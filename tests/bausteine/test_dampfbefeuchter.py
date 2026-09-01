@@ -28,6 +28,15 @@ def test_fremddampf_folgt_dem_polynom_der_excel():
 
 
 def test_befeuchtung_erhoeht_feuchte_und_temperatur():
+    """Achtung: dieser Test ist selbstbezueglich.
+
+    Die Mappe enthaelt keinen brauchbaren Rechenstand fuer den Dampfbefeuchter -
+    beide Befeuchter stehen dort auf null. Der Test rechnet die erwarteten Werte
+    mit derselben Formel nach, die der Baustein verwendet, und weist damit nur
+    Selbstkonsistenz nach, nicht Uebereinstimmung mit der Vorlage. Die Formeln
+    wurden stattdessen gegen den Formeltext der Zellen Anlage!P131 bis P134
+    geprueft; der rechnerische Nachweis erfolgt ueber die Jahresbilanz.
+    """
     p = parameter(
         dampfart="E", max_leistung=32.0, absalzverlust=10.0, dampftemperatur=180.0
     )
