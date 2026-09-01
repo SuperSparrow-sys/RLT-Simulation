@@ -5146,6 +5146,9 @@ alle passenden Portverbindungen von selbst.
     `rueckkanten() -> set[tuple[int, int]]`
   - `graph.erzeuge_ports(klasse, parameter, karte_id, ab_id) -> list[PortInstanz]`
   - `graph.verdrahte(von, nach, belegt) -> list[tuple[PortInstanz, PortInstanz]]`
+  - `graph.alternativen(von, nach, belegt) -> list[tuple[PortInstanz, PortInstanz]]` —
+    die gleich gut bewerteten, aber verworfenen Zuordnungen; leer, wenn die
+    Zuordnung eindeutig war
   - `graph.fehlende_ports(karte, belegt) -> list[PortInstanz]` — die Ports, die
     nach dem Verbinden nachwachsen müssen
 
@@ -5298,6 +5301,51 @@ def test_datenlogger_belegt_die_spalten_der_reihe_nach():
     paare = graph.verdrahte(raum, logger, belegt=set())
     ziele = [n.schluessel for _, n in paare]
     assert ziele[:2] == ["wert_1", "wert_2"]
+
+
+def test_zuluft_darf_nicht_in_den_umlufteingang():
+    """Umluft ist zurueckgefuehrte Abluft, nicht Zuluft.
+
+    Der einzige Umluftanschluss im Programm ist mischkammer.umluft_ein. Ein
+    Erhitzer, der auf eine Mischkammer gezogen wird, gehoert an den
+    Aussenlufteingang - etwa als Vorerhitzer im Aussenluftweg.
+    """
+    erhitzer, mischkammer = karte(1, "erhitzer"), karte(2, "mischkammer")
+    zuordnung = {
+        v.schluessel: n.schluessel
+        for v, n in graph.verdrahte(erhitzer, mischkammer, belegt=set())
+    }
+    assert zuordnung.get("luft_aus") == "aussenluft_ein"
+
+
+def test_abluft_darf_in_den_umlufteingang():
+    raum, mischkammer = karte(1, "einfacher_raum"), karte(2, "mischkammer")
+    zuordnung = {
+        v.basis: n.schluessel
+        for v, n in graph.verdrahte(raum, mischkammer, belegt=set())
+    }
+    assert zuordnung.get("abluft_aus") == "umluft_ein"
+
+
+def test_mehrdeutige_zuordnung_wird_gemeldet():
+    """Die WRG ist die einzige Karte mit zwei Luftrollen am Ausgang.
+
+    An einem neutralen Sammler ist damit nicht entscheidbar, ob der Zuluft- oder
+    der Abluftstrang gemeint ist. Die Wahl faellt wiederholbar nach der
+    Portreihenfolge; die verworfene Moeglichkeit muss aber benennbar bleiben,
+    damit der Editor den Pfeil als mehrdeutig kennzeichnen kann.
+    """
+    wrg, sammler = karte(1, "wrg"), karte(2, "sammler")
+    gewaehlt = graph.verdrahte(wrg, sammler, belegt=set())
+    verworfen = graph.alternativen(wrg, sammler, belegt=set())
+
+    assert [v.schluessel for v, _ in gewaehlt] == ["zuluft_aus"]
+    assert [v.schluessel for v, _ in verworfen] == ["abluft_aus"]
+
+
+def test_eindeutige_zuordnung_meldet_keine_alternative():
+    erhitzer, kuehler = karte(1, "erhitzer"), karte(2, "kuehler")
+    assert graph.alternativen(erhitzer, kuehler, belegt=set()) == []
 
 
 def test_belegte_ports_werden_uebersprungen():
@@ -5500,11 +5548,14 @@ VERBOTEN = {
 }
 
 # Luftwege, die sinnvoll aufeinander folgen, ohne dieselbe Rolle zu tragen.
+# Umluft ist zurueckgefuehrte ABLUFT - der einzige Umluftanschluss im Programm ist
+# der Umlufteingang der Mischkammer. Zuluft gehoert dort nicht hin; sie darf nur
+# ueber den Aussenlufteingang in die Mischkammer laufen, und das faengt die
+# Vorgabewertung von 1 ab.
 FOLGT_AUF = {
     (basis.AUSSENLUFT, basis.ZULUFT),
     (basis.ABLUFT, basis.FORTLUFT),
     (basis.ABLUFT, basis.UMLUFT),
-    (basis.ZULUFT, basis.UMLUFT),
 }
 
 
@@ -5585,6 +5636,39 @@ def verdrahte(von_karte, nach_karte, belegt):
     return vorwaerts + rueckwaerts
 
 
+def alternativen(von_karte, nach_karte, belegt):
+    """Gleich gut bewertete Zuordnungen, die 'verdrahte' NICHT gewaehlt hat.
+
+    Wenn eine Karte mehrere Luftrollen anbietet und die Gegenkarte einen neutralen
+    Anschluss hat, ist die Zuordnung echt mehrdeutig: Eine Waermerueckgewinnung an
+    einem Sammler koennte den Zuluft- oder den Abluftstrang meinen. 'verdrahte'
+    entscheidet dann nach der Reihenfolge, in der die Ports angelegt wurden - das
+    ist verlaesslich wiederholbar, aber nicht unbedingt das, was gemeint war.
+
+    Diese Funktion nennt die verworfenen Moeglichkeiten, damit der Editor den Pfeil
+    als mehrdeutig kennzeichnen und zur Korrektur anbieten kann. Sie raet nicht
+    besser - sie macht sichtbar, dass geraten wurde.
+    """
+    gewaehlt = {(v.id, n.id) for v, n in verdrahte(von_karte, nach_karte, belegt)}
+    genommene_ziele = {n for _, n in gewaehlt}
+    genommene_quellen = {v for v, _ in gewaehlt}
+
+    verworfen = []
+    for v in von_karte.ports:
+        if v.id in belegt or v.richtung != basis.AUSGANG:
+            continue
+        for n in nach_karte.ports:
+            if n.id in belegt or n.richtung != basis.EINGANG:
+                continue
+            if not _punkte(v, n) or (v.id, n.id) in gewaehlt:
+                continue
+            # Nur echte Konkurrenz zaehlt: eine Zuordnung, die um denselben
+            # Anschluss gestritten und verloren hat.
+            if v.id in genommene_quellen or n.id in genommene_ziele:
+                verworfen.append((v, n))
+    return verworfen
+
+
 class Anlagengraph:
     """Die Karten einer Anlage samt ihrer Verbindungen."""
 
@@ -5656,7 +5740,7 @@ unproblematisch und deutlich besser lesbar.
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_graph.py -v`
-Expected: 21 passed
+Expected: 25 passed
 
 - [ ] **Step 5: Commit**
 
