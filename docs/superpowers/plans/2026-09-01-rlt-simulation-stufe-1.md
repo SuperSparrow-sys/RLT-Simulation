@@ -606,7 +606,8 @@ git commit -m "Referenzdaten aus der Excel-Mappe als Pruefgrundlage exportiert"
 **Files:**
 - Create: `core/bausteine/__init__.py`, `core/bausteine/basis.py`,
   `core/bausteine/stoffdaten.py`
-- Test: `tests/bausteine/test_basis.py`, `tests/bausteine/test_stoffdaten.py`
+- Test: `tests/bausteine/__init__.py`, `tests/bausteine/conftest.py`,
+  `tests/bausteine/test_basis.py`, `tests/bausteine/test_stoffdaten.py`
 
 **Interfaces:**
 - Consumes: nichts
@@ -689,6 +690,43 @@ def test_registrierung_findet_baustein():
 
     assert basis.hole("test_dummy") is Testbaustein
     assert Testbaustein in basis.alle()
+
+
+def test_doppelte_kennung_wird_gemeldet():
+    """Eine doppelt vergebene Kennung darf nicht stillschweigend ueberschreiben."""
+
+    @basis.registriere
+    class Erster(basis.Baustein):
+        KENNUNG = "test_doppelt"
+        NAME = "Erster"
+        GRUPPE = "Test"
+        SYMBOL = "test.svg"
+        PARAMETER = []
+        PORTS = []
+        AUSGABEN = []
+
+        def berechne(self, ein, p, zustand):
+            return {}, zustand
+
+    with pytest.raises(ValueError, match="schon von Erster belegt"):
+
+        @basis.registriere
+        class Zweiter(basis.Baustein):
+            KENNUNG = "test_doppelt"
+            NAME = "Zweiter"
+            GRUPPE = "Test"
+            SYMBOL = "test.svg"
+            PARAMETER = []
+            PORTS = []
+            AUSGABEN = []
+
+            def berechne(self, ein, p, zustand):
+                return {}, zustand
+
+
+def test_wegwerfbausteine_lecken_nicht_zwischen_tests():
+    """Die conftest-Vorrichtung stellt das Register nach jedem Test wieder her."""
+    assert "test_dummy" not in {k.KENNUNG for k in basis.alle()}
 
 
 def test_hole_meldet_unbekannten_typ():
@@ -794,7 +832,7 @@ Portanlage in der Datenbank und Ergebnisspalten werden aus dieser Deklaration
 erzeugt - ein neuer Kartentyp ist deshalb genau eine neue Datei.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 # Portarten
 LUFT = "luft"
@@ -942,6 +980,11 @@ def registriere(klasse):
     """Klassendekorator: macht einen Baustein in Palette und Solver bekannt."""
     if not klasse.KENNUNG:
         raise ValueError(f"{klasse.__name__} hat keine KENNUNG")
+    vorhanden = _REGISTER.get(klasse.KENNUNG)
+    if vorhanden is not None and vorhanden is not klasse:
+        raise ValueError(
+            f"Die Kennung '{klasse.KENNUNG}' ist schon von {vorhanden.__name__} belegt"
+        )
     _REGISTER[klasse.KENNUNG] = klasse
     return klasse
 
@@ -987,10 +1030,33 @@ def lade_alle():
 
 `tests/bausteine/__init__.py`: leer anlegen.
 
+`tests/bausteine/conftest.py`:
+
+```python
+"""Haelt das Bausteinregister zwischen den Tests sauber.
+
+Mehrere Tests melden Wegwerf-Bausteine an. Ohne Wiederherstellung blieben sie
+fuer den Rest des Testlaufs im Register und taeuchten in jeder spaeteren
+Auswertung von basis.alle() oder basis.nach_gruppen() auf.
+"""
+
+import pytest
+
+from core.bausteine import basis
+
+
+@pytest.fixture(autouse=True)
+def register_zuruecksetzen():
+    vorher = dict(basis._REGISTER)
+    yield
+    basis._REGISTER.clear()
+    basis._REGISTER.update(vorher)
+```
+
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/bausteine -v`
-Expected: 11 passed
+Expected: 12 passed
 
 - [ ] **Step 5: Commit**
 
