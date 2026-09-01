@@ -2,7 +2,7 @@
 
 from core.bausteine.basis import (
     AUSGANG, EINGANG, LUFT, MESSWERT, SIGNAL, STELLGROESSE, WAERME, ZULUFT,
-    Baustein, Luft, Param, Port, registriere,
+    Baustein, Luft, Param, Port, druckverlust, registriere,
 )
 
 
@@ -39,9 +39,7 @@ class Erhitzer(Baustein):
         if luft.V > 0:
             T_aus = luft.T + 3600.0 * QH / (1.2 * 1.007 * luft.V)
 
-        dp = 0.0
-        if p["V_nenn"]:
-            dp = p["dp_nenn"] * (luft.V / p["V_nenn"]) ** 2
+        dp = druckverlust(luft.V, p["V_nenn"], p["dp_nenn"])
 
         aus = Luft(V=luft.V, T=T_aus, x=luft.x, dp=dp)
         return {"luft_aus": aus, "QH": QH, "T_aus": T_aus, "F_aus": luft.x, "dp": dp}, zustand

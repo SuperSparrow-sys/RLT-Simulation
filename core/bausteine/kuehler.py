@@ -8,7 +8,7 @@ Die Oberflaechentemperatur wird wie in der Excel als Kaltwassertemperatur plus
 from core.bausteine import stoffdaten as st
 from core.bausteine.basis import (
     AUSGANG, EINGANG, KAELTE, LUFT, MESSWERT, SIGNAL, STELLGROESSE, ZULUFT,
-    Baustein, Luft, Param, Port, registriere,
+    Baustein, Luft, Param, Port, druckverlust, registriere,
 )
 
 
@@ -57,9 +57,7 @@ class Kuehler(Baustein):
                 st.enthalpie(luft.T, luft.x) - st.enthalpie(T_aus, x_aus)
             )
 
-        dp = 0.0
-        if p["V_nenn"]:
-            dp = p["dp_nenn"] * (luft.V / p["V_nenn"]) ** 2
+        dp = druckverlust(luft.V, p["V_nenn"], p["dp_nenn"])
 
         warnung = "Kuehlleistung zu niedrig" if QK > p["QK_nenn"] else ""
 

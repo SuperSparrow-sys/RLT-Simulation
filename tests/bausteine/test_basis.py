@@ -88,6 +88,16 @@ def test_vorgabeparameter_werden_aus_der_deklaration_gebildet():
     assert MitVorgabe.vorgabeparameter() == {"V_nenn": 8200.0, "art": "F"}
 
 
+def test_druckverlust_steigt_quadratisch():
+    """Anlage!S135 - dp_nenn * (V / V_nenn)^2."""
+    assert basis.druckverlust(8200.0, 8200.0, 240.0) == pytest.approx(240.0)
+    assert basis.druckverlust(4100.0, 8200.0, 240.0) == pytest.approx(60.0)
+
+
+def test_druckverlust_ohne_nennvolumenstrom_ist_null():
+    assert basis.druckverlust(5000.0, 0.0, 240.0) == 0.0
+
+
 def test_bedarf_reicht_volumenstrom_standardmaessig_durch():
     @basis.registriere
     class Durchreiche(basis.Baustein):

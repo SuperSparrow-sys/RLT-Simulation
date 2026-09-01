@@ -172,6 +172,18 @@ def alle() -> list:
     return list(_REGISTER.values())
 
 
+def druckverlust(V: float, V_nenn: float, dp_nenn: float) -> float:
+    """Quadratischer Druckverlust eines durchstroemten Bauteils.
+
+    dp = dp_nenn * (V / V_nenn)^2 - in der Excel dreimal wortgleich als
+    Anlage!S135 (Erhitzer), AB135 (Kuehler) und AE135 (Luftwaescher). Bei
+    V_nenn = 0 ist der Druckverlust null; die Excel faengt das ebenso ab.
+    """
+    if not V_nenn:
+        return 0.0
+    return dp_nenn * (V / V_nenn) ** 2
+
+
 def nach_gruppen() -> dict:
     """Alle Bausteine nach Palettengruppe sortiert."""
     gruppen: dict = {}

@@ -47,6 +47,23 @@ def test_kuehler_entfeuchtet_nicht_bei_trockener_luft():
     assert aus["luft_aus"].x == pytest.approx(2.0)
 
 
+def test_kuehler_rechnet_den_zustand_auch_ohne_volumenstrom():
+    """Absichtlich wie in der Excel.
+
+    Anlage!AB131 rechnet T_aus ohne Volumenstrompruefung, weil dort nicht durch V
+    geteilt wird; nur die Leistung AB133 wird bei V <= 0 zu null. Der Erhitzer
+    (Anlage!S131) braucht die Pruefung dagegen, weil er durch V teilt. Diese
+    Asymmetrie stammt aus der Vorlage und wird bewusst uebernommen - der
+    Luftzustand eines Stranges ohne Volumenstrom wird nirgends weiterverwendet.
+    """
+    p = parameter(V_nenn=8200.0, dp_nenn=240.0, QK_nenn=250.0, T_KW_mittel=6.0)
+    ein = {"luft_ein": Luft(V=0.0, T=30.0, x=12.0), "stellgroesse": 100.0}
+    aus, _ = Kuehler().berechne(ein, p, {})
+    assert aus["QK"] == 0.0
+    assert aus["luft_aus"].V == 0.0
+    assert aus["luft_aus"].T < 30.0
+
+
 def test_kuehler_meldet_zu_niedrige_leistung():
     p = parameter(V_nenn=8200.0, dp_nenn=240.0, QK_nenn=5.0, T_KW_mittel=6.0)
     ein = {"luft_ein": Luft(V=8200.0, T=30.0, x=12.0), "stellgroesse": 100.0}
