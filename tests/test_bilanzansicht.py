@@ -97,8 +97,9 @@ def test_bilanz_endpunkt_liefert_warnungen_und_kartenwerte(app):
     daten = antwort.get_json()
 
     assert daten["warnungen"]["anzahl"] == 20
-    # Nie die volle Liste an den Client
-    assert len(daten["warnungen"]["beispiele"]) < 20
+    # Nie die volle Liste an den Client - ergebnisse.lade_warnungen() begrenzt
+    # auf 5 Beispiele, egal wie viele Warnungen es insgesamt gibt.
+    assert len(daten["warnungen"]["beispiele"]) == 5
     assert all("text" in w for w in daten["warnungen"]["beispiele"])
 
     assert daten["werte"]["1"]["T_aus"] == pytest.approx(2.0)
@@ -122,9 +123,26 @@ def test_bilanz_ohne_warnungen_meldet_zahl_null(app):
     assert daten["warnungen"] == {"anzahl": 0, "beispiele": []}
 
 
-def test_abbrechen_liefert_weniger_stunden_als_angefordert(app):
+def test_abbrechen_liefert_weniger_stunden_als_angefordert(app, monkeypatch):
     """Kern der Handpruefung: 'Abbrechen' beendet den Lauf wirklich, statt nur
-    ein Merkmal zu setzen, das erst am Ende beachtet wird."""
+    ein Merkmal zu setzen, das erst am Ende beachtet wird.
+
+    Ohne Verlangsamung waere dieser Test auf einer schnellen Maschine
+    unzuverlaessig: der 3000-Stunden-Lauf koennte fertig werden, bevor die
+    Abbrechen-Anfrage greift, und der Test wuerde ohne echte Pruefung gruen
+    durchlaufen. Jede Stunde bekommt daher 10ms Wartezeit dazu - bei 3000
+    Stunden waeren das 30s, wenn nie abgebrochen wuerde; der Abbruch greift
+    aber schon nach der ersten oder zweiten Stunde, weil core/solver.py den
+    Abbruch-Merker vor jeder Stunde prueft. Das macht den Test deterministisch
+    mit sehr grossem Sicherheitsabstand, ohne die Anwendung selbst zu aendern."""
+    original = solver.Solver._rechne_stunde
+
+    def langsamer(self, *args, **kwargs):
+        time.sleep(0.01)
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(solver.Solver, "_rechne_stunde", langsamer)
+
     klient = app.test_client()
     with app.app_context():
         projekt = anlagen.projekt_anlegen("P")
@@ -147,6 +165,5 @@ def test_abbrechen_liefert_weniger_stunden_als_angefordert(app):
             break
         time.sleep(0.05)
 
-    assert stand["status"] in ("abgebrochen", "fertig")
-    if stand["status"] == "abgebrochen":
-        assert stand["fertig"] < 3000
+    assert stand["status"] == "abgebrochen", stand
+    assert stand["fertig"] < 3000

@@ -98,7 +98,18 @@ def test_lauf_im_hintergrund_meldet_fortschritt_und_endet(app):
     assert stand["simulation_id"] > 0
 
 
-def test_abbruch_beendet_den_lauf(app):
+def test_abbruch_beendet_den_lauf(app, monkeypatch):
+    """Ohne Verlangsamung koennte der Lauf fertig werden, bevor der
+    Abbruch-Merker geprueft wird - der Test wuerde dann nichts pruefen (siehe
+    dieselbe Begruendung bei test_api_abbrechen_stoppt_den_lauf unten)."""
+    original = solver.Solver._rechne_stunde
+
+    def langsamer(self, *args, **kwargs):
+        time.sleep(0.01)
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(solver.Solver, "_rechne_stunde", langsamer)
+
     with app.app_context():
         projekt = anlagen.projekt_anlegen("P")
         anlage = ax_sim_2_1.baue(projekt, "A")
@@ -106,12 +117,13 @@ def test_abbruch_beendet_den_lauf(app):
         kennung = laeufe.starte(app, anlage, wetter, 0, 2000)
         laeufe.abbrechen(kennung)
 
-        for _ in range(200):
+        for _ in range(400):
             stand = laeufe.stand(kennung)
             if stand["status"] in ("fertig", "abgebrochen", "fehler"):
                 break
             time.sleep(0.05)
-    assert stand["status"] in ("abgebrochen", "fertig")
+    assert stand["status"] == "abgebrochen", stand
+    assert stand["fertig"] < 2000
 
 
 def test_api_startet_und_liefert_den_stand(app):
@@ -136,7 +148,23 @@ def test_api_startet_und_liefert_den_stand(app):
     assert stand["status"] == "fertig", stand.get("fehler")
 
 
-def test_api_abbrechen_stoppt_den_lauf(app):
+def test_api_abbrechen_stoppt_den_lauf(app, monkeypatch):
+    """Ohne Verlangsamung ist dieser Test auf einer schnellen Maschine
+    unzuverlaessig: der 2000-Stunden-Lauf koennte fertig werden, bevor die
+    Abbrechen-Anfrage greift, und der Test wuerde ohne echte Pruefung gruen
+    durchlaufen (also 'fertig' statt 'abgebrochen' beobachten, obwohl nie
+    getestet wurde, dass der Abbruch wirkt). Jede Stunde bekommt daher 10ms
+    Wartezeit dazu; core/solver.py prueft den Abbruch-Merker vor jeder
+    Stunde, also greift er schon nach der ersten oder zweiten - weit vor den
+    20s, die der volle Lauf ohne Abbruch bei dieser Verlangsamung braeuchte."""
+    original = solver.Solver._rechne_stunde
+
+    def langsamer(self, *args, **kwargs):
+        time.sleep(0.01)
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(solver.Solver, "_rechne_stunde", langsamer)
+
     klient = app.test_client()
     with app.app_context():
         projekt = anlagen.projekt_anlegen("P")
@@ -153,12 +181,13 @@ def test_api_abbrechen_stoppt_den_lauf(app):
     assert abbruch_antwort.status_code == 200
     assert abbruch_antwort.get_json() == {"ok": True}
 
-    for _ in range(200):
+    for _ in range(400):
         stand = klient.get(f"/api/simulation/{kennung}").get_json()
         if stand["status"] in ("fertig", "abgebrochen", "fehler"):
             break
         time.sleep(0.05)
-    assert stand["status"] in ("abgebrochen", "fertig")
+    assert stand["status"] == "abgebrochen", stand
+    assert stand["fertig"] < 2000
 
 
 def test_api_liefert_die_bilanz(app):

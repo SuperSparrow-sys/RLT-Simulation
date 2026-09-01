@@ -25,7 +25,20 @@ const GROESSEN = {
 // ein einzelner Netzwerk-Hakler waehrend eines achtminuetigen Laufs soll die
 // Anzeige nicht sofort verwerfen.
 const FORTSCHRITT_MAX_FEHLVERSUCHE = 8;
-const FORTSCHRITT_INTERVALL_MS = 700;
+
+// Reaktionsschnell zu Beginn, sparsamer danach - sonst waeren es bei acht
+// Minuten Laufzeit rund 700 Anfragen. Ein Fehlversuch wartet immer kurz,
+// unabhaengig davon, wie lange der Lauf schon geht, damit sich eine kurze
+// Netzwerkstoerung schnell erholt.
+const FORTSCHRITT_INTERVALL_KURZ_MS = 700;
+const FORTSCHRITT_INTERVALL_LANG_MS = 3000;
+const FORTSCHRITT_KURZ_DAUER_MS = 60000;
+
+function naechstesIntervall(startzeit) {
+  return Date.now() - startzeit < FORTSCHRITT_KURZ_DAUER_MS
+    ? FORTSCHRITT_INTERVALL_KURZ_MS
+    : FORTSCHRITT_INTERVALL_LANG_MS;
+}
 
 /* Frei vergebene Namen (Wetterdatensatz, Anlage) landen unverarbeitet in
    innerHTML-Vorlagen - ohne dieses Escapen wuerde ein Datensatzname wie
@@ -38,8 +51,16 @@ function htmlSicher(text) {
 
 const Simulation = {
   kennung: null,
+  // Ob gerade ein Lauf beobachtet wird - verhindert einen zweiten,
+  // unbeobachteten Lauf im Hintergrund (siehe starten()/_beendet()).
+  aktiv: false,
 
   async dialogOeffnen() {
+    if (this.aktiv) {
+      zeigeFehler("Es läuft bereits eine Simulation. Bitte warten oder abbrechen.");
+      return;
+    }
+
     let wetter;
     let bereiche;
     let fruehereLaeufe = [];
@@ -185,12 +206,28 @@ const Simulation = {
       zeigeFehler("Simulation konnte nicht gestartet werden.");
       return;
     }
-    this.kennung = (await antwort.json()).kennung;
-    this.zeigeFortschritt();
-    this.beobachte();
+    const kennung = (await antwort.json()).kennung;
+    this.kennung = kennung;
+    this.aktiv = true;
+    this._simulierenKnopfAktivieren(false);
+    this.zeigeFortschritt(kennung);
+    this.beobachte(kennung);
   },
 
-  zeigeFortschritt() {
+  _simulierenKnopfAktivieren(aktiviert) {
+    const knopf = document.getElementById("btn-simulieren");
+    if (knopf) knopf.disabled = !aktiviert;
+  },
+
+  // Ein Lauf ist zu Ende beobachtet - egal ob fertig, abgebrochen,
+  // fehlgeschlagen oder wegen dauerhaftem Verbindungsverlust aufgegeben.
+  // Erst danach darf ein neuer Lauf gestartet werden (siehe dialogOeffnen()).
+  _beendet() {
+    this.aktiv = false;
+    this._simulierenKnopfAktivieren(true);
+  },
+
+  zeigeFortschritt(kennung) {
     const alte = document.querySelector(".fortschritt-huelle");
     if (alte) alte.remove();
 
@@ -203,13 +240,16 @@ const Simulation = {
         <button id="btn-lauf-abbrechen">Abbrechen</button>
       </div>`;
     document.body.appendChild(huelle);
+    // 'kennung' ist der Wert des Parameters dieses Aufrufs, nicht
+    // this.kennung - so bleibt der Knopf auch dann an den richtigen Lauf
+    // gebunden, wenn this.kennung sich inzwischen geaendert haette.
     huelle.querySelector("#btn-lauf-abbrechen").onclick = async (e) => {
       const knopf = e.target;
       knopf.disabled = true;
       knopf.textContent = "Wird abgebrochen …";
       let antwort;
       try {
-        antwort = await fetch(`/api/simulation/${this.kennung}/abbrechen`, {
+        antwort = await fetch(`/api/simulation/${kennung}/abbrechen`, {
           method: "POST",
         });
       } catch {
@@ -228,12 +268,18 @@ const Simulation = {
     };
   },
 
-  async beobachte() {
+  // 'kennung' wird als Parameter uebernommen statt bei jedem Schleifendurchlauf
+  // erneut aus this.kennung gelesen zu werden - sonst wuerde diese Schleife,
+  // wenn inzwischen ein zweiter Lauf gestartet worden waere, unbemerkt auf
+  // dessen Stand umschwenken und den urspruenglich beobachteten Lauf
+  // verwaist und unbeobachtet im Hintergrund weiterlaufen lassen.
+  async beobachte(kennung) {
+    const start = Date.now();
     let fehlversuche = 0;
     while (true) {
       let stand;
       try {
-        const antwort = await fetch(`/api/simulation/${this.kennung}`);
+        const antwort = await fetch(`/api/simulation/${kennung}`);
         if (!antwort.ok) throw new Error("Antwort nicht ok");
         stand = await antwort.json();
         fehlversuche = 0;
@@ -242,10 +288,11 @@ const Simulation = {
         if (fehlversuche >= FORTSCHRITT_MAX_FEHLVERSUCHE) {
           const huelle = document.querySelector(".fortschritt-huelle");
           if (huelle) huelle.remove();
+          this._beendet();
           zeigeFehler("Verbindung zum Server verloren. Der Lauf läuft im Hintergrund weiter.");
           return;
         }
-        await new Promise((r) => setTimeout(r, FORTSCHRITT_INTERVALL_MS));
+        await new Promise((r) => setTimeout(r, FORTSCHRITT_INTERVALL_KURZ_MS));
         continue;
       }
 
@@ -261,6 +308,7 @@ const Simulation = {
       if (["fertig", "abgebrochen", "fehler"].includes(stand.status)) {
         const huelle = document.querySelector(".fortschritt-huelle");
         if (huelle) huelle.remove();
+        this._beendet();
 
         if (stand.status === "fehler") {
           zeigeFehler(`Simulation fehlgeschlagen: ${stand.fehler || "unbekannter Fehler"}`);
@@ -273,7 +321,7 @@ const Simulation = {
         await this.zeigeBilanz(stand.simulation_id, hinweis);
         return;
       }
-      await new Promise((r) => setTimeout(r, FORTSCHRITT_INTERVALL_MS));
+      await new Promise((r) => setTimeout(r, naechstesIntervall(start)));
     }
   },
 
