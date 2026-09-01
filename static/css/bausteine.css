@@ -1,0 +1,186 @@
+/* Eigene Stile fuer den Erklaerbereich (/bausteine). Nutzt nur die
+   CSS-Variablen aus static/css/style.css - keine eigenen Farbwerte. */
+
+.lehre {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.lehre-zurueck {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 13px;
+}
+.lehre-zurueck:hover { color: var(--blue); }
+
+.lehre-haupt {
+  flex: 1;
+  max-width: 920px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 28px 20px 64px;
+  box-sizing: border-box;
+}
+
+.lehre-einleitung {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  max-width: 68ch;
+  margin: 0 0 24px;
+}
+
+.lehre-inhalt {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin-bottom: 40px;
+}
+.lehre-inhalt a {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.lehre-inhalt a:hover { color: var(--blue); border-color: var(--blue); }
+
+.lehre-abschnitt { margin-bottom: 40px; }
+
+.lehre-handgriffe {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.handgriff {
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+}
+.handgriff h2 {
+  margin: 0 0 8px;
+  font-size: 14.5px;
+  font-weight: 500;
+}
+.handgriff p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.lehre-gruppe { margin-bottom: 28px; }
+.lehre-gruppe-titel {
+  font-size: 15px;
+  font-weight: 500;
+  margin: 0 0 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.baustein-karte {
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-bottom: 12px;
+}
+
+.baustein-kopf {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.baustein-name { font-size: 14.5px; font-weight: 500; }
+.baustein-kennung {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.baustein-beschreibung {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text);
+  margin: 0 0 8px;
+}
+
+.baustein-hinweis {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  background: var(--surface-alt);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  margin: 0 0 12px;
+}
+.baustein-hinweis::before {
+  content: "Hinweis: ";
+  font-weight: 500;
+  color: var(--text);
+}
+
+.baustein-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-bottom: 12px;
+}
+.baustein-details-block { min-width: 200px; flex: 1; }
+.baustein-details-titel {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  color: var(--text-tertiary);
+  margin: 0 0 6px;
+}
+.baustein-details ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+.baustein-anschluss-art {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+.baustein-anschluss-art.luft { background: var(--luft); }
+.baustein-anschluss-art.signal { background: var(--signal); }
+
+.baustein-fuss {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.baustein-beispiel-knopf {
+  font-size: 12.5px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--blue);
+  background: var(--surface);
+  color: var(--blue);
+  cursor: pointer;
+}
+.baustein-beispiel-knopf:hover { background: var(--blue-tint); }
+.baustein-beispiel-knopf:disabled {
+  cursor: default;
+  border-color: var(--border);
+  color: var(--text-tertiary);
+  background: var(--surface);
+}
+.baustein-beispiel-status {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
