@@ -3652,11 +3652,29 @@ from core.bausteine.p_regler import PRegler
 from core.bausteine.sequenzregler import Sequenzregler
 
 
+def p_regler_parameter(**abweichend):
+    """Vollstaendiger Parametersatz - der Baustein greift streng mit p[...] zu.
+
+    Ein fehlender Sollwert soll laut zuschlagen und nicht stillschweigend zu 0 °C
+    werden; deshalb bauen die Tests ihre Parameter aus der Deklaration auf, statt
+    Teilmengen von Hand zusammenzustellen.
+    """
+    p = PRegler.vorgabeparameter()
+    p.update(abweichend)
+    return p
+
+
+def hysterese_parameter(**abweichend):
+    p = HystereseRegler.vorgabeparameter()
+    p.update(abweichend)
+    return p
+
+
 # ---------------------------------------------------------------- P-Regler
 
 def test_p_regler_faehrt_bei_zu_kaltem_istwert_auf():
     """Anlage!K51/J57 - der Ausgang integriert ueber die Iterationen."""
-    p = {"xp_1": 5.0, "xp_2": 5.0}
+    p = p_regler_parameter(xp_1=5.0, xp_2=5.0)
     ein = {"sollwert_2": 20.0, "istwert_2": 18.0}
     zustand = {"y1": 0.0, "y2": 50.0}
     aus, zustand = PRegler().berechne(ein, p, zustand)
@@ -3664,14 +3682,14 @@ def test_p_regler_faehrt_bei_zu_kaltem_istwert_auf():
 
 
 def test_p_regler_faehrt_bei_zu_warmem_istwert_zu():
-    p = {"xp_1": 5.0, "xp_2": 5.0}
+    p = p_regler_parameter(xp_1=5.0, xp_2=5.0)
     ein = {"sollwert_2": 20.0, "istwert_2": 25.0}
     aus, _ = PRegler().berechne(ein, p, {"y1": 0.0, "y2": 50.0})
     assert aus["ausgang_2"] == pytest.approx(50.0 - 1.0)
 
 
 def test_p_regler_bleibt_zwischen_null_und_hundert():
-    p = {"xp_1": 5.0, "xp_2": 1.0}
+    p = p_regler_parameter(xp_1=5.0, xp_2=1.0)
     ein = {"sollwert_2": 20.0, "istwert_2": -200.0}
     aus, _ = PRegler().berechne(ein, p, {"y1": 0.0, "y2": 50.0})
     assert aus["ausgang_2"] == 100.0
@@ -3683,7 +3701,7 @@ def test_p_regler_bleibt_zwischen_null_und_hundert():
 
 def test_p_regler_konvergiert_auf_den_sollwert():
     """Wiederholtes Rechnen wie im Vorwaertslauf treibt den Ausgang an den Anschlag."""
-    p = {"xp_1": 5.0, "xp_2": 5.0}
+    p = p_regler_parameter(xp_1=5.0, xp_2=5.0)
     zustand = {"y1": 0.0, "y2": 0.0}
     for _ in range(100):
         aus, zustand = PRegler().berechne(
@@ -3703,10 +3721,17 @@ def test_sequenzregler_ist_im_totband_ruhig():
 
 
 def test_sequenzregler_oeffnet_die_erste_waermestufe():
+    """Aus Vorwert -20 und Istwert 10 wird die Abweichung -21, also 21 % Oeffnung.
+
+    Anlage!T140 rechnet (Istwert - unterer Sollwert)/10 = -1, dazu der Vorwert -20.
+    Anlage!S146 macht daraus MAX(0;MIN(21;100)) = 21. Erst ab einer Abweichung von
+    -100 steht die erste Waermestufe voll offen; das prueft der naechste Test.
+    """
     p = {"oberer_sw": 24.0, "unterer_sw": 20.0, "xp": 5.0}
     aus, _ = Sequenzregler().berechne({"istwert": 10.0}, p, {"e": -20.0})
-    assert aus["waermer_1"] == 100.0
+    assert aus["waermer_1"] == pytest.approx(21.0)
     assert aus["kaelter_1"] == 0.0
+    assert aus["waermer_2"] == 0.0
 
 
 def test_sequenzregler_staffelt_die_stufen():
@@ -3734,7 +3759,7 @@ def test_sequenzregler_kuehlt_bei_zu_warmem_istwert():
 # -------------------------------------------------------- Hysterese-Regler
 
 def test_hysterese_schaltet_oberhalb_der_schaltdifferenz_ein():
-    p = {"hysterese": 0.2}
+    p = hysterese_parameter(hysterese=0.2)
     aus, zustand = HystereseRegler().berechne(
         {"sollwert": 5.0, "istwert": 5.2}, p, {"zustand": 0.0}
     )
@@ -3743,7 +3768,7 @@ def test_hysterese_schaltet_oberhalb_der_schaltdifferenz_ein():
 
 
 def test_hysterese_schaltet_unterhalb_der_schaltdifferenz_aus():
-    p = {"hysterese": 0.2}
+    p = hysterese_parameter(hysterese=0.2)
     aus, _ = HystereseRegler().berechne(
         {"sollwert": 5.0, "istwert": 4.8}, p, {"zustand": 100.0}
     )
@@ -3751,7 +3776,7 @@ def test_hysterese_schaltet_unterhalb_der_schaltdifferenz_aus():
 
 
 def test_hysterese_haelt_den_zustand_im_totband():
-    p = {"hysterese": 1.0}
+    p = hysterese_parameter(hysterese=1.0)
     aus, _ = HystereseRegler().berechne(
         {"sollwert": 5.0, "istwert": 5.2}, p, {"zustand": 100.0}
     )
@@ -3900,9 +3925,16 @@ from core.bausteine.basis import (
     Baustein, Param, Port, registriere,
 )
 
+# Ausgang = klemme(vorzeichen * (e + versatz), 0, 100). Die Versaetze stehen so,
+# dass jede Zeile ihre Excel-Formel wiedergibt:
+#   waermer_3  Anlage!S144 = MAX(0;MIN(-(e+200);100))
+#   waermer_2  Anlage!S145 = MAX(0;MIN(-(e+100);100))
+#   waermer_1  Anlage!S146 = MAX(0;MIN(-e;100))
+#   kaelter_1  Anlage!S147 = MAX(0;MIN(e;100))
+#   kaelter_2  Anlage!S148 = MAX(0;MIN(e-100;100))
 STUFEN = (
-    ("waermer_3", -200.0, -1.0),
-    ("waermer_2", -100.0, -1.0),
+    ("waermer_3", 200.0, -1.0),
+    ("waermer_2", 100.0, -1.0),
     ("waermer_1", 0.0, -1.0),
     ("kaelter_1", 0.0, 1.0),
     ("kaelter_2", -100.0, 1.0),
@@ -3960,11 +3992,11 @@ class Sequenzregler(Baustein):
         return {"e": 0.0}
 ```
 
-**Achtung bei den Stufen:** Die Excel schreibt `MAX(0;MIN(-(e+200);100))` für
-`wärmer 3`, `MAX(0;MIN(-(e+100);100))` für `wärmer 2`, `MAX(0;MIN(-e;100))` für
-`wärmer 1`, `MAX(0;MIN(e;100))` für `kälter 1` und `MAX(0;MIN(e-100;100))` für
-`kälter 2`. Die Tabelle `STUFEN` bildet genau das ab: Vorzeichen −1 mit Versatz
-−200/−100/0 und Vorzeichen +1 mit Versatz 0/−100.
+**Achtung bei den Stufen:** Rechne beim Übertragen jede Zeile einmal nach.
+`vorzeichen * (e + versatz)` muss die Excel-Formel ergeben — für `wärmer 3` also
+`-1 * (e + 200) = -(e+200)`, wie `Anlage!S144` es schreibt. Ein Vorzeichenfehler im
+Versatz fällt nicht auf, solange nur eine Stufe geprüft wird, und der Kaskadenregler
+verwendet dieselbe Tabelle, sodass er ihn miterbt.
 
 `core/bausteine/hysterese_regler.py`:
 
