@@ -11,6 +11,7 @@ MODULE = [
     "dampfbefeuchter", "luftwaescher", "ventilator",
     "verteiler", "sammler", "aussenluft", "fortluft", "wetterkarte",
     "einfacher_raum", "statische_heizung", "raum",
+    "p_regler", "sequenzregler", "hysterese_regler", "kaskade",
 ]
 
 
