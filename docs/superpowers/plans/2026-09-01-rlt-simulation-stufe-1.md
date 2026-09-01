@@ -10880,9 +10880,19 @@ def verbindung_anlegen(anlage_id, von_port_id, nach_port_id):
         raise ValueError("Ein Pfeil laeuft von einem Ausgang zu einem Eingang")
     if von["art"] != nach["art"]:
         raise ValueError("Luft laesst sich nicht mit einem Signal verbinden")
-    if nach_port_id in _belegte_ports(anlage_id):
+    belegt = _belegte_ports(anlage_id)
+    if nach_port_id in belegt:
         raise ValueError(
             f"Der Anschluss '{nach['schluessel']}' ist schon belegt"
+        )
+    # Ein Luftausgang fuehrt an genau eine Stelle - auch von Hand darf daran kein
+    # zweiter Kanal haengen, sonst umginge diese Funktion die Regel, die die
+    # automatische Verdrahtung durchsetzt. Signalausgaenge duerfen dagegen
+    # beliebig viele Verbraucher speisen.
+    if von["art"] == "luft" and von_port_id in belegt:
+        raise ValueError(
+            f"Der Luftausgang '{von['schluessel']}' fuehrt schon woanders hin - "
+            "fuer eine Verzweigung gibt es den Verteiler"
         )
 
     try:
@@ -10991,6 +11001,44 @@ def test_einzelne_verbindung_von_hand(app):
             anlagen.verbindung_anlegen(
                 anlage, ports[raum]["T_Raum"], ports[regler]["istwert"]
             )
+
+
+def test_handverdrahtung_verzweigt_keinen_luftkanal(app):
+    """Auch von Hand fuehrt ein Luftausgang an genau eine Stelle."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        erhitzer = anlagen.karte_anlegen(anlage, "erhitzer", 0.0, 0.0)
+        erster = anlagen.karte_anlegen(anlage, "kuehler", 300.0, 0.0)
+        zweiter = anlagen.karte_anlegen(anlage, "kuehler", 300.0, 200.0)
+        anlagen.pfeil_anlegen(anlage, erhitzer, erster)
+
+        ports = {k["id"]: {p["schluessel"]: p["id"] for p in k["ports"]}
+                 for k in anlagen.als_json(anlage)["karten"]}
+        with pytest.raises(ValueError, match="fuehrt schon woanders hin"):
+            anlagen.verbindung_anlegen(
+                anlage, ports[erhitzer]["luft_aus"], ports[zweiter]["luft_ein"]
+            )
+
+
+def test_handverdrahtung_speist_mehrere_verbraucher_mit_einem_signal(app):
+    """Ein Stellsignal darf von Hand an mehrere Stellen gehen."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        regler = anlagen.karte_anlegen(anlage, "p_regler", 0.0, 0.0)
+        eins = anlagen.karte_anlegen(anlage, "erhitzer", 300.0, 0.0)
+        zwei = anlagen.karte_anlegen(anlage, "erhitzer", 300.0, 200.0)
+
+        ports = {k["id"]: {p["schluessel"]: p["id"] for p in k["ports"]}
+                 for k in anlagen.als_json(anlage)["karten"]}
+        for ziel in (eins, zwei):
+            anlagen.verbindung_anlegen(
+                anlage, ports[regler]["ausgang_2"], ports[ziel]["stellgroesse"]
+            )
+
+        g = anlagen.lade_graph(anlage)
+    assert len(g.verbindungen) == 2
 ```
 
 - [ ] **Step 16: Durchstich erneut laufen lassen**
