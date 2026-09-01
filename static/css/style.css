@@ -8,6 +8,7 @@
   --blue: #1a73e8;
   --blue-tint: #e8f0fe;
   --danger: #d93025;
+  --warning: #f9ab00;
   --radius: 10px;
   --font-body: Roboto, Arial, sans-serif;
 }
@@ -65,3 +66,12 @@ html, body {
                  background: var(--danger); color: #fff; padding: 8px 18px;
                  border-radius: 6px; font-size: 13px; z-index: 10;
                  box-shadow: 0 2px 6px rgba(0,0,0,.2); }
+
+.pfeil { fill: none; stroke: var(--text-secondary); pointer-events: stroke; }
+.pfeil-luft { stroke-width: 3; }
+.pfeil-signal { stroke-width: 1.2; stroke-dasharray: 5 4; }
+.pfeil-mehrdeutig { stroke: var(--warning); }
+.pfeil-vorschau { stroke: var(--blue); stroke-width: 2; stroke-dasharray: 4 4; }
+.pfeil:hover { stroke: var(--blue); }
+.karte.ziel .karte-rahmen { stroke: var(--blue); stroke-width: 2;
+                            fill: var(--blue-tint); }

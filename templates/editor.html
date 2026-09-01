@@ -29,9 +29,10 @@
   </div>
 
   <script>window.ANLAGE_ID = {{ anlage_id }};</script>
-  <!-- pfeile.js (Task 22) und panel.js (Task 23) ergaenzen ihre eigenen
-       Script-Tags hier, sobald ihre Dateien angelegt sind. -->
+  <!-- panel.js (Task 23) ergaenzt sein eigenes Script-Tag hier, sobald es
+       angelegt ist. -->
   <script src="{{ url_for('static', filename='js/palette.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/pfeile.js') }}"></script>
   <script src="{{ url_for('static', filename='js/editor.js') }}"></script>
 </body>
 </html>

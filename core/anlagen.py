@@ -174,16 +174,24 @@ def pfeil_anlegen(anlage_id, von_karte_id, nach_karte_id):
             "zusammen"
         )
 
+    # Wurde hier geraten? graph.alternativen nennt die verworfenen Moeglichkeiten -
+    # gibt es welche, war die Zuordnung nicht die einzig moegliche, und der Editor
+    # soll den Pfeil als mehrdeutig kennzeichnen (siehe core/graph.py).
+    mehrdeutig = bool(graph.alternativen(von, nach, belegt))
+
     try:
         return _pfeil_schreiben(
-            db, anlage_id, von_karte_id, nach_karte_id, von, nach, paare, belegt
+            db, anlage_id, von_karte_id, nach_karte_id, von, nach, paare, belegt,
+            mehrdeutig,
         )
     except Exception:
         db.rollback()
         raise
 
 
-def _pfeil_schreiben(db, anlage_id, von_karte_id, nach_karte_id, von, nach, paare, belegt):
+def _pfeil_schreiben(
+    db, anlage_id, von_karte_id, nach_karte_id, von, nach, paare, belegt, mehrdeutig,
+):
     cur = db.execute(
         "INSERT INTO pfeil (anlage_id, von_karte_id, nach_karte_id) VALUES (?, ?, ?)",
         (anlage_id, von_karte_id, nach_karte_id),
@@ -216,7 +224,7 @@ def _pfeil_schreiben(db, anlage_id, von_karte_id, nach_karte_id, von, nach, paar
             )
 
     db.commit()
-    return {"id": pfeil_id, "verbindungen": verbindungen}
+    return {"id": pfeil_id, "verbindungen": verbindungen, "mehrdeutig": mehrdeutig}
 
 
 def pfeil_loeschen(pfeil_id):
@@ -379,6 +387,11 @@ def als_json(anlage_id):
             }
         )
 
+    # Belegung ueber die ganze Anlage, um je Pfeil zu pruefen, ob seine Zuordnung
+    # mehrdeutig war: mit den eigenen Ports wieder frei gerechnet, verhaelt sich
+    # graph.alternativen genau wie im Moment der Entstehung dieses Pfeils.
+    belegt_gesamt = _belegte_ports(anlage_id)
+
     pfeile = []
     for zeile in db.execute(
         "SELECT * FROM pfeil WHERE anlage_id = ? ORDER BY id", (anlage_id,)
@@ -386,12 +399,27 @@ def als_json(anlage_id):
         verbindungen = db.execute(
             "SELECT * FROM verbindung WHERE pfeil_id = ?", (zeile["id"],)
         ).fetchall()
+
+        von_karte = g.karten.get(zeile["von_karte_id"])
+        nach_karte = g.karten.get(zeile["nach_karte_id"])
+        mehrdeutig = False
+        if von_karte and nach_karte:
+            eigene_ports = {v["von_port_id"] for v in verbindungen} | {
+                v["nach_port_id"] for v in verbindungen
+            }
+            mehrdeutig = bool(
+                graph.alternativen(
+                    von_karte, nach_karte, belegt_gesamt - eigene_ports
+                )
+            )
+
         pfeile.append(
             {
                 "id": zeile["id"],
                 "von_karte_id": zeile["von_karte_id"],
                 "nach_karte_id": zeile["nach_karte_id"],
                 "stuetzpunkte": json.loads(zeile["stuetzpunkte"]),
+                "mehrdeutig": mehrdeutig,
                 "verbindungen": [
                     {"von_port_id": v["von_port_id"], "nach_port_id": v["nach_port_id"]}
                     for v in verbindungen

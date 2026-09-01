@@ -50,6 +50,35 @@ def test_pfeil_verdrahtet_automatisch(app):
     assert pfeil["verbindungen"][0]["nach_schluessel"] == "luft_ein"
 
 
+def test_eindeutiger_pfeil_meldet_keine_mehrdeutigkeit(app):
+    """Erhitzer -> Kuehler hat nur einen passenden Luftweg - keine Alternative."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        a = anlagen.karte_anlegen(anlage, "erhitzer", 0.0, 0.0)
+        b = anlagen.karte_anlegen(anlage, "kuehler", 300.0, 0.0)
+        pfeil = anlagen.pfeil_anlegen(anlage, a, b)
+        daten = anlagen.als_json(anlage)
+    assert pfeil["mehrdeutig"] is False
+    gelesen = next(p for p in daten["pfeile"] if p["id"] == pfeil["id"])
+    assert gelesen["mehrdeutig"] is False
+
+
+def test_mehrdeutiger_pfeil_wird_im_ergebnis_gemeldet(app):
+    """Die WRG bietet Zu- und Abluft an - an einem neutralen Sammler ist das
+    mehrdeutig (siehe core/graph.py: test_mehrdeutige_zuordnung_wird_gemeldet)."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        wrg = anlagen.karte_anlegen(anlage, "wrg", 0.0, 0.0)
+        sammler = anlagen.karte_anlegen(anlage, "sammler", 300.0, 0.0)
+        pfeil = anlagen.pfeil_anlegen(anlage, wrg, sammler)
+        daten = anlagen.als_json(anlage)
+    assert pfeil["mehrdeutig"] is True
+    gelesen = next(p for p in daten["pfeile"] if p["id"] == pfeil["id"])
+    assert gelesen["mehrdeutig"] is True
+
+
 def test_regler_pfeil_verdrahtet_hin_und_zurueck(app):
     with app.app_context():
         projekt = anlagen.projekt_anlegen("P")

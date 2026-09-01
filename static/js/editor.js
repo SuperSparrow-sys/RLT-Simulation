@@ -2,17 +2,16 @@
 
 const NS = "http://www.w3.org/2000/svg";
 
-/* Pfeile (Task 22) und Panel (Task 23) sind noch nicht angelegt; ohne diesen
-   Schutz wuerde jeder Aufruf mit einem ReferenceError abbrechen und die
-   Funktion, in der er steht, vorzeitig verlassen - auch dann, wenn danach
-   noch wichtiger Code folgt (etwa das Registrieren der Zieh-Listener). Die
-   spaeteren Tasks entfernen die jeweilige Abfrage wieder, sobald ihr Modul
-   existiert. */
+/* Panel (Task 23) ist noch nicht angelegt; ohne diesen Schutz wuerde jeder
+   Aufruf mit einem ReferenceError abbrechen und die Funktion, in der er
+   steht, vorzeitig verlassen - auch dann, wenn danach noch wichtiger Code
+   folgt (etwa das Registrieren der Zieh-Listener). Task 23 entfernt die
+   Abfrage wieder, sobald panel.js existiert. */
 function pfeileZeichnen(anlage) {
-  if (typeof Pfeile !== "undefined") Pfeile.zeichneAlle(anlage);
+  Pfeile.zeichneAlle(anlage);
 }
 function pfeileBinden(editor) {
-  if (typeof Pfeile !== "undefined") Pfeile.binde(editor);
+  Pfeile.binde(editor);
 }
 function panelZeigen(karte) {
   if (typeof Panel !== "undefined") Panel.zeige(karte);
