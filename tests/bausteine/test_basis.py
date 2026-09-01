@@ -26,6 +26,43 @@ def test_registrierung_findet_baustein():
     assert Testbaustein in basis.alle()
 
 
+def test_doppelte_kennung_wird_gemeldet():
+    """Eine doppelt vergebene Kennung darf nicht stillschweigend ueberschreiben."""
+
+    @basis.registriere
+    class Erster(basis.Baustein):
+        KENNUNG = "test_doppelt"
+        NAME = "Erster"
+        GRUPPE = "Test"
+        SYMBOL = "test.svg"
+        PARAMETER = []
+        PORTS = []
+        AUSGABEN = []
+
+        def berechne(self, ein, p, zustand):
+            return {}, zustand
+
+    with pytest.raises(ValueError, match="schon von Erster belegt"):
+
+        @basis.registriere
+        class Zweiter(basis.Baustein):
+            KENNUNG = "test_doppelt"
+            NAME = "Zweiter"
+            GRUPPE = "Test"
+            SYMBOL = "test.svg"
+            PARAMETER = []
+            PORTS = []
+            AUSGABEN = []
+
+            def berechne(self, ein, p, zustand):
+                return {}, zustand
+
+
+def test_wegwerfbausteine_lecken_nicht_zwischen_tests():
+    """Die conftest-Vorrichtung stellt das Register nach jedem Test wieder her."""
+    assert "test_dummy" not in {k.KENNUNG for k in basis.alle()}
+
+
 def test_hole_meldet_unbekannten_typ():
     with pytest.raises(KeyError, match="gibt es nicht"):
         basis.hole("kein_baustein")

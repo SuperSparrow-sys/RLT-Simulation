@@ -5,7 +5,7 @@ Portanlage in der Datenbank und Ergebnisspalten werden aus dieser Deklaration
 erzeugt - ein neuer Kartentyp ist deshalb genau eine neue Datei.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 # Portarten
 LUFT = "luft"
@@ -153,6 +153,11 @@ def registriere(klasse):
     """Klassendekorator: macht einen Baustein in Palette und Solver bekannt."""
     if not klasse.KENNUNG:
         raise ValueError(f"{klasse.__name__} hat keine KENNUNG")
+    vorhanden = _REGISTER.get(klasse.KENNUNG)
+    if vorhanden is not None and vorhanden is not klasse:
+        raise ValueError(
+            f"Die Kennung '{klasse.KENNUNG}' ist schon von {vorhanden.__name__} belegt"
+        )
     _REGISTER[klasse.KENNUNG] = klasse
     return klasse
 
