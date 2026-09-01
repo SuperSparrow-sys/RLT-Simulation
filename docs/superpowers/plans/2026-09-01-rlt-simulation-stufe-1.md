@@ -622,7 +622,8 @@ git commit -m "Referenzdaten aus der Excel-Mappe als Pruefgrundlage exportiert"
   - `basis.Baustein` mit `berechne(ein, p, zustand) -> (aus, zustand)`,
     `bedarf(aus_bedarf, p) -> dict`, `anfangszustand(p) -> dict` und dem
     Klassenmerkmal `ZUSTAND_UEBER_ITERATION` (Vorgabe `False`)
-  - `basis.registriere(klasse)`, `basis.hole(kennung)`, `basis.alle()`
+  - `basis.registriere(klasse)`, `basis.hole(kennung)`, `basis.alle()`,
+    `basis.nach_gruppen()`, `basis.druckverlust(V, V_nenn, dp_nenn)`
   - `stoffdaten.p_saett(T)`, `stoffdaten.x_saett(T)`, `stoffdaten.enthalpie(T, x)`,
     `stoffdaten.rel_feuchte(T, x)`
 
@@ -752,6 +753,16 @@ def test_vorgabeparameter_werden_aus_der_deklaration_gebildet():
             return {}, zustand
 
     assert MitVorgabe.vorgabeparameter() == {"V_nenn": 8200.0, "art": "F"}
+
+
+def test_druckverlust_steigt_quadratisch():
+    """Anlage!S135 - dp_nenn * (V / V_nenn)^2."""
+    assert basis.druckverlust(8200.0, 8200.0, 240.0) == pytest.approx(240.0)
+    assert basis.druckverlust(4100.0, 8200.0, 240.0) == pytest.approx(60.0)
+
+
+def test_druckverlust_ohne_nennvolumenstrom_ist_null():
+    assert basis.druckverlust(5000.0, 0.0, 240.0) == 0.0
 
 
 def test_bedarf_reicht_volumenstrom_standardmaessig_durch():
@@ -999,6 +1010,18 @@ def alle() -> list:
     return list(_REGISTER.values())
 
 
+def druckverlust(V: float, V_nenn: float, dp_nenn: float) -> float:
+    """Quadratischer Druckverlust eines durchstroemten Bauteils.
+
+    dp = dp_nenn * (V / V_nenn)^2 - in der Excel dreimal wortgleich als
+    Anlage!S135 (Erhitzer), AB135 (Kuehler) und AE135 (Luftwaescher). Bei
+    V_nenn = 0 ist der Druckverlust null; die Excel faengt das ebenso ab.
+    """
+    if not V_nenn:
+        return 0.0
+    return dp_nenn * (V / V_nenn) ** 2
+
+
 def nach_gruppen() -> dict:
     """Alle Bausteine nach Palettengruppe sortiert."""
     gruppen: dict = {}
@@ -1202,6 +1225,23 @@ def test_kuehler_entfeuchtet_nicht_bei_trockener_luft():
     assert aus["luft_aus"].x == pytest.approx(2.0)
 
 
+def test_kuehler_rechnet_den_zustand_auch_ohne_volumenstrom():
+    """Absichtlich wie in der Excel.
+
+    Anlage!AB131 rechnet T_aus ohne Volumenstrompruefung, weil dort nicht durch V
+    geteilt wird; nur die Leistung AB133 wird bei V <= 0 zu null. Der Erhitzer
+    (Anlage!S131) braucht die Pruefung dagegen, weil er durch V teilt. Diese
+    Asymmetrie stammt aus der Vorlage und wird bewusst uebernommen - der
+    Luftzustand eines Stranges ohne Volumenstrom wird nirgends weiterverwendet.
+    """
+    p = parameter(V_nenn=8200.0, dp_nenn=240.0, QK_nenn=250.0, T_KW_mittel=6.0)
+    ein = {"luft_ein": Luft(V=0.0, T=30.0, x=12.0), "stellgroesse": 100.0}
+    aus, _ = Kuehler().berechne(ein, p, {})
+    assert aus["QK"] == 0.0
+    assert aus["luft_aus"].V == 0.0
+    assert aus["luft_aus"].T < 30.0
+
+
 def test_kuehler_meldet_zu_niedrige_leistung():
     p = parameter(V_nenn=8200.0, dp_nenn=240.0, QK_nenn=5.0, T_KW_mittel=6.0)
     ein = {"luft_ein": Luft(V=8200.0, T=30.0, x=12.0), "stellgroesse": 100.0}
@@ -1223,7 +1263,7 @@ Expected: FAIL mit `ModuleNotFoundError: No module named 'core.bausteine.erhitze
 
 from core.bausteine.basis import (
     AUSGANG, EINGANG, LUFT, MESSWERT, SIGNAL, STELLGROESSE, WAERME, ZULUFT,
-    Baustein, Luft, Param, Port, registriere,
+    Baustein, Luft, Param, Port, druckverlust, registriere,
 )
 
 
@@ -1260,9 +1300,7 @@ class Erhitzer(Baustein):
         if luft.V > 0:
             T_aus = luft.T + 3600.0 * QH / (1.2 * 1.007 * luft.V)
 
-        dp = 0.0
-        if p["V_nenn"]:
-            dp = p["dp_nenn"] * (luft.V / p["V_nenn"]) ** 2
+        dp = druckverlust(luft.V, p["V_nenn"], p["dp_nenn"])
 
         aus = Luft(V=luft.V, T=T_aus, x=luft.x, dp=dp)
         return {"luft_aus": aus, "QH": QH, "T_aus": T_aus, "F_aus": luft.x, "dp": dp}, zustand
@@ -1281,7 +1319,7 @@ Die Oberflaechentemperatur wird wie in der Excel als Kaltwassertemperatur plus
 from core.bausteine import stoffdaten as st
 from core.bausteine.basis import (
     AUSGANG, EINGANG, KAELTE, LUFT, MESSWERT, SIGNAL, STELLGROESSE, ZULUFT,
-    Baustein, Luft, Param, Port, registriere,
+    Baustein, Luft, Param, Port, druckverlust, registriere,
 )
 
 
@@ -1330,9 +1368,7 @@ class Kuehler(Baustein):
                 st.enthalpie(luft.T, luft.x) - st.enthalpie(T_aus, x_aus)
             )
 
-        dp = 0.0
-        if p["V_nenn"]:
-            dp = p["dp_nenn"] * (luft.V / p["V_nenn"]) ** 2
+        dp = druckverlust(luft.V, p["V_nenn"], p["dp_nenn"])
 
         warnung = "Kuehlleistung zu niedrig" if QK > p["QK_nenn"] else ""
 
@@ -1822,7 +1858,7 @@ AE131 bis AE135. Der feste Faktor 0,9 ist der Saettigungswirkungsgrad der Excel.
 from core.bausteine import stoffdaten as st
 from core.bausteine.basis import (
     AUSGANG, EINGANG, LUFT, MESSWERT, SIGNAL, STELLGROESSE, STROM, WASSER, ZULUFT,
-    Baustein, Luft, Param, Port, registriere,
+    Baustein, Luft, Param, Port, druckverlust, registriere,
 )
 
 SAETTIGUNGSWIRKUNGSGRAD = 0.9
@@ -1885,9 +1921,7 @@ class Luftwaescher(Baustein):
                 kennlinie = 1.0
             PE = p["V_nenn"] * 1.2 / 3600.0 * 200.0 / 0.6 / 1000.0 * kennlinie
 
-        dp = 0.0
-        if p["V_nenn"]:
-            dp = p["dp_nenn"] * (luft.V / p["V_nenn"]) ** 2
+        dp = druckverlust(luft.V, p["V_nenn"], p["dp_nenn"])
 
         return (
             {
