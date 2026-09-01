@@ -32,11 +32,10 @@ class HystereseRegler(Baustein):
 
     def berechne(self, ein, p, zustand):
         # Ist der Sollwert-Port nicht belegt, gilt der eingestellte Parameter.
-        # "ein.get(schluessel, p[schluessel])" wertet den Default eager aus und
-        # wirft KeyError, sobald p den Schluessel nicht hat - auch wenn ein ihn
-        # liefert. Deshalb hier mit kurzgeschlossener Fallback-Kette.
-        sollwert = ein["sollwert"] if "sollwert" in ein else p.get("sollwert", 0.0)
-        sollwert = float(sollwert)
+        # p traegt, aus vorgabeparameter() kommend, immer alle deklarierten
+        # Parameter; ein fehlender Sollwert soll deshalb laut mit KeyError
+        # zuschlagen statt still zu 0 zu werden.
+        sollwert = float(ein.get("sollwert", p["sollwert"]))
         istwert = float(ein.get("istwert", 0.0))
         vorher = float(zustand.get("zustand", 0.0))
         halb = p["hysterese"] / 2.0

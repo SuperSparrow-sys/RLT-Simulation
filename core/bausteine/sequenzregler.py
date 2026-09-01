@@ -9,11 +9,13 @@ from core.bausteine.basis import (
     Baustein, Param, Port, registriere,
 )
 
-# Anlage!S144 bis S148: MAX(0;MIN(-(e+200);100)) fuer waermer_3 bis
-# MAX(0;MIN(e-100;100)) fuer kaelter_2. Mit "vorzeichen * (e + versatz)"
-# braucht die Vorzeichen-(-1)-Haelfte den Versatz mit demselben Vorzeichen wie
-# in der Excel-Formel (+200/+100/0), nicht das umgekehrte - sonst reproduziert
-# die Tabelle nicht -(e+200) sondern -(e-200).
+# Ausgang = klemme(vorzeichen * (e + versatz), 0, 100). Die Versaetze stehen so,
+# dass jede Zeile ihre Excel-Formel wiedergibt:
+#   waermer_3  Anlage!S144 = MAX(0;MIN(-(e+200);100))
+#   waermer_2  Anlage!S145 = MAX(0;MIN(-(e+100);100))
+#   waermer_1  Anlage!S146 = MAX(0;MIN(-e;100))
+#   kaelter_1  Anlage!S147 = MAX(0;MIN(e;100))
+#   kaelter_2  Anlage!S148 = MAX(0;MIN(e-100;100))
 STUFEN = (
     ("waermer_3", 200.0, -1.0),
     ("waermer_2", 100.0, -1.0),

@@ -53,20 +53,18 @@ class PRegler(Baustein):
     def berechne(self, ein, p, zustand):
         # Ist der Sollwert-Port nicht belegt, gilt der eingestellte Parameter -
         # in der Excel steht der Sollwert ebenfalls als feste Zelle (Anlage!M59).
-        # "ein.get(schluessel, p[schluessel])" wertet den Default eager aus und
-        # wirft KeyError, sobald p den Schluessel nicht hat - auch wenn ein ihn
-        # liefert. Deshalb hier mit kurzgeschlossener Fallback-Kette.
-        sollwert_1 = ein["sollwert_1"] if "sollwert_1" in ein else p.get("sollwert_1", 0.0)
-        sollwert_2 = ein["sollwert_2"] if "sollwert_2" in ein else p.get("sollwert_2", 0.0)
+        # p traegt, aus vorgabeparameter() kommend, immer alle deklarierten
+        # Parameter; ein fehlender Sollwert soll deshalb laut mit KeyError
+        # zuschlagen statt still zu 0 zu werden.
         y1 = self._stufe(
             float(zustand.get("y1", 0.0)),
-            float(sollwert_1),
+            float(ein.get("sollwert_1", p["sollwert_1"])),
             float(ein.get("istwert_1", 0.0)),
             p["xp_1"],
         )
         y2 = self._stufe(
             float(zustand.get("y2", 0.0)),
-            float(sollwert_2),
+            float(ein.get("sollwert_2", p["sollwert_2"])),
             float(ein.get("istwert_2", 0.0)),
             p["xp_2"],
         )
