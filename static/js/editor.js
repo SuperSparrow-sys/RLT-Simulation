@@ -148,6 +148,10 @@ const Editor = {
 
   karteGreifen(ereignis, karte) {
     if (ereignis.button !== 0) return;
+    // Umschalt+Klick auf einer Karte ist Pfeile.ziehenStarten() vorbehalten
+    // (siehe pfeile.js) - ohne diese Abfrage wuerde stopPropagation() weiter
+    // unten den Klick abfangen, bevor er die Leinwand erreicht.
+    if (ereignis.shiftKey) return;
     ereignis.stopPropagation();
     this.auswahl = karte.id;
     panelZeigen(karte);

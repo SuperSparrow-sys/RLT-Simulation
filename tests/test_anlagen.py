@@ -153,6 +153,19 @@ def test_pfeil_zwischen_zwei_anlagen_wird_verweigert(app):
             anlagen.pfeil_anlegen(eine, hier, dort)
 
 
+def test_pfeil_zu_sich_selbst_wird_verweigert(app):
+    """Die Oberflaeche macht diese Geste jetzt direkt erreichbar (Umschalt+Ziehen
+    auf die eigene Karte zurueck) - ohne eigene Pruefung faellt sie nur zufaellig
+    durch 'passt kein freier Anschluss zusammen'."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        karte = anlagen.karte_anlegen(anlage, "erhitzer", 0.0, 0.0)
+
+        with pytest.raises(ValueError, match="nicht mit sich selbst"):
+            anlagen.pfeil_anlegen(anlage, karte, karte)
+
+
 def test_karte_loeschen_nimmt_ihre_pfeile_mit(app):
     with app.app_context():
         projekt = anlagen.projekt_anlegen("P")

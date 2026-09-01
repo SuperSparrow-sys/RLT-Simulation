@@ -52,7 +52,8 @@ CREATE TABLE IF NOT EXISTS pfeil (
     anlage_id      INTEGER NOT NULL REFERENCES anlage(id) ON DELETE CASCADE,
     von_karte_id   INTEGER NOT NULL REFERENCES karte(id) ON DELETE CASCADE,
     nach_karte_id  INTEGER NOT NULL REFERENCES karte(id) ON DELETE CASCADE,
-    stuetzpunkte   TEXT NOT NULL DEFAULT '[]'
+    stuetzpunkte   TEXT NOT NULL DEFAULT '[]',
+    mehrdeutig     INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS verbindung (
@@ -176,4 +177,19 @@ def close_db(exception=None):
 def init_db():
     db = get_db()
     db.executescript(SCHEMA)
+    _migriere(db)
     db.commit()
+
+
+def _migriere(db):
+    """Spaltenzusaetze fuer Datenbanken, die vor dieser Spalte angelegt wurden.
+
+    'CREATE TABLE IF NOT EXISTS' legt eine neue Spalte in einer bereits
+    bestehenden Tabelle nicht nachtraeglich an - ohne dies wuerde eine lokale
+    Datenbank aus einer frueheren Version mit 'no such column' abbrechen.
+    """
+    spalten = {z["name"] for z in db.execute("PRAGMA table_info(pfeil)")}
+    if "mehrdeutig" not in spalten:
+        db.execute(
+            "ALTER TABLE pfeil ADD COLUMN mehrdeutig INTEGER NOT NULL DEFAULT 0"
+        )

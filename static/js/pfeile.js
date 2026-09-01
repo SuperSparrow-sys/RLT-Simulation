@@ -8,23 +8,17 @@ const Pfeile = {
     this.editor = editor;
     const leinwand = document.getElementById("leinwand");
 
-    /* Erfassungsphase (capture): editor.js registriert auf der Karte selbst
-       einen pointerdown-Listener, der die Ausbreitung sofort stoppt (Karte
-       ziehen). Ohne Erfassungsphase erreicht ein Umschalt-Klick auf eine
-       Karte diesen Listener hier nie - er wird schon auf der Karte
-       abgefangen, bevor er nach oben zur Leinwand durchsickert. */
-    leinwand.addEventListener(
-      "pointerdown",
-      (e) => {
-        if (e.button !== 0 || !e.shiftKey) return;
-        const kartenElement = e.target.closest(".karte");
-        if (!kartenElement) return;
-        e.stopPropagation();
-        const id = Number(kartenElement.dataset.id);
-        this.ziehenStarten(editor.karteNach(id), e);
-      },
-      { capture: true }
-    );
+    /* editor.js' karteGreifen() laesst einen Umschalt-Klick ausdruecklich
+       durch (siehe dort), statt seine Ausbreitung zu stoppen - deshalb reicht
+       hier ein gewoehnlicher Bubble-Phase-Listener auf der Leinwand. */
+    leinwand.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0 || !e.shiftKey) return;
+      const kartenElement = e.target.closest(".karte");
+      if (!kartenElement) return;
+      e.stopPropagation();
+      const id = Number(kartenElement.dataset.id);
+      this.ziehenStarten(editor.karteNach(id), e);
+    });
 
     leinwand.addEventListener("dblclick", (e) => {
       const pfeilElement = e.target.closest(".pfeil");

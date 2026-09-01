@@ -152,6 +152,9 @@ def _belegte_ports(anlage_id):
 
 
 def pfeil_anlegen(anlage_id, von_karte_id, nach_karte_id):
+    if von_karte_id == nach_karte_id:
+        raise ValueError("Eine Karte kann nicht mit sich selbst verbunden werden")
+
     db = get_db()
     von = _lade_karte(von_karte_id)
     nach = _lade_karte(nach_karte_id)
@@ -193,8 +196,9 @@ def _pfeil_schreiben(
     db, anlage_id, von_karte_id, nach_karte_id, von, nach, paare, belegt, mehrdeutig,
 ):
     cur = db.execute(
-        "INSERT INTO pfeil (anlage_id, von_karte_id, nach_karte_id) VALUES (?, ?, ?)",
-        (anlage_id, von_karte_id, nach_karte_id),
+        "INSERT INTO pfeil (anlage_id, von_karte_id, nach_karte_id, mehrdeutig) "
+        "VALUES (?, ?, ?, ?)",
+        (anlage_id, von_karte_id, nach_karte_id, int(mehrdeutig)),
     )
     pfeil_id = cur.lastrowid
 
@@ -314,6 +318,7 @@ def verbindung_anlegen(anlage_id, von_port_id, nach_port_id):
 
     return {
         "id": cur.lastrowid,
+        "mehrdeutig": False,  # eine von Hand gesetzte Verbindung ist keine Vermutung
         "verbindungen": [
             {"von_karte_id": von["karte_id"], "von_schluessel": von["schluessel"],
              "nach_karte_id": nach["karte_id"], "nach_schluessel": nach["schluessel"]}
@@ -387,11 +392,6 @@ def als_json(anlage_id):
             }
         )
 
-    # Belegung ueber die ganze Anlage, um je Pfeil zu pruefen, ob seine Zuordnung
-    # mehrdeutig war: mit den eigenen Ports wieder frei gerechnet, verhaelt sich
-    # graph.alternativen genau wie im Moment der Entstehung dieses Pfeils.
-    belegt_gesamt = _belegte_ports(anlage_id)
-
     pfeile = []
     for zeile in db.execute(
         "SELECT * FROM pfeil WHERE anlage_id = ? ORDER BY id", (anlage_id,)
@@ -400,26 +400,21 @@ def als_json(anlage_id):
             "SELECT * FROM verbindung WHERE pfeil_id = ?", (zeile["id"],)
         ).fetchall()
 
-        von_karte = g.karten.get(zeile["von_karte_id"])
-        nach_karte = g.karten.get(zeile["nach_karte_id"])
-        mehrdeutig = False
-        if von_karte and nach_karte:
-            eigene_ports = {v["von_port_id"] for v in verbindungen} | {
-                v["nach_port_id"] for v in verbindungen
-            }
-            mehrdeutig = bool(
-                graph.alternativen(
-                    von_karte, nach_karte, belegt_gesamt - eigene_ports
-                )
-            )
-
         pfeile.append(
             {
                 "id": zeile["id"],
                 "von_karte_id": zeile["von_karte_id"],
                 "nach_karte_id": zeile["nach_karte_id"],
                 "stuetzpunkte": json.loads(zeile["stuetzpunkte"]),
-                "mehrdeutig": mehrdeutig,
+                # Ob geraten wurde, ist eine Tatsache ueber den Moment, in dem
+                # der Pfeil entstand - keine Eigenschaft des heutigen
+                # Anlagenzustands. Deshalb wird sie in pfeil_anlegen() einmal
+                # berechnet und hier nur gelesen, nicht neu bestimmt: eine
+                # Neuberechnung ueber die aktuelle Portbelegung liefert ein
+                # anderes Ergebnis, sobald spaeter angelegte Pfeile an der
+                # Gegenkarte weitere, zufaellig noch freie Anschluesse
+                # nachwachsen lassen.
+                "mehrdeutig": bool(zeile["mehrdeutig"]),
                 "verbindungen": [
                     {"von_port_id": v["von_port_id"], "nach_port_id": v["nach_port_id"]}
                     for v in verbindungen

@@ -264,10 +264,19 @@ def alternativen(von_karte, nach_karte, belegt):
     Diese Funktion nennt die verworfenen Moeglichkeiten, damit der Editor den Pfeil
     als mehrdeutig kennzeichnen und zur Korrektur anbieten kann. Sie raet nicht
     besser - sie macht sichtbar, dass geraten wurde.
+
+    Nur GLEICH gute Konkurrenz zaehlt, wie der Name sagt: ein Kandidat, der um
+    denselben Anschluss mit dem selben Punktestand wie der Gewinner gestritten
+    hat. Ein Kandidat mit einem niedrigeren Punktestand war nie ernsthaft im
+    Rennen - ihn zu melden waere falscher Alarm bei jedem Pfeil, dessen
+    Gegenkarte zufaellig noch einen freien, schlechter passenden Anschluss hat.
     """
-    gewaehlt = {(v.id, n.id) for v, n in verdrahte(von_karte, nach_karte, belegt)}
-    genommene_ziele = {n for _, n in gewaehlt}
-    genommene_quellen = {v for v, _ in gewaehlt}
+    vorwaerts, _ = _paare(von_karte, nach_karte, belegt)
+    gewaehlt = {(v.id, n.id) for v, n in vorwaerts}
+    punkte_je_quelle = {v.id: _punkte(v, n) for v, n in vorwaerts}
+    punkte_je_ziel = {n.id: _punkte(v, n) for v, n in vorwaerts}
+    genommene_ziele = {n.id for _, n in vorwaerts}
+    genommene_quellen = {v.id for v, _ in vorwaerts}
 
     verworfen = []
     for v in von_karte.ports:
@@ -276,11 +285,18 @@ def alternativen(von_karte, nach_karte, belegt):
         for n in nach_karte.ports:
             if n.id in belegt or n.richtung != basis.EINGANG:
                 continue
-            if not _punkte(v, n) or (v.id, n.id) in gewaehlt:
+            punkte = _punkte(v, n)
+            if not punkte or (v.id, n.id) in gewaehlt:
                 continue
             # Nur echte Konkurrenz zaehlt: eine Zuordnung, die um denselben
-            # Anschluss gestritten und verloren hat.
-            if v.id in genommene_quellen or n.id in genommene_ziele:
+            # Anschluss mit demselben Punktestand gestritten und verloren hat.
+            verliert_gegen_quelle = (
+                v.id in genommene_quellen and punkte == punkte_je_quelle[v.id]
+            )
+            verliert_gegen_ziel = (
+                n.id in genommene_ziele and punkte == punkte_je_ziel[n.id]
+            )
+            if verliert_gegen_quelle or verliert_gegen_ziel:
                 verworfen.append((v, n))
     return verworfen
 
