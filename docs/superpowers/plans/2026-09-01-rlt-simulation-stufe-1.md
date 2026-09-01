@@ -3868,8 +3868,11 @@ class PRegler(Baustein):
     SYMBOL = "p_regler.svg"
 
     PARAMETER = [
-        Param("xp_1", "Xp Regler 1 (schnell)", "-", 10.0),
-        Param("xp_2", "Xp Regler 2 (träge)", "-", 5.0),
+        # Anlage!K52 speist ueber K51 den Ausgang 1, Anlage!K54 ueber K53 den
+        # Ausgang 2. Der schnelle Regler hat also die KLEINERE Zahl - eine kleine
+        # Proportionalbandbreite bedeutet einen kraeftigeren Eingriff je Durchgang.
+        Param("xp_1", "Xp Regler 1 (schnell)", "-", 5.0),
+        Param("xp_2", "Xp Regler 2 (träge)", "-", 10.0),
         Param("sollwert_1", "Sollwert 1", "-", 0.0),
         Param("sollwert_2", "Sollwert 2", "°C", 20.0),
     ]
@@ -7725,23 +7728,23 @@ def baue(projekt_id, name="AX_SIM 2.1"):
     # -- Regelung, Anlage!I52:W72 -------------------------------------
     regler_vor = karte(
         "p_regler", 440, 400, "Regler Vorerhitzer",
-        xp_1=10.0, xp_2=5.0, sollwert_2=19.0,   # Anlage!N52, N54, M59
+        xp_1=5.0, xp_2=10.0, sollwert_2=19.0,   # Anlage!N52, N54, M59
     )
     regler_erhitzer_1 = karte(
         "p_regler", 960, 20, "Regler Erhitzer Halle",
-        xp_1=10.0, xp_2=5.0, sollwert_2=20.0,   # Anlage!W52, W54, V59
+        xp_1=5.0, xp_2=10.0, sollwert_2=20.0,   # Anlage!W52, W54, V59
     )
     regler_kuehler_1 = karte(
         "p_regler", 780, 20, "Regler Kühler Halle",
-        xp_1=10.0, xp_2=5.0, sollwert_2=15.0,   # Anlage!T52, T54, S70
+        xp_1=5.0, xp_2=10.0, sollwert_2=15.0,   # Anlage!T52, T54, S70
     )
     regler_erhitzer_2 = karte(
         "p_regler", 960, 440, "Regler Erhitzer Umkleide",
-        xp_1=10.0, xp_2=5.0, sollwert_2=20.0,
+        xp_1=5.0, xp_2=10.0, sollwert_2=20.0,
     )
     regler_kuehler_2 = karte(
         "p_regler", 780, 440, "Regler Kühler Umkleide",
-        xp_1=10.0, xp_2=5.0, sollwert_2=15.0,
+        xp_1=5.0, xp_2=10.0, sollwert_2=15.0,
     )
     regler_waescher_1 = karte(
         "hysterese_regler", 1320, 20, "Regler Luftwäscher Halle",
@@ -11420,18 +11423,18 @@ In `core/vorlagen/ax_sim_2_1.py` wird der Regelungsabschnitt ersetzt. Je Gerät:
 
     regler_vor = karte(
         "p_regler", 440, 400, "Regler Vorerhitzer",
-        xp_1=10.0, xp_2=5.0, sollwert_2=19.0,          # Anlage!N52, N54, M59
+        xp_1=5.0, xp_2=10.0, sollwert_2=19.0,          # Anlage!N52, N54, M59
     )
 
     # Kuehler Halle: Entfeuchtung (Sollwert 9 g/kg, Istwert = Raumfeuchte) und
     # Kuehlung (Sollwert = Raumtemperatur, Istwert fest 22 °C)
     entfeuchter_1 = karte(
         "p_regler", 780, 20, "Entfeuchtungsregler Halle",
-        xp_1=10.0, xp_2=5.0, sollwert_2=9.0,           # Anlage!S59
+        xp_1=5.0, xp_2=10.0, sollwert_2=9.0,           # Anlage!S59
     )
     kuehlregler_1 = karte(
         "p_regler", 780, 100, "Kühlregler Halle",
-        xp_1=10.0, xp_2=5.0, istwert_2=22.0,           # Anlage!S71
+        xp_1=5.0, xp_2=10.0, istwert_2=22.0,           # Anlage!S71
     )
     kuehlerstellung_1 = karte(
         "maximalwert", 780, 180, "Stellung Kühler Halle",
@@ -11441,7 +11444,7 @@ In `core/vorlagen/ax_sim_2_1.py` wird der Regelungsabschnitt ersetzt. Je Gerät:
     # Erhitzer Halle: Nachwaermen nach dem Waescher, mindestens 50 %
     erhitzerregler_1 = karte(
         "p_regler", 960, 20, "Regler Erhitzer Halle",
-        xp_1=10.0, xp_2=5.0, sollwert_2=20.0,          # Anlage!V59
+        xp_1=5.0, xp_2=10.0, sollwert_2=20.0,          # Anlage!V59
     )
     nachwaermen_1 = karte(
         "faktor", 960, 100, "Nachwärmen Halle", faktor=0.5,   # Anlage!V16
@@ -11486,12 +11489,42 @@ Diese drei werden deshalb mit `anlagen.verbindung_anlegen` ausdrücklich gesetzt
 `F_Raum → sollwert` beim Wäscherregler, `F_Raum → istwert_2` beim Entfeuchter,
 `T_Raum → sollwert_2` beim Kühlregler. Genau dafür gibt es diese Funktion.
 
-- [ ] **Step 8: Tests laufen lassen**
+- [ ] **Step 8: Die Verstärkungen richtigstellen**
+
+Die Prüfung von Task 18 hat gezeigt, dass die beiden Proportionalbandbreiten des
+P-Reglers vertauscht waren. In der Mappe speist `Anlage!K52 = 5` über `K51` den
+**Ausgang 1** und `K54 = 10` über `K53` den **Ausgang 2**; der als „schnell"
+bezeichnete Regler hat also die kleinere Zahl, weil eine kleine Bandbreite einen
+kräftigeren Eingriff je Durchgang bedeutet. Weil nur die träge Stufe verdrahtet ist,
+arbeitete bisher jeder Regler der Anlage mit 5 statt 10 — doppelt so scharf wie
+vorgesehen.
+
+Beides ist zu berichtigen: die Vorgabewerte in `core/bausteine/p_regler.py` auf
+`xp_1=5.0` und `xp_2=10.0`, und jeder Regler in der Vorlage auf `xp_1=5.0, xp_2=10.0`.
+Dazu ein Test in `tests/test_vorlage.py`, damit eine Verstärkung nicht wieder
+unbemerkt wandert:
+
+```python
+def test_reglerverstaerkungen_entsprechen_der_excel(app):
+    """Anlage!K52 speist Ausgang 1, K54 speist Ausgang 2 - der traege hat die 10."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("Referenz")
+        anlage = ax_sim_2_1.baue(projekt, "AX_SIM 2.1")
+        daten = anlagen.als_json(anlage)
+
+    regler = [k for k in daten["karten"] if k["typ"] == "p_regler"]
+    assert regler, "die Vorlage hat keine P-Regler"
+    for k in regler:
+        assert k["parameter"]["xp_1"] == 5.0, k["name"]
+        assert k["parameter"]["xp_2"] == 10.0, k["name"]
+```
+
+- [ ] **Step 9: Tests laufen lassen**
 
 Run: `./venv/bin/pytest -q`
 Expected: alle Tests bestanden.
 
-- [ ] **Step 9: Den Jahreslauf fahren und die Abweichung berichten**
+- [ ] **Step 10: Den Jahreslauf fahren und die Abweichung berichten**
 
 ```bash
 ./venv/bin/python werkzeuge/abgleich.py
@@ -11502,7 +11535,7 @@ und die Zahl der nicht konvergierten Stunden muss deutlich sinken. Ob sie die To
 von 0,5 Prozent schon erreichen, ist hier noch nicht gefordert — das ist Task 20.
 Berichtet wird, was tatsächlich herauskam, ohne Beschönigung.
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
 git add core tests
