@@ -61,11 +61,12 @@ def test_beleuchtungswaerme_entspricht_der_excel():
     assert Raum().beleuchtungswaerme(parameter()) == pytest.approx(1.452)
 
 
-def test_solargewinn_wird_ueber_22_grad_abgemindert():
+def test_solargewinn_wird_ueber_22_grad_aussentemperatur_abgemindert():
+    """Anlage!AK122 prueft AJ75 - und AI75 beschriftet diese Zelle als T_AU."""
     p = parameter()
     strahlung = {"QH_S": 400.0, "QH_O": 100.0, "QH_W": 100.0, "QH_N": 50.0, "QH_H": 300.0}
-    kalt = Raum().solargewinn(p, strahlung, T_Raum=18.0)
-    warm = Raum().solargewinn(p, strahlung, T_Raum=25.0)
+    kalt = Raum().solargewinn(p, strahlung, T_AU=18.0)
+    warm = Raum().solargewinn(p, strahlung, T_AU=25.0)
     assert warm == pytest.approx(0.2 * kalt)
     assert kalt > 0.0
 
@@ -73,7 +74,7 @@ def test_solargewinn_wird_ueber_22_grad_abgemindert():
 def test_solargewinn_ist_nachts_null():
     p = parameter()
     strahlung = {"QH_S": 0.0, "QH_O": 0.0, "QH_W": 0.0, "QH_N": 0.0, "QH_H": 0.0}
-    assert Raum().solargewinn(p, strahlung, T_Raum=18.0) == pytest.approx(0.0)
+    assert Raum().solargewinn(p, strahlung, T_AU=18.0) == pytest.approx(0.0)
 
 
 def test_raumtemperatur_strebt_dem_beharrungswert_entgegen():
@@ -90,6 +91,28 @@ def test_raumtemperatur_strebt_dem_beharrungswert_entgegen():
     for _ in range(200):
         aus, zustand = Raum().berechne(ein, p, zustand)
     assert aus["T_Raum"] < 5.0
+
+
+def test_wandspeicher_entspricht_der_excel():
+    """Anlage!AK127 und AK128 - der einzige belastbare Rechenstand des Wandspeichers.
+
+    Aus T_Wand = 0 °C und der Raumtemperatur AJ89 = 0.15028844280554668 °C ergibt
+    die Mappe QH_Wand = -2.2358667126533947 kW und T_Wand_neu =
+    0.04628884038410837 °C. Der Test haelt beides fest, weil der Teiler 3600 in
+    C_Wand von der Beschriftung der Bauart abweicht (siehe Kommentar im Baustein) -
+    ohne diesen Anker saehe die Abweichung wie ein Fehler aus und wuerde
+    frueher oder spaeter 'korrigiert'.
+    """
+    p = parameter()
+    raum = Raum()
+    g = raum.geometrie(p)
+
+    T_Wand, T_Raum = 0.0, 0.15028844280554668
+    QH_Wand = (T_Wand - T_Raum) * p["waermeuebergang"] * g["innenwand"] / 1000.0
+    C_Wand = g["innenwand"] * p["bauart"] / 3600.0
+
+    assert QH_Wand == pytest.approx(-2.2358667126533947, rel=1e-12)
+    assert T_Wand - QH_Wand / C_Wand == pytest.approx(0.04628884038410837, rel=1e-12)
 
 
 def test_wandtemperatur_folgt_der_raumtemperatur():
