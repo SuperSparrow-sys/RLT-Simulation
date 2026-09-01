@@ -9445,26 +9445,636 @@ git commit -m "Simulationsdialog mit Fortschritt und Jahresbilanz"
 
 ---
 
+## Task 25: Testanlage bauen und auf Plausibilität prüfen
+
+Task 20 weist nach, dass der Nachbau **dieselben Zahlen liefert wie die Excel**. Das
+ist nicht dasselbe wie: die Anlage rechnet physikalisch vernünftig. Ein Vorzeichenfehler
+in einem Baustein, den die Vorlage gar nicht benutzt, bliebe dort unentdeckt.
+
+Diese Aufgabe baut deshalb eine **zweite Anlage**, die bewusst die Karten einsetzt, die
+in der Vorlage fehlen — Dampfbefeuchter, bauphysikalischer Raum mit Wandspeicher,
+Kaskadenregler, Monatsprofil, Verbraucher —, rechnet sie über ein volles Jahr und prüft
+das Ergebnis gegen physikalische Erwartungen statt gegen Zahlen aus der Mappe.
+
+**Files:**
+- Create: `core/vorlagen/testanlage.py`, `werkzeuge/plausibilitaet.py`
+- Modify: `core/vorlagen/__init__.py`
+- Test: `tests/test_plausibilitaet.py`
+
+**Interfaces:**
+- Consumes: `anlagen`, `solver`, `werkzeuge.abgleich.lade_wetterstunden`, die
+  Bausteinbibliothek
+- Produces: `testanlage.BESCHREIBUNG`, `testanlage.baue(projekt_id, name) -> int`;
+  `plausibilitaet.rechne_testjahr(app) -> dict` mit `lauf`, `graph`, `anlage_id`;
+  `plausibilitaet.pruefungen(ergebnis) -> list[dict]` mit je `name`, `bestanden`,
+  `befund`; `plausibilitaet.als_text(pruefungen) -> str`
+
+- [ ] **Step 1: Write the failing test**
+
+`tests/test_plausibilitaet.py`:
+
+```python
+import pytest
+
+from app import create_app
+from core import database
+from werkzeuge import plausibilitaet
+
+
+@pytest.fixture(scope="module")
+def ergebnis(tmp_path_factory):
+    """Rechnet die Testanlage einmal ueber ein Jahr; alle Pruefungen teilen sie."""
+    pfad = tmp_path_factory.mktemp("plausibilitaet") / "rlt.db"
+    import core.config
+
+    alt = core.config.DB_PATH
+    core.config.DB_PATH = pfad
+    try:
+        app = create_app()
+        with app.app_context():
+            database.init_db()
+        yield plausibilitaet.rechne_testjahr(app)
+    finally:
+        core.config.DB_PATH = alt
+
+
+@pytest.mark.slow
+def test_jede_pruefung_besteht(ergebnis):
+    ergebnisse = plausibilitaet.pruefungen(ergebnis)
+    gescheitert = [p for p in ergebnisse if not p["bestanden"]]
+    assert not gescheitert, "\n" + plausibilitaet.als_text(ergebnisse)
+
+
+@pytest.mark.slow
+def test_die_testanlage_nutzt_die_karten_der_vorlage_nicht(ergebnis):
+    """Sie soll gerade das abdecken, was AX_SIM 2.1 auslaesst."""
+    typen = {k.typ for k in ergebnis["graph"].karten.values()}
+    assert {"dampfbefeuchter", "raum", "kaskade", "beleuchtung", "warmwasser"} <= typen
+
+
+@pytest.mark.slow
+def test_beide_vorlagen_decken_zusammen_die_ganze_bibliothek_ab(ergebnis):
+    """Jeder Kartentyp muss mindestens einmal wirklich gerechnet worden sein."""
+    from core.bausteine import basis
+
+    fehlend = plausibilitaet.nicht_abgedeckte_typen(ergebnis)
+    assert not fehlend, (
+        f"{len(fehlend)} von {len(basis.alle())} Kartentypen werden von keiner "
+        f"der beiden Vorlagen gerechnet: {sorted(fehlend)}"
+    )
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `./venv/bin/pytest tests/test_plausibilitaet.py -v`
+Expected: FAIL mit `ModuleNotFoundError: No module named 'werkzeuge.plausibilitaet'`
+
+- [ ] **Step 3: Build the test plant**
+
+`core/vorlagen/testanlage.py`:
+
+```python
+"""Eine zweite Anlage, gebaut zum Pruefen - nicht aus der Excel uebernommen.
+
+Sie setzt bewusst die Karten ein, die in der Vorlage AX_SIM 2.1 fehlen, damit
+kein Baustein ungerechnet bleibt: Dampfbefeuchter statt Luftwaescher, den
+bauphysikalischen Raum mit Wandspeicher statt des einfachen, den Kaskadenregler
+statt einzelner P-Regler, dazu Monatsprofil und die Verbraucher.
+
+Aufbau:
+
+    Wetter -> Aussenluft -> WRG -> Erhitzer -> Kuehler -> Dampfbefeuchter
+           -> Zuluftventilator -> Raum
+    Raum   -> Abluftventilator -> WRG -> Fortluft
+
+    Kaskade (T_AU, T_Raum, T_ZU) stellt Erhitzer und Kuehler
+    Hysterese-Regler stellt den Dampfbefeuchter nach der Raumfeuchte
+    Wochenzeitplan + Ferien + Monatsprofil + Tageslastprofil -> Anlagenbetrieb
+           -> beide Ventilatoren
+    Beleuchtung -> Raum; Heizungspumpen, Warmwasser, Zirkulation -> Bilanz
+"""
+
+from core import anlagen
+
+BESCHREIBUNG = "Testanlage Bürogebäude — deckt die Karten ab, die AX_SIM 2.1 auslässt"
+
+
+def baue(projekt_id, name="Testanlage Bürogebäude"):
+    anlage = anlagen.anlage_anlegen(
+        projekt_id, name, notiz="Zum Pruefen gebaut, nicht aus der Excel uebernommen"
+    )
+
+    def karte(typ, x, y, bezeichnung, **parameter):
+        return anlagen.karte_anlegen(anlage, typ, x, y, parameter, bezeichnung)
+
+    wetter = karte("wetter", 40, 40, "Wetterdaten")
+    aussenluft = karte("aussenluft", 40, 200, "Außenluft")
+
+    wrg = karte(
+        "wrg", 220, 200, "Wärmerückgewinnung",
+        V_nenn=6000.0, dp_WRG_nenn=150.0, dp_Bypass_nenn=40.0,
+        rueckwaermzahl=75.0, rueckfeuchtzahl=0.0,
+    )
+    erhitzer = karte(
+        "erhitzer", 400, 160, "Erhitzer",
+        V_nenn=6000.0, dp_nenn=60.0, QH_max=80.0,
+    )
+    kuehler = karte(
+        "kuehler", 580, 160, "Kühler",
+        V_nenn=6000.0, dp_nenn=180.0, QK_nenn=60.0, T_KW_mittel=8.0,
+    )
+    befeuchter = karte(
+        "dampfbefeuchter", 760, 160, "Dampfbefeuchter",
+        dampftemperatur=180.0, absalzverlust=10.0, max_leistung=25.0, dampfart="E",
+    )
+    zuluft = karte(
+        "ventilator", 940, 160, "Zuluftventilator",
+        rolle="zuluft", V_max=6000.0, dp_max=900.0, dp_konst=700.0,
+        PE_max=2.6, regelart="F", stellgroesse=100.0,
+    )
+
+    raum = karte(
+        "raum", 1140, 200, "Bürogeschoss",
+        laenge_a=30.0, laenge_b=18.0, laenge_c=30.0, laenge_d=18.0, laenge_e=0.0,
+        aw_anteil_a=1.0, aw_anteil_b=1.0, aw_anteil_c=1.0, aw_anteil_d=1.0,
+        u_wand_a=0.28, u_wand_b=0.28, u_wand_c=0.28, u_wand_d=0.28,
+        fenster_a=54.0, fenster_b=32.0, fenster_c=54.0, fenster_d=32.0,
+        u_fenster_a=1.3, u_fenster_b=1.3, u_fenster_c=1.3, u_fenster_d=1.3,
+        dach_laenge=0.0, dach_anteil=1.0, u_dach=0.2,
+        fenster_dach=0.0, u_fenster_dach=1.3,
+        boden_anteil=1.0, u_boden=0.3,
+        geschosse=1.0, hoehe=3.0, bauart=90.0, ausrichtung=0.0,
+        waermebruecke=0.05, waermeuebergang=7.7,
+        g_faktor=0.6, verschattung_1=0.7, verschattung_2=0.9,
+        verschattung_3=0.9, verschattung_4=1.0,
+        spez_beleuchtung=0.0,       # die Beleuchtung haengt als eigene Karte daran
+        start_temperatur=20.0,
+    )
+
+    abluft = karte(
+        "ventilator", 1140, 420, "Abluftventilator",
+        rolle="abluft", V_max=6000.0, dp_max=700.0, dp_konst=500.0,
+        PE_max=2.0, regelart="F", stellgroesse=100.0,
+    )
+    fortluft = karte("fortluft", 40, 420, "Fortluft")
+
+    kaskade = karte(
+        "kaskade", 580, 20, "Raum-/Zuluft-Kaskade",
+        T_Raum_min=21.0, T_AU_min=16.0, T_Raum_max=26.0, T_AU_max=32.0,
+        T_ZU_min=16.0, T_ZU_max=28.0, xp=5.0,
+    )
+    feuchteregler = karte(
+        "hysterese_regler", 760, 20, "Feuchteregler",
+        hysterese=0.5, sollwert=6.0,
+    )
+
+    zeitplan = karte("wochenzeitplan", 40, 560, "Wochenzeitplan")
+    ferien = karte(
+        "ferien", 220, 560, "Betriebsferien",
+        zeitraeume=[{"name": "Weihnachten", "von": "24.12.", "bis": "01.01."}],
+    )
+    monate = karte("monatsprofil", 400, 560, "Monatsprofil")
+    tagesprofil = karte(
+        "tageslastprofil", 580, 560, "Tageslastprofil",
+        lastgang_1=[0.3] * 6 + [1.0] * 12 + [0.3] * 6,
+    )
+    betrieb = karte("anlagenbetrieb", 760, 560, "Anlagenbetrieb")
+
+    beleuchtung = karte(
+        "beleuchtung", 1340, 120, "Beleuchtung",
+        spez_leistung=8.0, grundflaeche=540.0, nennbeleuchtung=500.0,
+    )
+    pumpen = karte(
+        "heizungspumpen", 1340, 480, "Heizungspumpen",
+        P_allgemein=0.3, P_wwb=0.2, P_kessel=0.4,
+    )
+    warmwasser = karte(
+        "warmwasser", 1340, 560, "Warmwasserbereitung",
+        speichervolumen=500.0, verbrauch=180.0, sollwert=55.0,
+    )
+    zirkulation = karte(
+        "zirkulation", 1340, 640, "Zirkulation",
+        volumenstrom=0.8, spreizung=5.0, P_pumpe=0.03,
+    )
+
+    bilanz = karte(
+        "bilanz", 1560, 400, "Energiepreise und Bilanz",
+        preis_strom_ht=280.0, preis_strom_nt=220.0, preis_strom_leistung=0.0,
+        preis_waerme=90.0, preis_kaelte=90.0, preis_wasser=4.5,
+        ht_von=7.0 / 24.0, ht_bis=20.0 / 24.0,
+    )
+    logger = karte(
+        "datenlogger", 1560, 120, "Datenlogger",
+        namen=["T Raum", "F Raum", "T Zuluft", "Q WRG"] + [""] * 6,
+        einheiten=["°C", "g/kg", "°C", "kW"] + [""] * 6,
+    )
+
+    for von, nach in [
+        (wetter, aussenluft),
+        (aussenluft, wrg),
+        (wrg, erhitzer),
+        (erhitzer, kuehler),
+        (kuehler, befeuchter),
+        (befeuchter, zuluft),
+        (zuluft, raum),
+        (raum, abluft),
+        (abluft, wrg),
+        (wrg, fortluft),
+        (wetter, raum),
+        (wetter, kaskade),
+        (kaskade, erhitzer),
+        (kaskade, kuehler),
+        (feuchteregler, befeuchter),
+        (zeitplan, betrieb),
+        (ferien, betrieb),
+        (tagesprofil, betrieb),
+        (betrieb, zuluft),
+        (betrieb, abluft),
+        (betrieb, beleuchtung),
+        (betrieb, pumpen),
+        (betrieb, zirkulation),
+        (beleuchtung, raum),
+        (zuluft, bilanz),
+        (abluft, bilanz),
+        (erhitzer, bilanz),
+        (kuehler, bilanz),
+        (befeuchter, bilanz),
+        (beleuchtung, bilanz),
+        (pumpen, bilanz),
+        (warmwasser, bilanz),
+        (zirkulation, bilanz),
+        (raum, logger),
+        (wrg, logger),
+    ]:
+        anlagen.pfeil_anlegen(anlage, von, nach)
+
+    return anlage
+```
+
+`core/vorlagen/__init__.py` — `VORLAGEN` um `"testanlage": testanlage` ergänzen.
+
+**Hinweis zur Verdrahtung:** Findet ein Pfeil keinen passenden Anschluss, wirft
+`pfeil_anlegen` einen `ValueError` mit beiden Kartennamen. Das ist ein echter Befund
+über die Rollenzuordnung aus Task 14 — nicht die Testanlage verbiegen, sondern die
+Zuordnung nachbessern und im Bericht festhalten.
+
+Der Kaskadenregler stellt sowohl Erhitzer als auch Kühler: Er gibt fünf
+Sequenzausgänge aus, und die automatische Verdrahtung wählt für jede Karte den
+passenden. Läuft das schief, ist auch das ein Befund über Task 14.
+
+- [ ] **Step 4: Write the plausibility tool**
+
+`werkzeuge/plausibilitaet.py`:
+
+```python
+"""Rechnet die Testanlage ueber ein Jahr und prueft das Ergebnis auf Plausibilitaet.
+
+Anders als der Abgleich in werkzeuge/abgleich.py wird hier NICHT gegen die Excel
+verglichen. Geprueft wird, ob sich die Anlage physikalisch vernuenftig verhaelt:
+Bleibt der Raum in einem sinnvollen Temperaturband? Wird im Winter geheizt und im
+Sommer gekuehlt und nicht umgekehrt? Bleibt die Luft unterhalb der Saettigung?
+Passen Stundenwerte und Jahressumme zusammen?
+
+Aufruf von Hand:  ./venv/bin/python werkzeuge/plausibilitaet.py
+"""
+
+from pathlib import Path
+
+WURZEL = Path(__file__).resolve().parent.parent
+
+
+def rechne_testjahr(app):
+    from core import anlagen, solver
+    from core.vorlagen import testanlage
+    from werkzeuge.abgleich import lade_wetterstunden
+
+    stunden = lade_wetterstunden()
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("Plausibilitaet")
+        anlage_id = testanlage.baue(projekt, "Testanlage Bürogebäude")
+        graph = anlagen.lade_graph(anlage_id)
+        lauf = solver.Solver(graph).starte(stunden)
+
+    return {
+        "lauf": lauf,
+        "graph": graph,
+        "anlage_id": anlage_id,
+        "wetter": stunden,
+    }
+
+
+# -- Hilfsgriffe auf den Lauf -------------------------------------------
+
+def _karte_mit_typ(graph, typ):
+    for kid, karte in graph.karten.items():
+        if karte.typ == typ:
+            return kid
+    return None
+
+
+def _reihe(ergebnis, typ, groesse):
+    """Stundenwerte einer Groesse der ersten Karte dieses Typs."""
+    kid = _karte_mit_typ(ergebnis["graph"], typ)
+    if kid is None:
+        return []
+    return [s.get(kid, {}).get(groesse, 0.0) for s in ergebnis["lauf"].stunden]
+
+
+def _monat(ergebnis, nummer):
+    """Indizes der Stunden eines Monats."""
+    return [
+        i for i, w in enumerate(ergebnis["wetter"])
+        if w["zeitpunkt"].month == nummer
+    ]
+
+
+def _summe(werte, indizes=None):
+    if indizes is None:
+        return sum(werte)
+    return sum(werte[i] for i in indizes if i < len(werte))
+
+
+# -- Die Pruefungen ------------------------------------------------------
+
+def pruefungen(ergebnis):
+    from core.bausteine import stoffdaten as st
+
+    lauf = ergebnis["lauf"]
+    ergebnisse = []
+
+    def pruefe(name, bedingung, befund):
+        ergebnisse.append(
+            {"name": name, "bestanden": bool(bedingung), "befund": befund}
+        )
+
+    # 1 - Der Lauf muss ueberhaupt zustande kommen
+    pruefe(
+        "Alle 8760 Stunden gerechnet",
+        len(lauf.stunden) == 8760,
+        f"{len(lauf.stunden)} Stunden",
+    )
+    pruefe(
+        "Jede Stunde konvergiert",
+        len(lauf.warnungen) == 0,
+        f"{len(lauf.warnungen)} Stunden ohne Konvergenz"
+        + (f", erste: {lauf.warnungen[0]['text']}" if lauf.warnungen else ""),
+    )
+
+    # 2 - Der Raum bleibt in einem sinnvollen Band
+    t_raum = _reihe(ergebnis, "raum", "T_Raum")
+    pruefe(
+        "Raumtemperatur zwischen 5 und 40 °C",
+        t_raum and min(t_raum) > 5.0 and max(t_raum) < 40.0,
+        f"min {min(t_raum):.1f} °C, max {max(t_raum):.1f} °C",
+    )
+
+    # 3 - Die Raumluft bleibt unter der Saettigung
+    f_raum = _reihe(ergebnis, "raum", "F_Raum")
+    ueber = [
+        i for i, (t, x) in enumerate(zip(t_raum, f_raum))
+        if x < 0.0 or x > st.x_saett(t) + 0.5
+    ]
+    pruefe(
+        "Raumfeuchte nie negativ und nie ueber der Saettigung",
+        not ueber,
+        f"{len(ueber)} Stunden ausserhalb"
+        + (f", erste Stunde {ueber[0]}" if ueber else ""),
+    )
+
+    # 4 - Geheizt wird im Winter, gekuehlt im Sommer
+    waerme = _reihe(ergebnis, "erhitzer", "QH")
+    kaelte = _reihe(ergebnis, "kuehler", "QK")
+    winter = _monat(ergebnis, 1) + _monat(ergebnis, 2) + _monat(ergebnis, 12)
+    sommer = _monat(ergebnis, 6) + _monat(ergebnis, 7) + _monat(ergebnis, 8)
+    pruefe(
+        "Heizwaerme im Winter groesser als im Sommer",
+        _summe(waerme, winter) > _summe(waerme, sommer),
+        f"Winter {_summe(waerme, winter) / 1000:.1f} MWh, "
+        f"Sommer {_summe(waerme, sommer) / 1000:.1f} MWh",
+    )
+    pruefe(
+        "Kaelte im Sommer groesser als im Winter",
+        _summe(kaelte, sommer) > _summe(kaelte, winter),
+        f"Sommer {_summe(kaelte, sommer) / 1000:.1f} MWh, "
+        f"Winter {_summe(kaelte, winter) / 1000:.1f} MWh",
+    )
+
+    # 5 - Kein Baustein liefert negative Leistung
+    negativ = {
+        name: min(reihe)
+        for name, reihe in (("Waerme", waerme), ("Kaelte", kaelte))
+        if reihe and min(reihe) < -1e-6
+    }
+    pruefe(
+        "Weder Heiz- noch Kaelteleistung wird negativ",
+        not negativ,
+        f"{negativ}" if negativ else "keine negativen Werte",
+    )
+
+    # 6 - Die Waermerueckgewinnung arbeitet in der richtigen Richtung
+    q_wrg = _reihe(ergebnis, "wrg", "Q_WRG")
+    t_au = [w["t_au"] for w in ergebnis["wetter"]]
+    falsch = [
+        i for i, (q, t) in enumerate(zip(q_wrg, t_au))
+        if q < -1e-6 and t < 20.0
+    ]
+    pruefe(
+        "Waermerueckgewinnung heizt die kalte Aussenluft, kuehlt sie nicht",
+        not falsch,
+        f"{len(falsch)} Stunden mit negativer Rueckgewinnung bei kalter Aussenluft",
+    )
+
+    # 7 - Zulufttemperatur bleibt im Bereich, den die Regelung vorgibt
+    t_zu = _reihe(ergebnis, "dampfbefeuchter", "T_aus")
+    pruefe(
+        "Zulufttemperatur zwischen -15 und 45 °C",
+        t_zu and min(t_zu) > -15.0 and max(t_zu) < 45.0,
+        f"min {min(t_zu):.1f} °C, max {max(t_zu):.1f} °C",
+    )
+
+    # 8 - Stundenwerte und Jahressumme passen zusammen
+    bilanz_kid = _karte_mit_typ(ergebnis["graph"], "bilanz")
+    strom_stunden = [
+        s.get(bilanz_kid, {}).get("strom_ht", 0.0)
+        + s.get(bilanz_kid, {}).get("strom_nt", 0.0)
+        for s in lauf.stunden
+    ]
+    strom_bilanz = lauf.bilanz["strom_ht"] + lauf.bilanz["strom_nt"]
+    pruefe(
+        "Summe der Stundenwerte gleich der Jahresbilanz",
+        abs(sum(strom_stunden) - strom_bilanz) < 1e-6,
+        f"Stunden {sum(strom_stunden):.6f} kWh, Bilanz {strom_bilanz:.6f} kWh",
+    )
+
+    # 9 - Der Zeitplan wirkt: nachts und an Feiertagen weniger Strom
+    betrieb = _reihe(ergebnis, "anlagenbetrieb", "betrieb")
+    strom_an = [s for s, b in zip(strom_stunden, betrieb) if b > 0.5]
+    strom_aus = [s for s, b in zip(strom_stunden, betrieb) if b <= 0.5]
+    pruefe(
+        "Im Betrieb wird mehr Strom gezogen als ausserhalb",
+        strom_an and strom_aus
+        and sum(strom_an) / len(strom_an) > sum(strom_aus) / len(strom_aus),
+        f"im Betrieb {sum(strom_an) / max(len(strom_an), 1):.2f} kW, "
+        f"ausserhalb {sum(strom_aus) / max(len(strom_aus), 1):.2f} kW",
+    )
+
+    # 10 - Wasser fliesst nur, wenn der Befeuchter laeuft
+    wasser = _reihe(ergebnis, "dampfbefeuchter", "wasser")
+    stellgroesse = _reihe(ergebnis, "dampfbefeuchter", "in_stellgroesse")
+    unstimmig = [
+        i for i, (w, u) in enumerate(zip(wasser, stellgroesse))
+        if w > 1e-9 and u <= 0.0
+    ]
+    pruefe(
+        "Wasserverbrauch nur bei angesteuertem Befeuchter",
+        not unstimmig,
+        f"{len(unstimmig)} Stunden mit Wasser ohne Ansteuerung",
+    )
+
+    # 11 - Der spezifische Heizwaermebedarf liegt in einer ueblichen Groessenordnung
+    raum_kid = _karte_mit_typ(ergebnis["graph"], "raum")
+    from core.bausteine import basis
+
+    raum_karte = ergebnis["graph"].karten[raum_kid]
+    flaeche = raum_karte.baustein.geometrie(raum_karte.parameter)["grundflaeche"]
+    spezifisch = _summe(waerme) / flaeche if flaeche else 0.0
+    pruefe(
+        "Spezifischer Heizwaermebedarf zwischen 10 und 400 kWh/(m² a)",
+        10.0 < spezifisch < 400.0,
+        f"{spezifisch:.1f} kWh/(m² a) bei {flaeche:.0f} m²",
+    )
+
+    # 12 - Die Wandtemperatur folgt dem Raum, ohne davonzulaufen
+    t_wand = _reihe(ergebnis, "raum", "T_Wand")
+    abstand = max(
+        (abs(w - r) for w, r in zip(t_wand, t_raum)), default=0.0
+    )
+    pruefe(
+        "Wandtemperatur bleibt in der Naehe der Raumtemperatur",
+        abstand < 15.0,
+        f"groesster Abstand {abstand:.1f} K",
+    )
+
+    return ergebnisse
+
+
+def nicht_abgedeckte_typen(ergebnis):
+    """Kartentypen, die weder die Vorlage noch die Testanlage verwendet."""
+    from core.bausteine import basis
+    from core.vorlagen import ax_sim_2_1  # noqa: F401  - nur zur Vollstaendigkeit
+
+    verwendet = {k.typ for k in ergebnis["graph"].karten.values()}
+    # Die Karten der Excel-Vorlage sind fest bekannt und werden in Task 20 gerechnet.
+    verwendet |= {
+        "wrg", "erhitzer", "kuehler", "luftwaescher", "ventilator", "verteiler",
+        "sammler", "aussenluft", "fortluft", "wetter", "einfacher_raum",
+        "p_regler", "hysterese_regler", "wochenzeitplan", "ferien",
+        "tageslastprofil", "anlagenbetrieb", "bilanz", "datenlogger",
+    }
+    return {k.KENNUNG for k in basis.alle()} - verwendet
+
+
+def als_text(ergebnisse):
+    zeilen = []
+    for p in ergebnisse:
+        zeichen = "OK    " if p["bestanden"] else "FEHLER"
+        zeilen.append(f"{zeichen}  {p['name']:55} {p['befund']}")
+    bestanden = sum(1 for p in ergebnisse if p["bestanden"])
+    zeilen.append(f"\n{bestanden} von {len(ergebnisse)} Pruefungen bestanden")
+    return "\n".join(zeilen)
+
+
+if __name__ == "__main__":
+    import sys
+
+    sys.path.insert(0, str(WURZEL))
+    from app import create_app
+    from core import database
+
+    anwendung = create_app()
+    with anwendung.app_context():
+        database.init_db()
+
+    ergebnis = rechne_testjahr(anwendung)
+    print(als_text(pruefungen(ergebnis)))
+
+    fehlend = nicht_abgedeckte_typen(ergebnis)
+    if fehlend:
+        print(f"\nVon keiner Vorlage gerechnet: {sorted(fehlend)}")
+    else:
+        print("\nAlle Kartentypen werden von mindestens einer Vorlage gerechnet.")
+```
+
+- [ ] **Step 5: Run the tool and read the result**
+
+Run: `./venv/bin/python werkzeuge/plausibilitaet.py`
+
+Erwartet wird eine Liste mit zwölf Prüfungen, alle bestanden, und die Meldung, dass
+jeder Kartentyp von mindestens einer Vorlage gerechnet wird.
+
+**Wenn eine Prüfung fehlschlägt, ist das ein echter Befund** — nicht die Schwelle
+verschieben. Die Prüfungen sind bewusst weit gefasst; sie schlagen nur an, wenn etwas
+grundsätzlich falsch ist. In dieser Reihenfolge vorgehen:
+
+1. **Konvergenz zuerst.** Melden sich Stunden als nicht konvergiert, ist die
+   Reglerverdrahtung oder eine Rückkante schuld — nicht die Physik.
+2. **Vorzeichen.** Negative Heiz- oder Kälteleistung, oder eine Rückgewinnung, die
+   kalte Außenluft weiter abkühlt, weist auf ein vertauschtes Vorzeichen im
+   betreffenden Baustein hin.
+3. **Jahreszeit.** Wird im Sommer geheizt und im Winter gekühlt, ist die Kaskade
+   verkehrt herum verdrahtet — wärmer und kälter sind vertauscht.
+4. **Größenordnung.** Ein spezifischer Heizwärmebedarf weit außerhalb des Bandes
+   deutet auf einen Faktor 1000 an der falschen Stelle in der Raumbilanz hin.
+
+Den Befund samt Ursache im Bericht festhalten.
+
+- [ ] **Step 6: Run test to verify it passes**
+
+Run: `./venv/bin/pytest tests/test_plausibilitaet.py -v`
+Expected: 3 passed
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add core/vorlagen/testanlage.py core/vorlagen/__init__.py werkzeuge/plausibilitaet.py tests/test_plausibilitaet.py
+git commit -m "Testanlage und Plausibilitaetspruefung ueber ein volles Jahr"
+```
+
+---
+
 ## Abschluss von Stufe 1
 
 - [ ] **Alle Tests laufen lassen**
 
-Run: `pytest -v`
-Expected: alle Tests bestanden, einschließlich des Jahresabgleichs aus Task 20
+Run: `./venv/bin/pytest -v`
+Expected: alle Tests bestanden, einschliesslich des Jahresabgleichs gegen die Excel
+(Task 20) und der Plausibilitaetspruefung an der Testanlage (Task 25).
 
-- [ ] **README ergänzen**
+- [ ] **Beide Werkzeuge von Hand laufen lassen und die Ausgaben in den Bericht nehmen**
 
-Abschnitte über die Kartentypen, die Vorlage, das Hochladen von Wetterdaten und den
-Abgleich gegen die Excel. Der Hinweis auf `referenz/` bleibt bestehen.
+```bash
+./venv/bin/python werkzeuge/abgleich.py
+./venv/bin/python werkzeuge/plausibilitaet.py
+```
+
+Das erste zeigt, dass der Nachbau dieselben Zahlen liefert wie die Excel. Das zweite
+zeigt, dass eine voellig andere Anlage sich physikalisch vernuenftig verhaelt. Beides
+zusammen ist der Nachweis; eines allein genuegt nicht.
+
+- [ ] **README ergaenzen**
+
+Abschnitte ueber die Kartentypen, die beiden Vorlagen, das Hochladen von Wetterdaten,
+den Abgleich gegen die Excel und die Plausibilitaetspruefung. Der Hinweis auf
+`referenz/` bleibt bestehen.
 
 - [ ] **Abschluss-Commit**
 
 ```bash
 git add README.md
-git commit -m "Stufe 1 abgeschlossen: Rechenkern, Editor und Jahresbilanz"
+git commit -m "Stufe 1 abgeschlossen: Rechenkern, Editor, Jahresabgleich und Plausibilitaetspruefung"
 ```
 
 ## Was danach kommt (Stufe 2, eigener Plan)
 
-Open-Meteo-Import mit Jahresvergleich, Diagramme, Varianten-Gegenüberstellung,
+Open-Meteo-Import mit Jahresvergleich, Diagramme, Varianten-Gegenueberstellung,
 HTML- und PDF-Bericht mit ReportLab sowie die Ausgabe nach CSV und Excel.
