@@ -4,7 +4,7 @@ import sqlite3
 import time
 from functools import wraps
 
-from flask import g
+from flask import current_app, g
 
 from core import config
 
@@ -106,6 +106,8 @@ CREATE TABLE IF NOT EXISTS simulation (
     von_stunde         INTEGER NOT NULL,
     bis_stunde         INTEGER NOT NULL,
     status             TEXT NOT NULL DEFAULT 'fertig',
+    kennung            TEXT,
+    fortschritt        INTEGER NOT NULL DEFAULT 0,
     gestartet_am       TEXT NOT NULL DEFAULT (datetime('now')),
     dauer_s            REAL NOT NULL DEFAULT 0,
     warnungen          TEXT NOT NULL DEFAULT '[]'
@@ -133,6 +135,8 @@ CREATE TABLE IF NOT EXISTS bilanz (
 
 CREATE INDEX IF NOT EXISTS idx_zeitreihe_sim ON zeitreihe(simulation_id);
 CREATE INDEX IF NOT EXISTS idx_bilanz_sim    ON bilanz(simulation_id);
+CREATE INDEX IF NOT EXISTS idx_simulation_kennung ON simulation(kennung);
+CREATE INDEX IF NOT EXISTS idx_simulation_anlage_status ON simulation(anlage_id, status);
 """
 
 
@@ -178,6 +182,7 @@ def init_db():
     db = get_db()
     db.executescript(SCHEMA)
     _migriere(db)
+    _aufraeume_verwaiste_laeufe(db)
     db.commit()
 
 
@@ -193,3 +198,40 @@ def _migriere(db):
         db.execute(
             "ALTER TABLE pfeil ADD COLUMN mehrdeutig INTEGER NOT NULL DEFAULT 0"
         )
+
+    spalten = {z["name"] for z in db.execute("PRAGMA table_info(simulation)")}
+    if "kennung" not in spalten:
+        db.execute("ALTER TABLE simulation ADD COLUMN kennung TEXT")
+    if "fortschritt" not in spalten:
+        db.execute(
+            "ALTER TABLE simulation ADD COLUMN fortschritt INTEGER NOT NULL DEFAULT 0"
+        )
+
+
+def _aufraeume_verwaiste_laeufe(db):
+    """Simulationslaeufe, die beim letzten Absturz oder Neustart des Dienstes
+    auf 'laeuft' stehengeblieben sind, werden als abgebrochen markiert.
+
+    Der Rechen-Thread eines solchen Laufs existiert nach einem Neustart nicht
+    mehr (core/laeufe.py haelt seinen Fortschritt nur im Arbeitsspeicher des
+    Prozesses) - die Zeile wuerde sonst fuer immer 'laeuft' behaupten, obwohl
+    nie wieder etwas daran rechnet. Laeuft bei jedem init_db() mit: im
+    Normalfall (keine verwaiste Zeile) ist das eine leere, guenstige Abfrage.
+    """
+    verwaist = db.execute(
+        "SELECT id, anlage_id FROM simulation WHERE status = 'laeuft'"
+    ).fetchall()
+    if not verwaist:
+        return
+    db.execute("UPDATE simulation SET status = 'abgebrochen' WHERE status = 'laeuft'")
+    meldung = (
+        "Dienst neu gestartet: %d verwaiste(r) Simulationslauf/-laeufe "
+        "(Anlagen %s) als abgebrochen markiert - der Rechen-Thread war weg."
+    ) % (len(verwaist), sorted({z["anlage_id"] for z in verwaist}))
+    try:
+        current_app.logger.warning(meldung)
+    except RuntimeError:
+        # Ausserhalb eines Flask-Anwendungskontexts (z.B. ein Skript unter
+        # werkzeuge/) gibt es keinen Logger - die Aufraeumung selbst ist
+        # trotzdem wichtig und lief bereits.
+        pass

@@ -221,6 +221,102 @@ def test_api_liefert_die_bilanz(app):
     assert {"karte_id", "karte_name", "groesse", "einheit"} <= daten["reihen"][0].keys()
 
 
+def test_zeile_entsteht_beim_start_nicht_erst_beim_abschluss(app, monkeypatch):
+    """Kern der Wiederaufnahme nach einem Neuladen: die 'simulation'-Zeile
+    muss schon da sein, waehrend noch gerechnet wird - vorher entstand sie
+    erst am Ende (ergebnisse.speichere()), und ein Neuladen waehrend der
+    Rechnung fand keine Spur des Laufs."""
+    original = solver.Solver._rechne_stunde
+
+    def langsamer(self, *args, **kwargs):
+        time.sleep(0.05)
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(solver.Solver, "_rechne_stunde", langsamer)
+
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = ax_sim_2_1.baue(projekt, "A")
+        wetter = wetter_anlegen(50)
+        kennung = laeufe.starte(app, anlage, wetter, 0, 50)
+
+        # Direkt nach starte() - der Hintergrund-Thread rechnet wegen der
+        # Verlangsamung garantiert noch, wenn diese Zeile erreicht wird.
+        zeile = ergebnisse.laufende_simulation(anlage)
+        assert zeile is not None
+        assert zeile["kennung"] == kennung
+        assert zeile["von_stunde"] == 0
+        assert zeile["bis_stunde"] == 50
+
+        db = database.get_db()
+        status = db.execute(
+            "SELECT status FROM simulation WHERE id = ?", (zeile["id"],)
+        ).fetchone()["status"]
+        assert status == "laeuft"
+
+        for _ in range(400):
+            stand = laeufe.stand(kennung)
+            if stand["status"] in ("fertig", "abgebrochen", "fehler"):
+                break
+            time.sleep(0.05)
+        assert stand["status"] == "fertig", stand.get("fehler")
+
+        # Nach dem Abschluss steht der Endstand in derselben Zeile - keine
+        # zweite ist entstanden, und laufende_simulation() findet nichts mehr.
+        endstatus = db.execute(
+            "SELECT status FROM simulation WHERE id = ?", (zeile["id"],)
+        ).fetchone()["status"]
+        assert endstatus == "fertig"
+        assert ergebnisse.laufende_simulation(anlage) is None
+
+
+def test_laufender_auftrag_ist_je_anlage(app, monkeypatch):
+    """Zwei Anlagen rechnen gleichzeitig: laufender_auftrag() einer Anlage
+    darf nie den Lauf der jeweils anderen zeigen."""
+    original = solver.Solver._rechne_stunde
+
+    def langsamer(self, *args, **kwargs):
+        time.sleep(0.05)
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(solver.Solver, "_rechne_stunde", langsamer)
+
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage_a = ax_sim_2_1.baue(projekt, "A")
+        anlage_b = ax_sim_2_1.baue(projekt, "B")
+        wetter = wetter_anlegen(50)
+
+        kennung_a = laeufe.starte(app, anlage_a, wetter, 0, 50)
+
+        auftrag_a = laeufe.laufender_auftrag(anlage_a)
+        assert auftrag_a is not None
+        assert auftrag_a["kennung"] == kennung_a
+        assert auftrag_a["status"] == "laeuft"
+        assert laeufe.laufender_auftrag(anlage_b) is None
+
+        for _ in range(400):
+            if laeufe.stand(kennung_a)["status"] in ("fertig", "abgebrochen", "fehler"):
+                break
+            time.sleep(0.05)
+
+
+def test_fortschritt_speichern_schreibt_in_die_zeile(app):
+    """Die von core.laeufe._laufen() in groesserem Abstand aufgerufene
+    Schreibfunktion isoliert getestet, ohne auf den echten Zeitabstand warten
+    zu muessen."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = ax_sim_2_1.baue(projekt, "A")
+        wetter = wetter_anlegen(10)
+        simulation_id = ergebnisse.beginne(anlage, wetter, 0, 10, "kennung-x")
+
+        ergebnisse.fortschritt_speichern(simulation_id, 4)
+
+        zeile = ergebnisse.laufende_simulation(anlage)
+        assert zeile["fortschritt"] == 4
+
+
 def test_lauf_meldet_fehler_statt_zu_haengen(app):
     """Ein ungueltiger Wetterdatensatz verletzt den FOREIGN-KEY beim Speichern -
     ein echter Fehlerpfad, kein simulierter."""

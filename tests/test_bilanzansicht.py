@@ -53,6 +53,111 @@ def test_simulationen_einer_anlage_werden_gelistet(app):
     assert liste[0]["kosten_gesamt"] == pytest.approx(150.0)
 
 
+def test_simulationen_liste_kennzeichnet_einen_laufenden_eintrag(app, monkeypatch):
+    """Randfall aus der Aufgabenstellung: 'Fruehere Laeufe' zeigt jetzt auch
+    laufende Eintraege - status und kennung muessen das erkennbar machen,
+    statt wie ein Lauf mit Nullwerten fertig auszusehen (das Aussehen selbst
+    ist Sache von static/js/simulation.js._fruehereLaeufeHtml)."""
+    original = solver.Solver._rechne_stunde
+
+    def langsamer(self, *args, **kwargs):
+        time.sleep(0.05)
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(solver.Solver, "_rechne_stunde", langsamer)
+
+    klient = app.test_client()
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = ax_sim_2_1.baue(projekt, "A")
+        wetter = wetter_anlegen(50)
+
+    antwort = klient.post(
+        "/api/simulation",
+        json={"anlage_id": anlage, "wetterdatensatz_id": wetter, "von": 0, "bis": 50},
+    )
+    kennung = antwort.get_json()["kennung"]
+
+    liste = klient.get(f"/api/anlagen/{anlage}/simulationen").get_json()
+    assert len(liste) == 1
+    assert liste[0]["status"] == "laeuft"
+    assert liste[0]["kennung"] == kennung
+    # Noch keine Bilanz vorhanden - kosten_gesamt faellt auf 0.0 zurueck, aber
+    # status+kennung sagen dem Client, dass das "0.00 EUR" nicht bedeutet.
+    assert liste[0]["kosten_gesamt"] == 0.0
+
+    for _ in range(400):
+        if klient.get(f"/api/simulation/{kennung}").get_json()["status"] in (
+            "fertig", "abgebrochen", "fehler",
+        ):
+            break
+        time.sleep(0.05)
+
+    liste = klient.get(f"/api/anlagen/{anlage}/simulationen").get_json()
+    assert liste[0]["status"] == "fertig"
+
+
+def test_laufende_simulation_endpunkt_ohne_lauf_meldet_null(app):
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = ax_sim_2_1.baue(projekt, "A")
+
+    antwort = app.test_client().get(f"/api/anlagen/{anlage}/laufende_simulation")
+    assert antwort.status_code == 200
+    assert antwort.get_json() is None
+
+
+def test_laufende_simulation_endpunkt_deckt_die_ganze_wiederaufnahme_ab(app, monkeypatch):
+    """Genau der Ablauf aus der Aufgabenstellung: Lauf starten, Zeile lesen
+    (hier ueber den Endpunkt, den die Editorseite nach einem Neuladen
+    abfragt), Abbruch ueber die Schnittstelle, Endstand pruefen."""
+    original = solver.Solver._rechne_stunde
+
+    def langsamer(self, *args, **kwargs):
+        time.sleep(0.01)
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(solver.Solver, "_rechne_stunde", langsamer)
+
+    klient = app.test_client()
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = ax_sim_2_1.baue(projekt, "A")
+        wetter = wetter_anlegen(2000)
+
+    start = klient.post(
+        "/api/simulation",
+        json={"anlage_id": anlage, "wetterdatensatz_id": wetter, "von": 0, "bis": 2000},
+    )
+    kennung = start.get_json()["kennung"]
+
+    # "Laeuft fuer diese Anlage gerade etwas, und unter welchem Schluessel?"
+    laufend = klient.get(f"/api/anlagen/{anlage}/laufende_simulation").get_json()
+    assert laufend is not None
+    assert laufend["kennung"] == kennung
+    assert laufend["status"] == "laeuft"
+    assert laufend["gesamt"] == 2000
+
+    abbruch = klient.post(f"/api/simulation/{kennung}/abbrechen")
+    assert abbruch.status_code == 200
+
+    stand = {}
+    for _ in range(400):
+        stand = klient.get(f"/api/simulation/{kennung}").get_json()
+        if stand["status"] in ("fertig", "abgebrochen", "fehler"):
+            break
+        time.sleep(0.05)
+    assert stand["status"] == "abgebrochen", stand
+    assert stand["fertig"] < 2000
+
+    # Endstand: die Zeile ist nicht mehr 'laeuft', der Endpunkt meldet wieder
+    # 'null' fuer diese Anlage - und die Bilanz (ueber die simulation_id aus
+    # dem letzten stand()) ist trotz des Abbruchs abrufbar.
+    assert klient.get(f"/api/anlagen/{anlage}/laufende_simulation").get_json() is None
+    bilanz = klient.get(f"/api/simulation/{stand['simulation_id']}/bilanz")
+    assert bilanz.status_code == 200
+
+
 def test_schnellwahlen_treffen_die_richtigen_stunden(app):
     """Die Bereiche entsprechen den Schaltflaechen der Excel (Tabelle1)."""
     from routes.simulation import SCHNELLWAHL

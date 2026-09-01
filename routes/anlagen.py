@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 
-from core import anlagen, ergebnisse, vorlagen
+from core import anlagen, ergebnisse, laeufe, vorlagen
 
 bp = Blueprint("anlagen", __name__, url_prefix="/api")
 
@@ -60,6 +60,18 @@ def anlage_lesen(anlage_id):
 @bp.get("/anlagen/<int:anlage_id>/simulationen")
 def simulationen(anlage_id):
     return jsonify(ergebnisse.simulationen_von(anlage_id))
+
+
+@bp.get("/anlagen/<int:anlage_id>/laufende_simulation")
+def laufende_simulation(anlage_id):
+    """Fuer die Editorseite nach einem Neuladen: laeuft fuer diese Anlage
+    gerade ein Lauf? 'null', wenn nicht - sonst Kennung und Stand, damit die
+    Seite genau dessen Fortschrittsanzeige (statt einer fremden oder gar
+    keiner) wieder aufbauen kann. Eigener Endpunkt statt einer Erweiterung
+    von /simulationen: dort geht es um die Liste vergangener Laeufe fuer den
+    Startdialog, hier um die punktuelle Frage 'laeuft gerade etwas', die die
+    Seite bei jedem Laden unabhaengig vom Dialog stellt."""
+    return jsonify(laeufe.laufender_auftrag(anlage_id))
 
 
 @bp.post("/karten")

@@ -139,9 +139,16 @@ const Simulation = {
 
     dialog.querySelectorAll(".frueherer-lauf").forEach((zeile) => {
       zeile.addEventListener("click", () => {
-        const simulationId = Number(zeile.dataset.simulationId);
         dialog.remove();
-        this.zeigeBilanz(simulationId);
+        if (zeile.dataset.status === "laeuft" && zeile.dataset.kennung) {
+          if (this.aktiv) {
+            zeigeFehler("Es läuft bereits eine Simulation. Bitte warten oder abbrechen.");
+            return;
+          }
+          this._wiederAufnehmen(zeile.dataset.kennung);
+        } else {
+          this.zeigeBilanz(Number(zeile.dataset.simulationId));
+        }
       });
     });
 
@@ -167,16 +174,27 @@ const Simulation = {
     };
   },
 
+  // Ein laufender Eintrag hat noch keine Bilanz (die entsteht erst beim
+  // Abschluss, siehe core/ergebnisse.abschliesse) - "0.00 EUR" anzuzeigen
+  // saehe wie ein Lauf ohne jeden Verbrauch aus, statt wie einer, der noch
+  // rechnet. Stattdessen ein eigenes Kennzeichen, und ein Klick darauf
+  // greift den Lauf wieder auf statt eine (noch nicht vorhandene) Bilanz zu
+  // laden.
   _fruehereLaeufeHtml(laeufe) {
     if (!laeufe.length) return "";
     const zeilen = laeufe
       .slice(0, 5)
-      .map(
-        (l) => `<li class="frueherer-lauf" data-simulation-id="${l.id}">
+      .map((l) => {
+        const laeuftNoch = l.status === "laeuft";
+        const rechts = laeuftNoch
+          ? `<span class="zahl frueherer-lauf-laeuft">läuft …</span>`
+          : `<span class="zahl">${l.kosten_gesamt.toFixed(2)} EUR</span>`;
+        return `<li class="frueherer-lauf" data-simulation-id="${l.id}"
+              data-status="${htmlSicher(l.status)}" data-kennung="${htmlSicher(l.kennung || "")}">
           <span>${htmlSicher(l.wetter_name)} · Stunde ${l.von_stunde}–${l.bis_stunde}</span>
-          <span class="zahl">${l.kosten_gesamt.toFixed(2)} EUR</span>
-        </li>`
-      )
+          ${rechts}
+        </li>`;
+      })
       .join("");
     return `
       <div class="panel-zeile">
@@ -207,11 +225,46 @@ const Simulation = {
       return;
     }
     const kennung = (await antwort.json()).kennung;
+    this._wiederAufnehmen(kennung);
+  },
+
+  // Gemeinsamer Einstieg fuer einen frisch gestarteten Lauf (starten()), einen
+  // nach dem Neuladen der Seite wiedergefundenen (pruefeLaufendenLauf()) und
+  // einen aus "Fruehere Laeufe" erneut aufgegriffenen (dialogOeffnen()) - in
+  // allen drei Faellen ist ab hier nur noch wichtig, unter welcher Kennung
+  // beobachtet wird. 'anfangsstand' ist optional und zeigt sofort einen
+  // sinnvollen Fortschritt an, statt bis zur ersten Abfrage in beobachte()
+  // bei 0 zu stehen (siehe pruefeLaufendenLauf()).
+  _wiederAufnehmen(kennung, anfangsstand) {
     this.kennung = kennung;
     this.aktiv = true;
     this._simulierenKnopfAktivieren(false);
     this.zeigeFortschritt(kennung);
+    if (anfangsstand) {
+      this._aktualisiereFortschrittsanzeige(anfangsstand.fertig, anfangsstand.gesamt);
+    }
     this.beobachte(kennung);
+  },
+
+  // Beim Laden der Editorseite fragen, ob fuer diese Anlage bereits ein Lauf
+  // rechnet (z.B. weil die Seite waehrend eines Jahreslaufs neu geladen
+  // wurde) und dessen Fortschrittsanzeige und Abbruch wiederherstellen.
+  // window.ANLAGE_ID statt Editor.anlage.id: editor.html setzt es in einem
+  // Inline-Script vor allen js-Dateien, es steht also schon hier zur
+  // Verfuegung, ohne auf Editor.laden() (das erst nach diesem DOMContentLoaded-
+  // Handler laeuft, siehe editor.js) warten zu muessen.
+  async pruefeLaufendenLauf() {
+    if (this.aktiv || typeof window.ANLAGE_ID === "undefined") return;
+    let antwort;
+    try {
+      antwort = await fetch(`/api/anlagen/${window.ANLAGE_ID}/laufende_simulation`);
+    } catch {
+      return; // Kein erkennbarer laufender Lauf ist hier keine Fehlermeldung wert.
+    }
+    if (!antwort.ok) return;
+    const stand = await antwort.json();
+    if (!stand || !stand.kennung) return;
+    this._wiederAufnehmen(stand.kennung, stand);
   },
 
   _simulierenKnopfAktivieren(aktiviert) {
@@ -268,6 +321,16 @@ const Simulation = {
     };
   },
 
+  _aktualisiereFortschrittsanzeige(fertig, gesamt) {
+    const anteil = gesamt ? fertig / gesamt : 0;
+    const balken = document.getElementById("fortschritt-balken");
+    if (balken) balken.style.width = `${(anteil * 100).toFixed(1)}%`;
+    const text = document.getElementById("fortschritt-text");
+    if (text) {
+      text.textContent = `Simulation läuft … ${fertig || 0} von ${gesamt || 0} Stunden`;
+    }
+  },
+
   // 'kennung' wird als Parameter uebernommen statt bei jedem Schleifendurchlauf
   // erneut aus this.kennung gelesen zu werden - sonst wuerde diese Schleife,
   // wenn inzwischen ein zweiter Lauf gestartet worden waere, unbemerkt auf
@@ -296,14 +359,7 @@ const Simulation = {
         continue;
       }
 
-      const anteil = stand.gesamt ? stand.fertig / stand.gesamt : 0;
-      const balken = document.getElementById("fortschritt-balken");
-      if (balken) balken.style.width = `${(anteil * 100).toFixed(1)}%`;
-      const text = document.getElementById("fortschritt-text");
-      if (text) {
-        text.textContent =
-          `Simulation läuft … ${stand.fertig || 0} von ${stand.gesamt || 0} Stunden`;
-      }
+      this._aktualisiereFortschrittsanzeige(stand.fertig, stand.gesamt);
 
       if (["fertig", "abgebrochen", "fehler"].includes(stand.status)) {
         const huelle = document.querySelector(".fortschritt-huelle");
@@ -408,4 +464,5 @@ const Simulation = {
 window.addEventListener("DOMContentLoaded", () => {
   const knopf = document.getElementById("btn-simulieren");
   if (knopf) knopf.onclick = () => Simulation.dialogOeffnen();
+  Simulation.pruefeLaufendenLauf();
 });

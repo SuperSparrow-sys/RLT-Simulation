@@ -44,16 +44,86 @@ def _preise(graph):
     return {}
 
 
-def speichere(anlage_id, wetterdatensatz_id, von, bis, lauf, graph, dauer, status="fertig"):
+# Status, den core/laeufe.py._laufen() waehrend der Rechnung setzt - siehe
+# beginne()/abschliesse(). Umlautfreies "laeuft" nach demselben Muster wie
+# die uebrigen Statuswerte hier (fertig/abgebrochen/fehler) und wie das
+# in-memory-Feld status="laeuft" in core.laeufe._AUFTRAEGE.
+STATUS_LAEUFT = "laeuft"
+
+
+def beginne(anlage_id, wetterdatensatz_id, von, bis, kennung):
+    """Legt die Zeile eines neu gestarteten Laufs sofort an, Status 'laeuft'.
+
+    Vorher entstand die Zeile erst am Ende (in speichere()) - ein Neuladen
+    der Editorseite oder ein Neustart des Dienstes waehrend der Rechnung
+    fand dann ueberhaupt keine Spur des Laufs. Mit dieser Zeile ab dem Start
+    kann core.laeufe.laufender_auftrag() sie wiederfinden, und
+    core.database._aufraeume_verwaiste_laeufe() erkennt sie nach einem
+    Neustart als verwaist.
+    """
     db = get_db()
     cur = db.execute(
         "INSERT INTO simulation (anlage_id, wetterdatensatz_id, von_stunde, "
-        "bis_stunde, status, dauer_s, warnungen) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "bis_stunde, status, kennung, fortschritt) "
+        "VALUES (?, ?, ?, ?, ?, ?, 0)",
+        (anlage_id, wetterdatensatz_id, von, bis, STATUS_LAEUFT, kennung),
+    )
+    db.commit()
+    return cur.lastrowid
+
+
+def fortschritt_speichern(simulation_id, fertig):
+    """Schreibt den Zwischenstand in die beim Start angelegte Zeile.
+
+    core.laeufe._laufen() ruft dies in groesserem Abstand auf, nicht bei
+    jeder Stunde (Begruendung dort) - die laufende Zeile zeigt trotzdem
+    immer einen einigermassen aktuellen Stand, falls die Seite neu laedt.
+    """
+    db = get_db()
+    db.execute(
+        "UPDATE simulation SET fortschritt = ? WHERE id = ?", (fertig, simulation_id)
+    )
+    db.commit()
+
+
+def abschliesse(simulation_id, lauf, graph, dauer, status):
+    """Schreibt den Endstand in die von beginne() angelegte Zeile und
+    speichert Zeitreihen und Bilanz - das Gegenstueck zu beginne(), fuer
+    einen Lauf, der ueber core.laeufe.starte() gestartet wurde."""
+    db = get_db()
+    db.execute(
+        "UPDATE simulation SET status = ?, dauer_s = ?, warnungen = ?, "
+        "fortschritt = ? WHERE id = ?",
+        (
+            status, dauer, json.dumps(lauf.warnungen, ensure_ascii=False),
+            len(lauf.stunden), simulation_id,
+        ),
+    )
+    _ergebnisse_einfuegen(db, simulation_id, lauf, graph)
+    db.commit()
+
+
+def speichere(anlage_id, wetterdatensatz_id, von, bis, lauf, graph, dauer, status="fertig"):
+    """Legt Zeile und Ergebnisse eines bereits abgeschlossenen Laufs in einem
+    Schritt an - fuer Aufrufer ohne vorherigen beginne()-Aufruf (Tests, die
+    direkt ein fertiges Ergebnis anlegen, und werkzeuge/durchstich.py)."""
+    db = get_db()
+    cur = db.execute(
+        "INSERT INTO simulation (anlage_id, wetterdatensatz_id, von_stunde, "
+        "bis_stunde, status, dauer_s, warnungen, fortschritt) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (anlage_id, wetterdatensatz_id, von, bis, status, dauer,
-         json.dumps(lauf.warnungen, ensure_ascii=False)),
+         json.dumps(lauf.warnungen, ensure_ascii=False), len(lauf.stunden)),
     )
     simulation_id = cur.lastrowid
+    _ergebnisse_einfuegen(db, simulation_id, lauf, graph)
+    db.commit()
+    return simulation_id
 
+
+def _ergebnisse_einfuegen(db, simulation_id, lauf, graph):
+    """Zeitreihen und Bilanz einer Zeile schreiben - gemeinsam von speichere()
+    und abschliesse() genutzt, ohne selbst zu committen."""
     # Alle vorkommenden Groessen einsammeln
     reihen = {}
     for nummer, stunde in enumerate(lauf.stunden):
@@ -89,8 +159,18 @@ def speichere(anlage_id, wetterdatensatz_id, von, bis, lauf, graph, dauer, statu
         zeilen,
     )
 
-    db.commit()
-    return simulation_id
+
+def laufende_simulation(anlage_id):
+    """Die Zeile des aktuell laufenden Simulationslaufs dieser Anlage, falls
+    es einen gibt - sonst None. Juengste zuerst, falls durch einen Randfall
+    (z.B. ein umgangener Client) doch mehr als eine Zeile 'laeuft'."""
+    db = get_db()
+    zeile = db.execute(
+        "SELECT id, kennung, von_stunde, bis_stunde, fortschritt FROM simulation "
+        "WHERE anlage_id = ? AND status = ? ORDER BY id DESC LIMIT 1",
+        (anlage_id, STATUS_LAEUFT),
+    ).fetchone()
+    return dict(zeile) if zeile else None
 
 
 def lade_bilanz(simulation_id):
@@ -193,6 +273,10 @@ def simulationen_von(anlage_id):
             "von_stunde": z["von_stunde"], "bis_stunde": z["bis_stunde"],
             "status": z["status"], "gestartet_am": z["gestartet_am"],
             "dauer_s": z["dauer_s"],
+            # Nur bei einem noch laufenden Lauf gesetzt (siehe beginne()) -
+            # der Dialog kann so eine 'laeuft'-Zeile statt einer (bei einem
+            # laufenden Lauf noch nicht vorhandenen) Bilanz wieder aufgreifen.
+            "kennung": z["kennung"],
             "kosten_gesamt": z["kosten_gesamt"] or 0.0,
         }
         for z in zeilen

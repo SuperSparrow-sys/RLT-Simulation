@@ -4,7 +4,7 @@ import threading
 import time
 import uuid
 
-from core import anlagen, ergebnisse, solver
+from core import anlagen, database, ergebnisse, solver
 from core.wetter import speicher
 
 _AUFTRAEGE = {}
@@ -16,6 +16,17 @@ _SPERRE = threading.Lock()
 # Eintraege verwerfen, sobald es zu viele werden.
 _MAX_AUFTRAEGE = 200
 _ABGESCHLOSSEN = ("fertig", "abgebrochen", "fehler")
+
+# Wie oft _laufen() den Fortschritt zusaetzlich zum Arbeitsspeicher in die
+# 'simulation'-Zeile schreibt. Bei einem Jahreslauf (8760 Stunden, ~8 Minuten)
+# waere ein Schreibzugriff je Stunde reiner Overhead, den niemand braucht,
+# solange der Dienst laeuft (dort ist _AUFTRAEGE die schnellere, massgebliche
+# Quelle - siehe stand()). Der DB-Stand ist nur fuer den Moment direkt nach
+# einem Neuladen der Seite gedacht, bevor die erste Abfrage von dort eine
+# frische Antwort liefert - 5s halten ihn dafuer nah genug am echten Stand,
+# ohne bei einem Jahreslauf mehr als rund 100 zusaetzliche Schreibzugriffe zu
+# verursachen.
+_FORTSCHRITT_SCHREIB_ABSTAND_S = 5.0
 
 
 def _aufraeumen():
@@ -46,15 +57,20 @@ def abbrechen(kennung):
     _setze(kennung, abbruch=True)
 
 
-def _laufen(app, kennung, anlage_id, wetterdatensatz_id, von, bis):
+def _laufen(app, kennung, simulation_id, anlage_id, wetterdatensatz_id, von, bis):
     with app.app_context():
         begonnen = time.time()
+        letzte_schreibzeit = [begonnen]  # Liste als Zelle, da fortschritt() sie neu bindet
         try:
             stunden = speicher.lade_stunden(wetterdatensatz_id, von, bis)
             graph = anlagen.lade_graph(anlage_id)
 
             def fortschritt(nummer, gesamt):
                 _setze(kennung, fertig=nummer, gesamt=gesamt)
+                jetzt = time.time()
+                if jetzt - letzte_schreibzeit[0] >= _FORTSCHRITT_SCHREIB_ABSTAND_S:
+                    letzte_schreibzeit[0] = jetzt
+                    ergebnisse.fortschritt_speichern(simulation_id, nummer)
 
             def abbruch():
                 return bool(stand(kennung).get("abbruch"))
@@ -69,10 +85,8 @@ def _laufen(app, kennung, anlage_id, wetterdatensatz_id, von, bis):
             # Massgeblich ist daher, ob weniger Stunden herauskamen als angefordert.
             vollstaendig = len(lauf.stunden) >= len(stunden)
             status = "fertig" if vollstaendig else "abgebrochen"
-            simulation_id = ergebnisse.speichere(
-                anlage_id, wetterdatensatz_id, von, bis, lauf, graph,
-                dauer=time.time() - begonnen,
-                status=status,
+            ergebnisse.abschliesse(
+                simulation_id, lauf, graph, dauer=time.time() - begonnen, status=status
             )
             _setze(
                 kennung,
@@ -82,20 +96,70 @@ def _laufen(app, kennung, anlage_id, wetterdatensatz_id, von, bis):
                 dauer=time.time() - begonnen,
             )
         except Exception as fehler:  # noqa: BLE001 - der Lauf darf die App nicht kippen
-            _setze(kennung, status="fehler", fehler=str(fehler))
+            _setze(kennung, status="fehler", fehler=str(fehler), simulation_id=simulation_id)
+            try:
+                # Die beim Start angelegte Zeile (status='laeuft') darf nicht
+                # fuer immer so stehen bleiben - sonst haette
+                # _aufraeume_verwaiste_laeufe() beim naechsten Dienststart
+                # nichts mehr aufzuraeumen, obwohl dieser Lauf nie fertig wurde.
+                db = database.get_db()
+                db.execute(
+                    "UPDATE simulation SET status = 'fehler' WHERE id = ?",
+                    (simulation_id,),
+                )
+                db.commit()
+            except Exception:  # noqa: BLE001 - das Markieren darf nicht nachtraeglich kippen
+                pass
 
 
 def starte(app, anlage_id, wetterdatensatz_id, von, bis):
     kennung = uuid.uuid4().hex
+    try:
+        simulation_id = ergebnisse.beginne(anlage_id, wetterdatensatz_id, von, bis, kennung)
+    except Exception as fehler:  # noqa: BLE001 - z.B. ein ungueltiger Wetterdatensatz
+        # Vor dieser Zeile stand dieselbe Pruefung erst am Ende von _laufen()
+        # (dort ebenfalls abgefangen) - jetzt schlaegt sie schon hier fehl, weil
+        # beginne() sofort schreibt statt erst nach dem ganzen Lauf. Damit
+        # starte() weiterhin nie eine Ausnahme an den aufrufenden Request
+        # durchreicht (die Anrufenden erwarten immer eine Kennung und lesen den
+        # Fehler ueber stand()), wird der Fehlschlag hier genauso wie ein
+        # spaeter Fehlschlag im Hintergrund-Thread im Speicher vermerkt.
+        _setze(kennung, status="fehler", fehler=str(fehler), simulation_id=0)
+        return kennung
     _setze(
         kennung,
         status="laeuft", fertig=0, gesamt=max(bis - von, 0),
-        abbruch=False, simulation_id=0,
+        abbruch=False, simulation_id=simulation_id,
     )
     faden = threading.Thread(
         target=_laufen,
-        args=(app, kennung, anlage_id, wetterdatensatz_id, von, bis),
+        args=(app, kennung, simulation_id, anlage_id, wetterdatensatz_id, von, bis),
         daemon=True,
     )
     faden.start()
     return kennung
+
+
+def laufender_auftrag(anlage_id):
+    """Fuer die Editorseite nach einem Neuladen: laeuft fuer diese Anlage
+    gerade ein Lauf, und unter welcher Kennung? None, wenn nicht.
+
+    Liest die Zeile aus der Datenbank (core.ergebnisse.laufende_simulation)
+    und ergaenzt fertig/gesamt aus _AUFTRAEGE, falls dort vorhanden - das ist
+    waehrend des Laufs der aktuellere Stand (siehe _FORTSCHRITT_SCHREIB_ABSTAND_S).
+    Eine 'laeuft'-Zeile ohne Eintrag in _AUFTRAEGE kann in diesem Prozess nicht
+    vorkommen: _aufraeume_verwaiste_laeufe() raeumt beim Start jede Zeile weg,
+    die von einem fruaheren Prozess stammt, bevor je wieder ein Lauf startet.
+    """
+    zeile = ergebnisse.laufende_simulation(anlage_id)
+    if zeile is None:
+        return None
+    gesamt = zeile["bis_stunde"] - zeile["von_stunde"]
+    im_speicher = stand(zeile["kennung"]) if zeile["kennung"] else {}
+    return {
+        "kennung": zeile["kennung"],
+        "simulation_id": zeile["id"],
+        "status": "laeuft",
+        "fertig": im_speicher.get("fertig", zeile["fortschritt"]),
+        "gesamt": im_speicher.get("gesamt", gesamt),
+    }
