@@ -255,9 +255,20 @@ def verbindung_anlegen(anlage_id, von_port_id, nach_port_id):
         raise ValueError("Ein Pfeil laeuft von einem Ausgang zu einem Eingang")
     if von["art"] != nach["art"]:
         raise ValueError("Luft laesst sich nicht mit einem Signal verbinden")
-    if nach_port_id in _belegte_ports(anlage_id):
+
+    belegt = _belegte_ports(anlage_id)
+    if nach_port_id in belegt:
         raise ValueError(
             f"Der Anschluss '{nach['schluessel']}' ist schon belegt"
+        )
+    # Ein Luftausgang fuehrt an genau eine Stelle - auch von Hand darf daran kein
+    # zweiter Kanal haengen, sonst umginge diese Funktion die Regel, die die
+    # automatische Verdrahtung durchsetzt. Signalausgaenge duerfen dagegen
+    # beliebig viele Verbraucher speisen.
+    if von["art"] == "luft" and von_port_id in belegt:
+        raise ValueError(
+            f"Der Luftausgang '{von['schluessel']}' fuehrt schon woanders hin - "
+            "fuer eine Verzweigung gibt es den Verteiler"
         )
 
     try:
