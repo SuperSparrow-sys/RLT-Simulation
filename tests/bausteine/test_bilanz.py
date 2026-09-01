@@ -47,6 +47,25 @@ def test_am_wochenende_gilt_der_niedertarif():
     assert aus["hochtarif"] == 0.0
 
 
+def test_tarifgrenzen_sind_beidseitig_streng():
+    """Anlage!AP42 - anders als der Wochenzeitplan, absichtlich.
+
+    Das Hochtariffenster prueft AR4 > AP39 und AR4 < AQ39, also beidseitig streng.
+    Der Wochenzeitplan (Anlage!AN7) prueft dagegen AN4 >= AL7 und AN4 < AM7. Die
+    Mappe ist hier in sich uneinheitlich; beide Karten geben ihre eigene Zelle
+    wieder. Praktisch heisst das: die volle Stunde des Tarifbeginns zaehlt noch
+    zum Niedertarif.
+    """
+    p = parameter()
+    genau_am_anfang = Bilanz().berechne({"strom_1": 10.0}, p, stunde(2024, 1, 2, 7))[0]
+    eine_stunde_spaeter = Bilanz().berechne({"strom_1": 10.0}, p, stunde(2024, 1, 2, 8))[0]
+    genau_am_ende = Bilanz().berechne({"strom_1": 10.0}, p, stunde(2024, 1, 2, 20))[0]
+
+    assert genau_am_anfang["hochtarif"] == 0.0
+    assert eine_stunde_spaeter["hochtarif"] == 1.0
+    assert genau_am_ende["hochtarif"] == 0.0
+
+
 def test_bilanz_summiert_alle_angeschlossenen_leistungen():
     ein = {
         "strom_1": 4.9, "strom_2": 1.7, "strom_3": 0.18,

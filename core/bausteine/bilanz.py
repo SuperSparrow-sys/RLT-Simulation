@@ -2,6 +2,12 @@
 
 Die Karte summiert alles, was an ihre dynamischen Eingaenge angeschlossen ist,
 und teilt den Strom nach Hoch- und Niedertarif auf.
+
+Die sechs Preisparameter werden hier bewusst NICHT verrechnet: je Stunde
+interessieren die Mengen, die Kosten entstehen erst in der Jahresbilanz. Sie
+stehen trotzdem an dieser Karte, weil sie fachlich hierher gehoeren und im
+Parameterfenster zusammen mit den Mengen zu sehen sein sollen;
+core/ergebnisse.py liest sie beim Speichern eines Laufs aus.
 """
 
 from core.bausteine.basis import (
@@ -51,6 +57,12 @@ class Bilanz(Baustein):
         hochtarif = 0.0
         if zeitpunkt is not None and zeitpunkt.weekday() < 5:
             anteil = (zeitpunkt.hour + zeitpunkt.minute / 60.0) / 24.0
+            # Anlage!AP42 vergleicht beidseitig streng: AR4 > AP39 und AR4 < AQ39.
+            # Der Wochenzeitplan (Anlage!AN7) macht es anders - dort heisst es
+            # AN4 >= AL7 und AN4 < AM7, also links geschlossen. Die Mappe ist an
+            # dieser Stelle in sich uneinheitlich; jede Karte gibt ihre eigene Zelle
+            # wieder. Beim Tarif faellt die volle Stunde des Beginns damit noch in den
+            # Niedertarif. Der Test unten haelt das fest.
             if p["ht_von"] < anteil < p["ht_bis"]:
                 hochtarif = 1.0
 
