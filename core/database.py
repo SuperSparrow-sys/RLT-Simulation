@@ -97,6 +97,43 @@ CREATE TABLE IF NOT EXISTS wetterstunde (
 );
 """
 
+SCHEMA += """
+CREATE TABLE IF NOT EXISTS simulation (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    anlage_id          INTEGER NOT NULL REFERENCES anlage(id) ON DELETE CASCADE,
+    wetterdatensatz_id INTEGER NOT NULL REFERENCES wetterdatensatz(id),
+    von_stunde         INTEGER NOT NULL,
+    bis_stunde         INTEGER NOT NULL,
+    status             TEXT NOT NULL DEFAULT 'fertig',
+    gestartet_am       TEXT NOT NULL DEFAULT (datetime('now')),
+    dauer_s            REAL NOT NULL DEFAULT 0,
+    warnungen          TEXT NOT NULL DEFAULT '[]'
+);
+
+CREATE TABLE IF NOT EXISTS zeitreihe (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    simulation_id  INTEGER NOT NULL REFERENCES simulation(id) ON DELETE CASCADE,
+    karte_id       INTEGER NOT NULL,
+    karte_name     TEXT NOT NULL DEFAULT '',
+    groesse        TEXT NOT NULL,
+    einheit        TEXT NOT NULL DEFAULT '',
+    werte          BLOB NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS bilanz (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    simulation_id  INTEGER NOT NULL REFERENCES simulation(id) ON DELETE CASCADE,
+    groesse        TEXT NOT NULL,
+    menge          REAL NOT NULL,
+    einheit        TEXT NOT NULL,
+    preis          REAL NOT NULL DEFAULT 0,
+    kosten         REAL NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_zeitreihe_sim ON zeitreihe(simulation_id);
+CREATE INDEX IF NOT EXISTS idx_bilanz_sim    ON bilanz(simulation_id);
+"""
+
 
 def retry_on_lock(func):
     @wraps(func)
