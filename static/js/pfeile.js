@@ -27,12 +27,57 @@ const Pfeile = {
     });
   },
 
+  // Kartenmasse: editor.js traegt die tatsaechliche (durch Textumbruch
+  // gewachsene) Breite/Hoehe jeder Karte als karte._breite/_hoehe ein, sobald
+  // sie gezeichnet ist - siehe dortiger Kommentar bei zeichneKarte(). Diese
+  // Datei liest sie nur, mit Rueckfallwerten fuer den (nie eintretenden, aber
+  // billig abzusichernden) Fall, dass eine Karte noch nicht gezeichnet wurde.
+  masse(karte) {
+    return { b: karte._breite || 190, h: karte._hoehe || 96 };
+  },
+
   rand(von, nach) {
-    /* Ausgang rechts, Eingang links - so laufen die Pfeile wie in der Excel. */
-    return {
-      a: { x: von.pos_x + 150, y: von.pos_y + 48 },
-      b: { x: nach.pos_x, y: nach.pos_y + 48 },
-    };
+    /* Welche Kante einer Karte ein Pfeil beruehrt, richtet sich nach der
+       Lage des Ziels: liegt es ueberwiegend rechts oder links, laufen die
+       Pfeile wie in der Excel von rechts (Ausgang) nach links (Eingang);
+       liegt es ueberwiegend darueber oder darunter (typisch fuer Regler direkt
+       ueber oder unter dem Bauteil, das sie stellen), laufen sie von unten
+       nach oben oder umgekehrt. Ohne diese Unterscheidung nahm jeder
+       Pfeil - auch ein senkrechter oder ein rueckwaerts laufender wie
+       Abluftventilator -> WRG - immer den rechten Rand als Start und den
+       linken als Ziel und schlug dabei einen unnoetigen Bogen quer durch
+       dazwischenliegende Karten (siehe Task-Beschreibung, Befund 5). */
+    const vm = this.masse(von);
+    const nm = this.masse(nach);
+    const vMitteX = von.pos_x + vm.b / 2;
+    const vMitteY = von.pos_y + vm.h / 2;
+    const nMitteX = nach.pos_x + nm.b / 2;
+    const nMitteY = nach.pos_y + nm.h / 2;
+    const dx = nMitteX - vMitteX;
+    const dy = nMitteY - vMitteY;
+
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      return dx >= 0
+        ? { a: { x: von.pos_x + vm.b, y: vMitteY }, b: { x: nach.pos_x, y: nMitteY }, achse: "x" }
+        : { a: { x: von.pos_x, y: vMitteY }, b: { x: nach.pos_x + nm.b, y: nMitteY }, achse: "x" };
+    }
+    return dy >= 0
+      ? { a: { x: vMitteX, y: von.pos_y + vm.h }, b: { x: nMitteX, y: nach.pos_y }, achse: "y" }
+      : { a: { x: vMitteX, y: von.pos_y }, b: { x: nMitteX, y: nach.pos_y + nm.h }, achse: "y" };
+  },
+
+  /* Baut die Bezierbahn passend zur in rand() gewaehlten Achse: bei einer
+     ueberwiegend waagrechten Verbindung liegen die Kontrollpunkte auf halber
+     Breite (ein S in x), bei einer ueberwiegend senkrechten auf halber Hoehe
+     (ein S in y) - sonst wuerde eine senkrechte Verbindung (Regler direkt
+     ueber/unter seinem Bauteil) unnoetig seitlich ausholen. */
+  bahnPunkte(a, b, achse) {
+    if (achse === "y") {
+      const mitteY = (a.y + b.y) / 2;
+      return `M ${a.x} ${a.y} C ${a.x} ${mitteY}, ${b.x} ${mitteY}, ${b.x} ${b.y}`;
+    }
+    const mitteX = (a.x + b.x) / 2;
+    return `M ${a.x} ${a.y} C ${mitteX} ${a.y}, ${mitteX} ${b.y}, ${b.x} ${b.y}`;
   },
 
   // Dieselben vier Energierollen wie core/bausteine/basis.py ENERGIEROLLEN -
@@ -67,13 +112,9 @@ const Pfeile = {
       const nach = anlage.karten.find((k) => k.id === pfeil.nach_karte_id);
       if (!von || !nach) continue;
 
-      const { a, b } = this.rand(von, nach);
-      const mitteX = (a.x + b.x) / 2;
+      const { a, b, achse } = this.rand(von, nach);
       const bahn = document.createElementNS(NSS, "path");
-      bahn.setAttribute(
-        "d",
-        `M ${a.x} ${a.y} C ${mitteX} ${a.y}, ${mitteX} ${b.y}, ${b.x} ${b.y}`
-      );
+      bahn.setAttribute("d", this.bahnPunkte(a, b, achse));
       const klassen = ["pfeil", `pfeil-${this.artDesPfeils(pfeil, anlage)}`];
       if (pfeil.mehrdeutig) klassen.push("pfeil-mehrdeutig");
       bahn.setAttribute("class", klassen.join(" "));
@@ -87,6 +128,22 @@ const Pfeile = {
           : "");
       bahn.appendChild(hinweis);
 
+      // "Pruefen einer bestehenden Verbindung": beim Ueberfahren des Pfeils
+      // leuchten genau die zwei Anschluesse auf, die er tatsaechlich
+      // verbindet - nicht der ganze Portkranz beider Karten. So bleibt die
+      // Antwort auf "welche Anschluesse genau?" auffindbar, ohne dass die
+      // Grundansicht dafuer staendig alle Anschluesse zeigen muss.
+      const portIds = pfeil.verbindungen.flatMap((v) => [v.von_port_id, v.nach_port_id]);
+      const beteiligtePorts = portIds
+        .map((id) => document.querySelector(`[data-port="${id}"]`))
+        .filter(Boolean);
+      bahn.addEventListener("pointerenter", () => {
+        beteiligtePorts.forEach((p) => p.classList.add("port-in-pruefung"));
+      });
+      bahn.addEventListener("pointerleave", () => {
+        beteiligtePorts.forEach((p) => p.classList.remove("port-in-pruefung"));
+      });
+
       ebene.appendChild(bahn);
     }
   },
@@ -98,13 +155,48 @@ const Pfeile = {
     vorschau.setAttribute("class", "pfeil pfeil-vorschau");
     document.getElementById("pfeile").appendChild(vorschau);
 
-    const start = { x: karte.pos_x + 150, y: karte.pos_y + 48 };
+    const quellElement = document.querySelector(`.karte[data-id="${karte.id}"]`);
+    // Waehrend des Ziehens bleibt der Anknuepfpunkt der Quellkarte sichtbar
+    // (statt nach dem ersten Pointerdown wieder unter :hover zu verschwinden,
+    // sobald der Zeiger die Karte verlaesst) - siehe .karte.verbindet-von in
+    // style.css. leinwand traegt dieselbe Markierung fuer den Cursor.
+    if (quellElement) quellElement.classList.add("verbindet-von");
+    leinwand.classList.add("verbindet-aktiv");
+
+    const vm = this.masse(karte);
+    const mitteX = karte.pos_x + vm.b / 2;
+    const mitteY = karte.pos_y + vm.h / 2;
     const sicht = this.editor.sicht;
+
+    const aufraeumen = () => {
+      window.removeEventListener("pointermove", bewegen);
+      window.removeEventListener("pointerup", loslassen);
+      window.removeEventListener("keydown", beiEscape);
+      vorschau.remove();
+      if (quellElement) quellElement.classList.remove("verbindet-von");
+      leinwand.classList.remove("verbindet-aktiv");
+      document.querySelectorAll(".karte.ziel").forEach((g) =>
+        g.classList.remove("ziel")
+      );
+    };
+    const beiEscape = (e) => {
+      if (e.key === "Escape") aufraeumen();
+    };
 
     const bewegen = (e) => {
       const kasten = leinwand.getBoundingClientRect();
       const x = (e.clientX - kasten.left - sicht.x) / sicht.zoom;
       const y = (e.clientY - kasten.top - sicht.y) / sicht.zoom;
+
+      // Der Anfangspunkt der Vorschau folgt dem Zeiger an den Rand der
+      // Quellkarte, die er gerade verlaesst - so startet die Linie sichtbar
+      // an der Karte, egal auf welcher Seite das Ziel liegt, statt immer
+      // starr am rechten Rand zu kleben (siehe rand() weiter oben, dieselbe
+      // Idee fuer fertige Pfeile).
+      const dx = x - mitteX, dy = y - mitteY;
+      const start = Math.abs(dx) >= Math.abs(dy)
+        ? { x: karte.pos_x + (dx >= 0 ? vm.b : 0), y: mitteY }
+        : { x: mitteX, y: karte.pos_y + (dy >= 0 ? vm.h : 0) };
       vorschau.setAttribute("d", `M ${start.x} ${start.y} L ${x} ${y}`);
 
       const ziel = document.elementFromPoint(e.clientX, e.clientY);
@@ -118,12 +210,7 @@ const Pfeile = {
     };
 
     const loslassen = async (e) => {
-      window.removeEventListener("pointermove", bewegen);
-      window.removeEventListener("pointerup", loslassen);
-      vorschau.remove();
-      document.querySelectorAll(".karte.ziel").forEach((g) =>
-        g.classList.remove("ziel")
-      );
+      aufraeumen();
 
       const ziel = document.elementFromPoint(e.clientX, e.clientY);
       const zielKarte = ziel && ziel.closest(".karte");
@@ -163,6 +250,7 @@ const Pfeile = {
 
     window.addEventListener("pointermove", bewegen);
     window.addEventListener("pointerup", loslassen);
+    window.addEventListener("keydown", beiEscape);
   },
 
   async loeschen(pfeilId) {

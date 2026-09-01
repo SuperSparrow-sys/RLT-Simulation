@@ -2,6 +2,52 @@
 
 const NS = "http://www.w3.org/2000/svg";
 
+// Dieselben sieben Palettengruppen wie palette.js (siehe dortige
+// "reihenfolge") - hier auf einen kurzen, css-tauglichen Klassennamen
+// abgebildet, damit jede Karte erkennbar traegt, zu welcher Gruppe sie
+// gehoert (Farbstreifen UND Textkuerzel, siehe zeichneKarte() - Farbe allein
+// waere fuer Anwenderinnen ohne Farbsinn keine verlaessliche Auskunft).
+const GRUPPEN_KLASSE = {
+  "Luftbehandlung": "luftbehandlung",
+  "Verteilung": "verteilung",
+  "Räume": "raeume",
+  "Regelung": "regelung",
+  "Zeit und Betrieb": "zeit",
+  "Quellen und Senken": "quellen",
+  "Verbraucher": "verbraucher",
+};
+
+// Textmasse fuer den Zeilenumbruch der Kartennamen: ein einzelner,
+// wiederverwendeter Messkontext statt bei jeder Karte ein neues <canvas> zu
+// erzeugen. Canvas statt DOM-Messung (getComputedTextLength), weil die Karte
+// zu diesem Zeitpunkt noch gar nicht im DOM haengt - erst nach der Messung
+// steht fest, wie hoch ihr <rect> werden muss.
+let _messkontext = null;
+function textBreite(text, font) {
+  if (!_messkontext) _messkontext = document.createElement("canvas").getContext("2d");
+  _messkontext.font = font;
+  return _messkontext.measureText(text).width;
+}
+
+// Vollstaendiger Umbruch ohne Abschneiden (siehe Task: "Vollstaendige Namen
+// ohne Abschneiden") - so viele Zeilen wie noetig, die Karte waechst mit.
+function zeilenUmbrechen(text, maxBreite, font) {
+  const woerter = text.split(" ");
+  const zeilen = [];
+  let aktuell = "";
+  for (const wort of woerter) {
+    const kandidat = aktuell ? `${aktuell} ${wort}` : wort;
+    if (aktuell && textBreite(kandidat, font) > maxBreite) {
+      zeilen.push(aktuell);
+      aktuell = wort;
+    } else {
+      aktuell = kandidat;
+    }
+  }
+  if (aktuell) zeilen.push(aktuell);
+  return zeilen;
+}
+
 function pfeileZeichnen(anlage) {
   Pfeile.zeichneAlle(anlage);
 }
@@ -78,50 +124,155 @@ const Editor = {
     }
     pfeileZeichnen(this.anlage);
     this.aktualisiereSicht();
+    // Leere Leinwand: ohne diesen Hinweis sieht eine frisch angelegte Anlage
+    // aus wie eine leere Flaeche ohne jeden Hinweis, wie man anfaengt (siehe
+    // Task, Befund 6). Er verschwindet, sobald die erste Karte da ist.
+    const hinweis = document.getElementById("leinwand-hinweis");
+    if (hinweis) hinweis.hidden = this.anlage.karten.length > 0;
+  },
+
+  KARTE_BREITE: 190,
+
+  /* Berechnet Breite, Hoehe und alle Textzeilen/-y-Positionen einer Karte,
+     bevor sie gezeichnet wird - die Kartenhoehe waechst mit der Anzahl
+     Namenszeilen, statt Text unter dem Rand abzuschneiden (siehe Task,
+     Befund 3). zeichneKarte() nutzt das Ergebnis zum Zeichnen, pfeile.js
+     liest die gespeicherte Breite/Hoehe (karte._breite/_hoehe, siehe
+     zeichneKarte()) fuer die Pfeilgeometrie. */
+  karteMasseBerechnen(karte) {
+    const breite = this.KARTE_BREITE;
+    const pad = 10;
+    const icon = 20;
+    const textX = pad + icon + 8;
+    const zeilenHoehe = 15;
+    const zeilen = zeilenUmbrechen(karte.name, breite - textX - pad, "500 12px Roboto, Arial, sans-serif");
+    const nameHoehe = zeilen.length * zeilenHoehe;
+    const kopfHoehe = Math.max(icon, nameHoehe);
+    const nameStartY = pad + (kopfHoehe - nameHoehe) / 2 + 10;
+    const gruppenY = pad + kopfHoehe + 16;
+    const werteY = gruppenY + 17;
+    const hoehe = werteY + 11;
+    return { breite, hoehe, zeilen, textX, nameStartY, gruppenY, werteY };
   },
 
   zeichneKarte(karte) {
+    const masse = this.karteMasseBerechnen(karte);
+    // Fuer pfeile.js (Pfeilgeometrie) und portPosition() weiter unten -
+    // siehe Kommentar bei Pfeile.masse() in pfeile.js.
+    karte._breite = masse.breite;
+    karte._hoehe = masse.hoehe;
+
     const gruppe = document.createElementNS(NS, "g");
     gruppe.setAttribute("class", "karte");
     gruppe.setAttribute("data-id", karte.id);
+    gruppe.setAttribute("data-gruppe", GRUPPEN_KLASSE[karte.gruppe] || "sonstige");
     gruppe.setAttribute("transform", `translate(${karte.pos_x} ${karte.pos_y})`);
+    // Tastaturbedienbar: fokussierbar, mit Enter/Leertaste auswaehlbar (siehe
+    // karteTaste() unten). Der sichtbare Fokusring kommt aus style.css
+    // ([tabindex]:focus-visible), hier nur das Attribut selbst.
+    gruppe.setAttribute("tabindex", "0");
+    gruppe.setAttribute("role", "button");
+    gruppe.setAttribute("aria-label", `${karte.name}, ${karte.gruppe}`);
     if (this.auswahl === karte.id) gruppe.classList.add("gewaehlt");
 
     const rahmen = document.createElementNS(NS, "rect");
     rahmen.setAttribute("class", "karte-rahmen");
-    rahmen.setAttribute("width", 150);
-    rahmen.setAttribute("height", 96);
+    rahmen.setAttribute("width", masse.breite);
+    rahmen.setAttribute("height", masse.hoehe);
     rahmen.setAttribute("rx", 8);
     gruppe.appendChild(rahmen);
+
+    // Gruppenstreifen: Farbe UND (im Panel/Titel) Text - siehe Kommentar bei
+    // GRUPPEN_KLASSE oben. Um 7px von oben/unten eingerueckt, damit er nicht
+    // ueber die abgerundeten Ecken des Rahmens hinaussteht.
+    const streifen = document.createElementNS(NS, "rect");
+    streifen.setAttribute("class", "karte-gruppenstreifen");
+    streifen.setAttribute("x", 0);
+    streifen.setAttribute("y", 7);
+    streifen.setAttribute("width", 4);
+    streifen.setAttribute("height", Math.max(masse.hoehe - 14, 4));
+    streifen.setAttribute("rx", 2);
+    gruppe.appendChild(streifen);
 
     const bild = document.createElementNS(NS, "image");
     bild.setAttribute("href", `/static/symbole/${karte.symbol}`);
     bild.setAttribute("x", 10);
     bild.setAttribute("y", 10);
-    bild.setAttribute("width", 32);
-    bild.setAttribute("height", 32);
+    bild.setAttribute("width", 20);
+    bild.setAttribute("height", 20);
     gruppe.appendChild(bild);
 
     const beschriftung = document.createElementNS(NS, "text");
     beschriftung.setAttribute("class", "karte-name");
-    beschriftung.setAttribute("x", 50);
-    beschriftung.setAttribute("y", 30);
-    beschriftung.textContent = karte.name;
+    for (let i = 0; i < masse.zeilen.length; i++) {
+      const zeile = document.createElementNS(NS, "tspan");
+      zeile.setAttribute("x", masse.textX);
+      zeile.setAttribute("y", masse.nameStartY + i * 15);
+      zeile.textContent = masse.zeilen[i];
+      beschriftung.appendChild(zeile);
+    }
     gruppe.appendChild(beschriftung);
+
+    // Gruppenname als Text (nicht nur der Farbstreifen) - siehe Kommentar bei
+    // GRUPPEN_KLASSE oben zur Begruendung.
+    const gruppentext = document.createElementNS(NS, "text");
+    gruppentext.setAttribute("class", "karte-gruppe");
+    gruppentext.setAttribute("x", 10);
+    gruppentext.setAttribute("y", masse.gruppenY);
+    gruppentext.textContent = karte.gruppe;
+    gruppe.appendChild(gruppentext);
 
     const werte = document.createElementNS(NS, "text");
     werte.setAttribute("class", "karte-werte");
     werte.setAttribute("x", 10);
-    werte.setAttribute("y", 66);
+    werte.setAttribute("y", masse.werteY);
     werte.setAttribute("data-werte", karte.id);
     gruppe.appendChild(werte);
 
     for (const port of karte.ports) {
       gruppe.appendChild(this.zeichnePort(karte, port));
     }
+    gruppe.appendChild(this.zeichneVerbindungsgriff(karte, masse));
 
     gruppe.addEventListener("pointerdown", (e) => this.karteGreifen(e, karte));
+    gruppe.addEventListener("keydown", (e) => this.karteTaste(e, karte, gruppe));
     return gruppe;
+  },
+
+  /* Der einzige, deutlich sichtbare Anknuepfpunkt am Kartenrand (siehe Task:
+     "erscheint an ihrem Rand ein deutlicher Anknuepfpunkt, den man auf die
+     Zielkarte zieht"). In der Grundansicht unsichtbar (opacity 0 in
+     style.css), erscheint er beim Ueberfahren oder Fokussieren der Karte
+     sowie waehrend des Ziehens selbst (.karte.verbindet-von, von
+     Pfeile.ziehenStarten() gesetzt) - das ist die Entdeckungsroute fuer das
+     Verbinden ohne Vorwissen. Umschalt+Ziehen (siehe pfeile.js binde())
+     bleibt als Abkuerzung fuer Geuebte bestehen. */
+  zeichneVerbindungsgriff(karte, masse) {
+    const griff = document.createElementNS(NS, "g");
+    griff.setAttribute("class", "verbindungs-griff");
+    griff.setAttribute("transform", `translate(${masse.breite} ${masse.hoehe / 2})`);
+
+    const kreis = document.createElementNS(NS, "circle");
+    kreis.setAttribute("class", "verbindungs-griff-kreis");
+    kreis.setAttribute("r", 9);
+    griff.appendChild(kreis);
+
+    const kreuz = document.createElementNS(NS, "path");
+    kreuz.setAttribute("class", "verbindungs-griff-kreuz");
+    kreuz.setAttribute("d", "M -4 0 H 4 M 0 -4 V 4");
+    griff.appendChild(kreuz);
+
+    const titel = document.createElementNS(NS, "title");
+    titel.textContent = "Ziehen, um diese Karte mit einer anderen zu verbinden";
+    griff.appendChild(titel);
+
+    griff.addEventListener("pointerdown", (e) => {
+      // Nicht auch noch karteGreifen() ausloesen (Verschieben/Auswaehlen) -
+      // dieser Pointerdown gehoert allein dem Verbinden.
+      e.stopPropagation();
+      Pfeile.ziehenStarten(karte, e);
+    });
+    return griff;
   },
 
   portPosition(karte, port) {
@@ -129,24 +280,52 @@ const Editor = {
       (p) => p.richtung === port.richtung && p.art === port.art
     );
     const index = gleiche.indexOf(port);
-    const abstand = 96 / (gleiche.length + 1);
+    const hoehe = karte._hoehe || 96;
+    const abstand = hoehe / (gleiche.length + 1);
     const y = abstand * (index + 1);
-    const x = port.richtung === "ein" ? 0 : 150;
+    const x = port.richtung === "ein" ? 0 : (karte._breite || this.KARTE_BREITE);
     return { x, y };
+  },
+
+  /* Luft, Signal und Energie muessen sich auch ohne Farbsinn unterscheiden
+     lassen (siehe Task) - deshalb nicht nur eine andere Farbe je Art, sondern
+     eine andere Form: Kreis fuer Luft, Quadrat fuer Signal, Dreieck (Spitze
+     in Fliessrichtung) fuer die vier Energierollen aus Pfeile.ENERGIEROLLEN
+     (dieselbe Liste wie fuer die Pfeilfarbe in pfeile.js). */
+  portKategorie(port) {
+    if (port.art === "luft") return "luft";
+    return Pfeile.ENERGIEROLLEN.includes(port.rolle) ? "energie" : "signal";
   },
 
   zeichnePort(karte, port) {
     const { x, y } = this.portPosition(karte, port);
-    const punkt = document.createElementNS(NS, "circle");
-    punkt.setAttribute("class", `port port-${port.art}`);
-    punkt.setAttribute("cx", x);
-    punkt.setAttribute("cy", y);
-    punkt.setAttribute("r", 4);
-    punkt.setAttribute("data-port", port.id);
+    const kategorie = this.portKategorie(port);
+    let form;
+    if (kategorie === "luft") {
+      form = document.createElementNS(NS, "circle");
+      form.setAttribute("cx", x);
+      form.setAttribute("cy", y);
+      form.setAttribute("r", 5);
+    } else if (kategorie === "energie") {
+      const r = 5.5;
+      const spitzeX = port.richtung === "ein" ? x - r : x + r;
+      const basisX = port.richtung === "ein" ? x + r : x - r;
+      form = document.createElementNS(NS, "polygon");
+      form.setAttribute("points", `${spitzeX},${y} ${basisX},${y - r} ${basisX},${y + r}`);
+    } else {
+      form = document.createElementNS(NS, "rect");
+      const seite = 8;
+      form.setAttribute("x", x - seite / 2);
+      form.setAttribute("y", y - seite / 2);
+      form.setAttribute("width", seite);
+      form.setAttribute("height", seite);
+    }
+    form.setAttribute("class", `port port-${kategorie}`);
+    form.setAttribute("data-port", port.id);
     const titel = document.createElementNS(NS, "title");
     titel.textContent = `${port.schluessel} (${port.rolle})`;
-    punkt.appendChild(titel);
-    return punkt;
+    form.appendChild(titel);
+    return form;
   },
 
   /* Von karteGreifen() und der Leinwand selbst gebraucht, deshalb hier
@@ -157,6 +336,26 @@ const Editor = {
     );
   },
 
+  /* Waehlt eine Karte aus (Panel + .gewaehlt-Klasse), ohne sie zu verschieben
+     - der gemeinsame Kern von karteGreifen() (Maus) und karteTaste()
+     (Tastatur). */
+  karteAuswaehlen(karte, gruppe) {
+    this.auswahl = karte.id;
+    panelZeigen(karte);
+    this.entferneAuswahlKlasse();
+    gruppe.classList.add("gewaehlt");
+  },
+
+  /* Tastaturbedienung einer Karte (siehe Task: Karten muessen "fokussierbar
+     und mit der Tastatur bedienbar" sein). Verschieben bleibt der Maus
+     vorbehalten - eine Karte per Tastatur zu verbinden oder zu verschieben
+     ist ein groesseres, eigenes Vorhaben und nicht Teil dieses Auftrags. */
+  karteTaste(ereignis, karte, gruppe) {
+    if (ereignis.key !== "Enter" && ereignis.key !== " ") return;
+    ereignis.preventDefault();
+    this.karteAuswaehlen(karte, gruppe);
+  },
+
   karteGreifen(ereignis, karte) {
     if (ereignis.button !== 0) return;
     // Umschalt+Klick auf einer Karte ist Pfeile.ziehenStarten() vorbehalten
@@ -164,14 +363,11 @@ const Editor = {
     // unten den Klick abfangen, bevor er die Leinwand erreicht.
     if (ereignis.shiftKey) return;
     ereignis.stopPropagation();
-    this.auswahl = karte.id;
-    panelZeigen(karte);
+    const gruppe = ereignis.currentTarget;
+    this.karteAuswaehlen(karte, gruppe);
 
     const start = { x: ereignis.clientX, y: ereignis.clientY };
     const anfang = { x: karte.pos_x, y: karte.pos_y };
-    const gruppe = ereignis.currentTarget;
-    this.entferneAuswahlKlasse();
-    gruppe.classList.add("gewaehlt");
 
     const bewegen = (e) => {
       karte.pos_x = anfang.x + (e.clientX - start.x) / this.sicht.zoom;

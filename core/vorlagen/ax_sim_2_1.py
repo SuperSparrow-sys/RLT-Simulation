@@ -36,11 +36,11 @@ def baue(projekt_id, name="AX_SIM 2.1"):
 
     # -- Quellen ------------------------------------------------------
     wetter = karte("wetter", 40, 40, "Wetterdaten")
-    aussenluft = karte("aussenluft", 40, 200, "Außenluft")
+    aussenluft = karte("aussenluft", 40, 460, "Außenluft")
 
     # -- Gemeinsame Vorbehandlung, Anlage!I9:N21 ----------------------
     wrg = karte(
-        "wrg", 240, 200, "Wärmerückgewinnung",
+        "wrg", 300, 460, "Wärmerückgewinnung",
         V_nenn=12200.0,        # Anlage!J9
         dp_WRG_nenn=170.0,     # Anlage!J10
         dp_Bypass_nenn=50.0,   # Anlage!J11
@@ -48,62 +48,62 @@ def baue(projekt_id, name="AX_SIM 2.1"):
         rueckfeuchtzahl=0.0,   # Anlage!J13
     )
     vorerhitzer = karte(
-        "erhitzer", 440, 200, "Vorerhitzer",
+        "erhitzer", 560, 460, "Vorerhitzer",
         V_nenn=12200.0, dp_nenn=30.0, QH_max=27.0,   # Anlage!M9, M10, M11
     )
-    verteiler = karte("verteiler", 620, 200, "Verteiler")
+    verteiler = karte("verteiler", 820, 460, "Verteiler")
 
     # -- Gang 1 "Halle", Anlage!R9:AC21 -------------------------------
     kuehler_1 = karte(
-        "kuehler", 780, 120, "Kühler Halle",
+        "kuehler", 1340, 250, "Kühler Halle",
         V_nenn=8200.0, dp_nenn=240.0, QK_nenn=63.0, T_KW_mittel=6.0,
     )
     erhitzer_1 = karte(
-        "erhitzer", 960, 120, "Erhitzer Halle",
+        "erhitzer", 1600, 250, "Erhitzer Halle",
         V_nenn=8200.0, dp_nenn=147.0, QH_max=101.0,
     )
     zuluft_1 = karte(
-        "ventilator", 1140, 120, "Zuluftventilator Halle",
+        "ventilator", 1860, 250, "Zuluftventilator Halle",
         rolle="zuluft", V_max=8200.0, dp_max=1400.0, dp_konst=1400.0,
         PE_max=4.9, regelart="F", stellgroesse=100.0,   # Anlage!Y16
     )
     waescher_1 = karte(
-        "luftwaescher", 1320, 120, "Luftwäscher Halle",
+        "luftwaescher", 2120, 250, "Luftwäscher Halle",
         V_nenn=8200.0, dp_nenn=50.0, absalzverlust=10.0, pumpenart="H",
     )
 
     # -- Gang 2 "Umkleide", Anlage!R31:AC43 ---------------------------
     kuehler_2 = karte(
-        "kuehler", 780, 320, "Kühler Umkleide",
+        "kuehler", 1340, 1090, "Kühler Umkleide",
         V_nenn=4000.0, dp_nenn=150.0, QK_nenn=250.0, T_KW_mittel=9.0,
     )
     erhitzer_2 = karte(
-        "erhitzer", 960, 320, "Erhitzer Umkleide",
+        "erhitzer", 1600, 1090, "Erhitzer Umkleide",
         V_nenn=4000.0, dp_nenn=62.0, QH_max=47.0,
     )
     zuluft_2 = karte(
-        "ventilator", 1140, 320, "Zuluftventilator Umkleide",
+        "ventilator", 1860, 1090, "Zuluftventilator Umkleide",
         rolle="zuluft", V_max=4000.0, dp_max=1190.0, dp_konst=4000.0,
         PE_max=1.7, regelart="F", stellgroesse=100.0,   # Anlage!Y38
     )
     waescher_2 = karte(
-        "luftwaescher", 1320, 320, "Luftwäscher Umkleide",
+        "luftwaescher", 2120, 1090, "Luftwäscher Umkleide",
         V_nenn=4000.0, dp_nenn=50.0, absalzverlust=10.0, pumpenart="H",
     )
 
     # -- Raum und Abluft, Anlage!AG31:AI50 und L31:N43 ----------------
     raum = karte(
-        "einfacher_raum", 1520, 220, "Einfacher Raum",
+        "einfacher_raum", 2380, 460, "Einfacher Raum",
         spez_transmission=0.5,   # Anlage!AH31
         sollwert_stat=15.0,      # Anlage!AH44
     )
-    sammler = karte("sammler", 1520, 420, "Sammler Abluft")
+    sammler = karte("sammler", 2380, 670, "Sammler Abluft")
     abluft = karte(
-        "ventilator", 1320, 480, "Abluftventilator",
+        "ventilator", 2380, 880, "Abluftventilator",
         rolle="abluft", V_max=10000.0, dp_max=750.0, dp_konst=600.0,
         PE_max=3.3, regelart="F", stellgroesse=90.0,    # Anlage!M38
     )
-    fortluft = karte("fortluft", 40, 420, "Fortluft")
+    fortluft = karte("fortluft", 300, 670, "Fortluft")
 
     # -- Regelung, Anlage!I52:W72 -------------------------------------
     #
@@ -121,7 +121,7 @@ def baue(projekt_id, name="AX_SIM 2.1"):
     # (Anlage!V16 bzw. V38 ueber AB16/AB38) hat.
 
     regler_vor = karte(
-        "p_regler", 440, 400, "Regler Vorerhitzer",
+        "p_regler", 560, 40, "Regler Vorerhitzer",
         xp_1=5.0, xp_2=10.0, sollwert_2=19.0,          # Anlage!N52, N54, M59
     )
 
@@ -136,24 +136,24 @@ def baue(projekt_id, name="AX_SIM 2.1"):
     # gemeinsames Umkehrglied genuegt, weil auch der Regler dahinter gemeinsam
     # ist - ein Signalausgang darf beliebig viele Verbraucher speisen.
     entfeuchtungsregler = karte(
-        "p_regler", 780, 20, "Entfeuchtungsregler",
+        "p_regler", 1080, 460, "Entfeuchtungsregler",
         xp_1=5.0, xp_2=10.0, sollwert_2=9.0,           # Anlage!S59
     )
     entfeuchter_umkehr = karte(
-        "umkehrglied", 780, 100, "Umkehrung Entfeuchter",   # Anlage!S16: 100-S61
+        "umkehrglied", 1080, 670, "Umkehrung Entfeuchter",   # Anlage!S16: 100-S61
     )
     # Kuehlregler (Anlage!S72, Kette T64=S72-((S71-S70)/T65)): S70=AH45, der
     # Sollwert ist also die Raumtemperatur, S71 ein fester Istwert - dieselbe
     # Vertauschung wie beim Waescherregler. EIN Regler fuer beide Geraete.
     kuehlregler = karte(
-        "p_regler", 780, 180, "Kühlregler",
+        "p_regler", 1080, 880, "Kühlregler",
         xp_1=5.0, xp_2=10.0, istwert_2=22.0,           # Anlage!S71
     )
     kuehlerstellung_1 = karte(
-        "maximalwert", 780, 260, "Stellung Kühler Halle",   # Anlage!S16
+        "maximalwert", 1340, 40, "Stellung Kühler Halle",   # Anlage!S16
     )
     kuehlerstellung_2 = karte(
-        "maximalwert", 780, 340, "Stellung Kühler Umkleide",   # Anlage!S38
+        "maximalwert", 1340, 1300, "Stellung Kühler Umkleide",   # Anlage!S38
     )
 
     # Erhitzerregler (Anlage!V72, Kette W64=V72-((V71-V70)/W65)): V71=V39, der
@@ -162,36 +162,36 @@ def baue(projekt_id, name="AX_SIM 2.1"):
     # Geraete - das ist die echte Kopplung ueber die Straenge hinweg: die Halle
     # reagiert in der Mappe auf den Austritt der Umkleide.
     erhitzerregler = karte(
-        "p_regler", 960, 20, "Regler Erhitzer",
+        "p_regler", 1080, 250, "Regler Erhitzer",
         xp_1=5.0, xp_2=10.0, sollwert_2=20.0,          # Anlage!V70
     )
     nachwaermen_1 = karte(
-        "faktor", 960, 100, "Nachwärmen Halle", faktor=0.5,   # Anlage!V16
+        "faktor", 1860, 40, "Nachwärmen Halle", faktor=0.5,   # Anlage!V16
     )
     nachwaermen_2 = karte(
-        "faktor", 960, 180, "Nachwärmen Umkleide", faktor=0.5,   # Anlage!V38
+        "faktor", 1860, 1300, "Nachwärmen Umkleide", faktor=0.5,   # Anlage!V38
     )
     erhitzerstellung_1 = karte(
-        "maximalwert", 960, 260, "Stellung Erhitzer Halle",
+        "maximalwert", 1600, 40, "Stellung Erhitzer Halle",
     )
     erhitzerstellung_2 = karte(
-        "maximalwert", 960, 340, "Stellung Erhitzer Umkleide",
+        "maximalwert", 1600, 1300, "Stellung Erhitzer Umkleide",
     )
 
     # Waescherregler bleiben je Geraet eigenstaendig (Anlage!AB57, AB68).
     waescherregler_1 = karte(
-        "hysterese_regler", 1320, 20, "Regler Luftwäscher Halle",
+        "hysterese_regler", 2120, 40, "Regler Luftwäscher Halle",
         hysterese=0.1, istwert=5.0,                    # Anlage!AB54, AB56
     )
     waescherregler_2 = karte(
-        "hysterese_regler", 1320, 100, "Regler Luftwäscher Umkleide",
+        "hysterese_regler", 2120, 1300, "Regler Luftwäscher Umkleide",
         hysterese=0.1, istwert=6.0,                    # Anlage!AB65, AB67
     )
 
     # -- Zeit und Betrieb, Anlage!AK4:AV32 ----------------------------
-    zeitplan = karte("wochenzeitplan", 40, 560, "Wochenzeitplan")
+    zeitplan = karte("wochenzeitplan", 40, 1510, "Wochenzeitplan")
     ferien = karte(
-        "ferien", 240, 560, "Ferien",
+        "ferien", 300, 1510, "Ferien",
         zeitraeume=[
             {"name": "Weihnachten", "von": "22.12.", "bis": "06.01."},
             {"name": "Ostern", "von": "22.03.", "bis": "06.04."},
@@ -201,20 +201,20 @@ def baue(projekt_id, name="AX_SIM 2.1"):
         ],
     )
     tagesprofil = karte(
-        "tageslastprofil", 440, 560, "Tageslastprofil",
+        "tageslastprofil", 560, 1510, "Tageslastprofil",
         lastgang_1=[0.4] * 7 + [1.0] * 13 + [0.4] * 4,   # Anlage!AT7:AT30
     )
-    betrieb = karte("anlagenbetrieb", 640, 560, "Anlagenbetrieb")
+    betrieb = karte("anlagenbetrieb", 820, 1510, "Anlagenbetrieb")
 
     # -- Bilanz und Protokoll, Anlage!AO30:AR42 und B26:D46 -----------
     bilanz = karte(
-        "bilanz", 1720, 560, "Energiepreise und Bilanz",
+        "bilanz", 2640, 1090, "Energiepreise und Bilanz",
         preis_strom_ht=150.0, preis_strom_nt=150.0, preis_strom_leistung=0.0,
         preis_waerme=50.0, preis_kaelte=50.0, preis_wasser=4.0,
         ht_von=7.0 / 24.0, ht_bis=20.0 / 24.0,
     )
     logger = karte(
-        "datenlogger", 1720, 220, "Datenlogger",
+        "datenlogger", 2640, 460, "Datenlogger",
         namen=["WRG", "T Raum", "F Raum"] + [""] * 7,
         einheiten=["kW", "°C", "g/kg"] + [""] * 7,
     )

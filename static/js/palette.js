@@ -49,15 +49,41 @@ const Palette = {
         eintrag.className = "palette-eintrag";
         eintrag.draggable = true;
         eintrag.title = typ.name;
+        // Per Tastatur erreichbar und bedienbar (siehe Task: Paletteneintraege
+        // waren bisher kein tabindex entfernt) - Enter/Leertaste legen die
+        // Karte an, siehe perTastaturHinzufuegen() unten. role="button", weil
+        // ein <div> ohne das fuer Screenreader sonst kein interaktives
+        // Element ist.
+        eintrag.tabIndex = 0;
+        eintrag.setAttribute("role", "button");
+        eintrag.setAttribute("aria-label", `${typ.name} auf die Leinwand legen`);
         eintrag.innerHTML =
           `<img src="/static/symbole/${typ.symbol}" alt="">` +
           `<span>${typ.name}</span>`;
         eintrag.addEventListener("dragstart", (e) => {
           e.dataTransfer.setData("text/kartentyp", typ.kennung);
         });
+        eintrag.addEventListener("keydown", (e) => {
+          if (e.key !== "Enter" && e.key !== " ") return;
+          e.preventDefault();
+          this.perTastaturHinzufuegen(typ.kennung);
+        });
         liste.appendChild(eintrag);
       }
       behaelter.appendChild(liste);
     }
+  },
+
+  /* Fuegt eine Karte per Tastatur hinzu (Drag&Drop hat kein Tastaturaequivalent
+     - siehe Kommentar oben bei tabIndex) in der Mitte des aktuell sichtbaren
+     Leinwandausschnitts. Editor ist zu diesem Zeitpunkt sicher definiert -
+     derselbe Grund wie bei zeigeFehler() oben: dieser Handler laeuft erst,
+     lange nachdem alle Skripte geladen und Editor.laden() gelaufen ist. */
+  perTastaturHinzufuegen(kennung) {
+    const leinwand = document.getElementById("leinwand");
+    const kasten = leinwand.getBoundingClientRect();
+    const x = (kasten.width / 2 - Editor.sicht.x) / Editor.sicht.zoom;
+    const y = (kasten.height / 2 - Editor.sicht.y) / Editor.sicht.zoom;
+    Editor.karteHinzufuegen(kennung, Math.round(x), Math.round(y));
   },
 };
