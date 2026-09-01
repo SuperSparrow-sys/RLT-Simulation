@@ -32,17 +32,37 @@ function textBreite(text, font) {
 // Vollstaendiger Umbruch ohne Abschneiden (siehe Task: "Vollstaendige Namen
 // ohne Abschneiden") - so viele Zeilen wie noetig, die Karte waechst mit.
 function zeilenUmbrechen(text, maxBreite, font) {
-  const woerter = text.split(" ");
   const zeilen = [];
   let aktuell = "";
-  for (const wort of woerter) {
-    const kandidat = aktuell ? `${aktuell} ${wort}` : wort;
-    if (aktuell && textBreite(kandidat, font) > maxBreite) {
-      zeilen.push(aktuell);
-      aktuell = wort;
-    } else {
-      aktuell = kandidat;
+
+  // Ein einzelnes Wort, das fuer sich allein schon breiter ist als
+  // maxBreite (z.B. "Wärmerückgewinnung" - ein zusammengesetztes Wort ganz
+  // ohne Leerzeichen), kann nicht am Wortzwischenraum umbrechen. Ohne diese
+  // zeichenweise Aufteilung liefe es entweder ueber die Karte hinaus oder
+  // verschwaende - bei gegenskalierten Namen (siehe Editor.
+  // aktualisiereBeschriftungen()) sichtbar hinter der Nachbarkarte - genau
+  // das Abschneiden, das dieser Umbruch eigentlich verhindern soll. Gibt
+  // das letzte, noch passende Stueck zurueck; der Aufrufer haengt bei
+  // Bedarf das naechste Wort daran.
+  function schneide(wort) {
+    let rest = wort;
+    while (textBreite(rest, font) > maxBreite && rest.length > 1) {
+      let i = rest.length - 1;
+      while (i > 1 && textBreite(rest.slice(0, i) + "-", font) > maxBreite) i--;
+      zeilen.push(rest.slice(0, i) + "-");
+      rest = rest.slice(i);
     }
+    return rest;
+  }
+
+  for (const wort of text.split(" ")) {
+    const kandidat = aktuell ? `${aktuell} ${wort}` : wort;
+    if (textBreite(kandidat, font) <= maxBreite) {
+      aktuell = kandidat;
+      continue;
+    }
+    if (aktuell) zeilen.push(aktuell);
+    aktuell = schneide(wort);
   }
   if (aktuell) zeilen.push(aktuell);
   return zeilen;
@@ -141,6 +161,22 @@ const Editor = {
   },
 
   KARTE_BREITE: 190,
+  // Schriftgroesse und Zeilenhoehe des Kartennamens - eine einzige
+  // Quelle fuer karteMasseBerechnen() (misst damit), zeichneKarte()
+  // (zeichnet damit) UND aktualisiereBeschriftungen() (haelt die
+  // Bildschirmgroesse damit ab). style.css' .karte-name tspan muss mit
+  // KARTE_NAME_PX uebereinstimmen (dort als Kommentar vermerkt).
+  KARTE_NAME_PX: 14,
+  KARTE_NAME_ZEILENHOEHE: 17,
+  // Unter dieser Bildschirmhoehe (in Pixeln) wird der Kartenname nicht
+  // weiter mitverkleinert (siehe aktualisiereBeschriftungen()) - siehe
+  // Task: "Der Name einer Karte darf eine Mindestgroesse nicht
+  // unterschreiten, auch wenn der Kasten kleiner wird."
+  MIN_NAME_PX: 11,
+  // Unterhalb dieser Zoomstufe tragen Gruppenzeile und Werte nichts mehr
+  // bei (die Gruppe steht ohnehin schon als Farbkante da) und verschwinden,
+  // statt zu grauem Nebel zu verblassen - siehe aktualisiereBeschriftungen().
+  DETAIL_ZOOM_SCHWELLE: 0.85,
 
   /* Berechnet Breite, Hoehe und alle Textzeilen/-y-Positionen einer Karte,
      bevor sie gezeichnet wird - die Kartenhoehe waechst mit der Anzahl
@@ -159,10 +195,21 @@ const Editor = {
     // Bei 36 Karten passt die Vorlage beim automatischen Einpassen nur mit
     // spuerbarem Herauszoomen ins Bild (siehe Editor.einpassen()) - der
     // Name ist dort das Wichtigste auf der Karte, eine Stufe groesser haelt
-    // ihn dabei noch lesbar, ohne die Kartenbreite (und damit die Zoomstufe)
-    // zu beruehren, denn nur die Kartenhoehe waechst mit.
-    const zeilenHoehe = 17;
-    const zeilen = zeilenUmbrechen(karte.name, breite - textX - pad, "500 14px Roboto, Arial, sans-serif");
+    // ihn dabei noch lesbar. Den tatsaechlichen Bodensatz gegen den Zoom
+    // haelt aktualisiereBeschriftungen() weiter unten.
+    const zeilenHoehe = this.KARTE_NAME_ZEILENHOEHE;
+    const font = `500 ${this.KARTE_NAME_PX}px Roboto, Arial, sans-serif`;
+    // Der Umbruch faellt schmaler aus, als die Kartenbreite selbst erlauben
+    // wuerde: bei kleiner Zoomstufe waechst der Name durch die
+    // Gegenskalierung (siehe aktualisiereBeschriftungen()) auf dem
+    // Bildschirm breiter, als die - dann geschrumpfte - Karte noch ist. Ein
+    // langer Name, der die volle Kartenbreite ausnutzt, liefe dabei in die
+    // Nachbarkarte hinein. Ein engerer Umbruch bricht ihn stattdessen
+    // frueher auf eine weitere Zeile um (die Kartenhoehe hat dafuer genug
+    // Luft) und haelt die gegenskalierte Breite in einem Rahmen, den auch
+    // eng benachbarte Karten noch vertragen.
+    const zeilenBreite = Math.min(breite - textX - pad, 100);
+    const zeilen = zeilenUmbrechen(karte.name, zeilenBreite, font);
     const nameHoehe = zeilen.length * zeilenHoehe;
     const kopfHoehe = Math.max(icon, nameHoehe);
     const nameStartY = pad + (kopfHoehe - nameHoehe) / 2 + 11;
@@ -219,16 +266,29 @@ const Editor = {
     bild.setAttribute("height", 20);
     gruppe.appendChild(bild);
 
+    // Der Name sitzt in einer eigenen Huelle mit der ersten Zeilenbasislinie
+    // als Ankerpunkt (data-ax/data-ay) - aktualisiereBeschriftungen() haengt
+    // bei kleiner Zoomstufe eine Gegenskalierung an genau diesen Anker, damit
+    // der Name nicht unter eine Mindestgroesse schrumpft, waehrend der Rest
+    // der Karte normal mitskaliert (siehe Task und Kommentar dort). Die
+    // Zeilen selbst stehen deshalb relativ zum Anker (x=0, y=i*Zeilenhoehe),
+    // nicht mehr in absoluten Kartenkoordinaten.
+    const beschriftungsHuelle = document.createElementNS(NS, "g");
+    beschriftungsHuelle.setAttribute("class", "karte-name-huelle");
+    beschriftungsHuelle.dataset.ax = masse.textX;
+    beschriftungsHuelle.dataset.ay = masse.nameStartY;
+    beschriftungsHuelle.setAttribute("transform", `translate(${masse.textX} ${masse.nameStartY})`);
     const beschriftung = document.createElementNS(NS, "text");
     beschriftung.setAttribute("class", "karte-name");
     for (let i = 0; i < masse.zeilen.length; i++) {
       const zeile = document.createElementNS(NS, "tspan");
-      zeile.setAttribute("x", masse.textX);
-      zeile.setAttribute("y", masse.nameStartY + i * 15);
+      zeile.setAttribute("x", 0);
+      zeile.setAttribute("y", i * this.KARTE_NAME_ZEILENHOEHE);
       zeile.textContent = masse.zeilen[i];
       beschriftung.appendChild(zeile);
     }
-    gruppe.appendChild(beschriftung);
+    beschriftungsHuelle.appendChild(beschriftung);
+    gruppe.appendChild(beschriftungsHuelle);
 
     // Gruppenname als Text (nicht nur der Farbstreifen) - siehe Kommentar bei
     // GRUPPEN_KLASSE oben zur Begruendung.
@@ -451,6 +511,50 @@ const Editor = {
         `translate(${this.sicht.x} ${this.sicht.y}) scale(${this.sicht.zoom})`
       );
     this.aktualisiereMinikarte();
+    this.aktualisiereBeschriftungen();
+  },
+
+  /* Haelt die Kartenbeschriftung gegen den Zoom lesbar (siehe Task-
+     Nachbesserung: "Die Schrift schrumpft mit, und das muss sie nicht").
+     Zwei getrennte Massnahmen fuer zwei verschiedene Bestandteile:
+
+     1. Der Name ist auf jeder Karte das Wichtigste - er bekommt eine
+        Gegenskalierung, sobald die aktuelle Zoomstufe ihn unter
+        MIN_NAME_PX schrumpfen wuerde, und waechst darueber hinaus wieder
+        ganz normal mit dem Zoom mit (kein harter Sprung, sondern ein
+        weicher Uebergang: bei Zoom = MIN_NAME_PX/KARTE_NAME_PX ist die
+        Gegenskalierung genau 1). Alle Karten teilen sich denselben
+        Gegenskalierungsfaktor - er haengt nur von der aktuellen Zoomstufe
+        ab, nicht vom Karteninhalt -, deshalb wird er hier einmal berechnet
+        und auf jede .karte-name-huelle angewendet (siehe deren data-ax/
+        data-ay - der Anker ist die erste Zeilenbasislinie, siehe
+        zeichneKarte()).
+
+     2. Gruppenzeile und Werte tragen unterhalb einer Zoomstufe nichts mehr
+        bei (die Gruppe steht ohnehin schon als Farbkante da, siehe
+        .karte-gruppenstreifen) - sie verschwinden dort ganz, statt zu
+        unlesbarem Grau zu verblassen, und kommen zurueck, sobald wieder
+        genug Zoom da ist. */
+  aktualisiereBeschriftungen() {
+    const zoom = this.sicht.zoom;
+    const mindestVerhaeltnis = this.MIN_NAME_PX / this.KARTE_NAME_PX;
+    const gegenzoom = zoom < mindestVerhaeltnis ? mindestVerhaeltnis / zoom : 1;
+    document.querySelectorAll(".karte-name-huelle").forEach((huelle) => {
+      const { ax, ay } = huelle.dataset;
+      huelle.setAttribute("transform", `translate(${ax} ${ay}) scale(${gegenzoom})`);
+    });
+
+    // el.hidden = ... setzt bei einem per createElementNS erzeugten SVG-
+    // Element zwar die IDL-Eigenschaft, spiegelt sie aber nicht zuverlaessig
+    // auf das tatsaechliche hidden-Attribut (und damit auf die CSS-Regel
+    // [hidden]{display:none!important}) - deshalb hier ausdruecklich das
+    // Attribut selbst setzen/entfernen statt der Kurzform, die anderswo auf
+    // der Seite (bei gewoehnlichen HTML-Elementen) funktioniert.
+    const zeigeDetails = zoom >= this.DETAIL_ZOOM_SCHWELLE;
+    document.querySelectorAll(".karte-gruppe, .karte-werte").forEach((el) => {
+      if (zeigeDetails) el.removeAttribute("hidden");
+      else el.setAttribute("hidden", "");
+    });
   },
 
   /* Berechnet die Weltkoordinaten-Huelle aller Karten (kleinstes Rechteck,
