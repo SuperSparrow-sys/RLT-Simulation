@@ -2,13 +2,55 @@
 
 const NS = "http://www.w3.org/2000/svg";
 
+/* Pfeile (Task 22) und Panel (Task 23) sind noch nicht angelegt; ohne diesen
+   Schutz wuerde jeder Aufruf mit einem ReferenceError abbrechen und die
+   Funktion, in der er steht, vorzeitig verlassen - auch dann, wenn danach
+   noch wichtiger Code folgt (etwa das Registrieren der Zieh-Listener). Die
+   spaeteren Tasks entfernen die jeweilige Abfrage wieder, sobald ihr Modul
+   existiert. */
+function pfeileZeichnen(anlage) {
+  if (typeof Pfeile !== "undefined") Pfeile.zeichneAlle(anlage);
+}
+function pfeileBinden(editor) {
+  if (typeof Pfeile !== "undefined") Pfeile.binde(editor);
+}
+function panelZeigen(karte) {
+  if (typeof Panel !== "undefined") Panel.zeige(karte);
+}
+function panelLeeren() {
+  if (typeof Panel !== "undefined") Panel.leeren();
+}
+
+/* Modester, einheitlicher Umgang mit fehlgeschlagenen Anfragen: kurze
+   deutsche Meldung fuer die Anwenderin statt eines stillen Fehlschlags oder
+   einer Konsolenmeldung, die niemand sieht. Kein eigenes
+   Benachrichtigungssystem - nur eine einzelne, wiederverwendete Leiste. */
+function zeigeFehler(nachricht) {
+  const leiste = document.getElementById("fehlermeldung");
+  if (!leiste) return;
+  leiste.textContent = nachricht;
+  leiste.hidden = false;
+  window.clearTimeout(zeigeFehler.timer);
+  zeigeFehler.timer = window.setTimeout(() => { leiste.hidden = true; }, 5000);
+}
+
 const Editor = {
   anlage: null,
   auswahl: null,
   sicht: { x: 0, y: 0, zoom: 1 },
 
   async laden(anlageId) {
-    const antwort = await fetch(`/api/anlagen/${anlageId}`);
+    let antwort;
+    try {
+      antwort = await fetch(`/api/anlagen/${anlageId}`);
+    } catch {
+      zeigeFehler("Anlage konnte nicht geladen werden.");
+      return;
+    }
+    if (!antwort.ok) {
+      zeigeFehler("Anlage konnte nicht geladen werden.");
+      return;
+    }
     this.anlage = await antwort.json();
     document.getElementById("anlagenname").textContent = this.anlage.name;
     this.zeichne();
@@ -24,7 +66,7 @@ const Editor = {
     for (const karte of this.anlage.karten) {
       ebene.appendChild(this.zeichneKarte(karte));
     }
-    Pfeile.zeichneAlle(this.anlage);
+    pfeileZeichnen(this.anlage);
     this.aktualisiereSicht();
   },
 
@@ -97,45 +139,68 @@ const Editor = {
     return punkt;
   },
 
+  /* Von karteGreifen() und der Leinwand selbst gebraucht, deshalb hier
+     einmal benannt statt an beiden Stellen wiederholt. */
+  entferneAuswahlKlasse() {
+    document.querySelectorAll(".karte.gewaehlt").forEach((g) =>
+      g.classList.remove("gewaehlt")
+    );
+  },
+
   karteGreifen(ereignis, karte) {
     if (ereignis.button !== 0) return;
     ereignis.stopPropagation();
     this.auswahl = karte.id;
-    Panel.zeige(karte);
+    panelZeigen(karte);
 
     const start = { x: ereignis.clientX, y: ereignis.clientY };
     const anfang = { x: karte.pos_x, y: karte.pos_y };
     const gruppe = ereignis.currentTarget;
-    document.querySelectorAll(".karte.gewaehlt").forEach((g) =>
-      g.classList.remove("gewaehlt")
-    );
+    this.entferneAuswahlKlasse();
     gruppe.classList.add("gewaehlt");
 
     const bewegen = (e) => {
       karte.pos_x = anfang.x + (e.clientX - start.x) / this.sicht.zoom;
       karte.pos_y = anfang.y + (e.clientY - start.y) / this.sicht.zoom;
       gruppe.setAttribute("transform", `translate(${karte.pos_x} ${karte.pos_y})`);
-      Pfeile.zeichneAlle(this.anlage);
+      pfeileZeichnen(this.anlage);
     };
     const loslassen = async () => {
       window.removeEventListener("pointermove", bewegen);
       window.removeEventListener("pointerup", loslassen);
-      await fetch(`/api/karten/${karte.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pos_x: karte.pos_x, pos_y: karte.pos_y }),
-      });
+      let antwort;
+      try {
+        antwort = await fetch(`/api/karten/${karte.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pos_x: karte.pos_x, pos_y: karte.pos_y }),
+        });
+      } catch {
+        zeigeFehler("Position konnte nicht gespeichert werden.");
+        return;
+      }
+      if (!antwort.ok) zeigeFehler("Position konnte nicht gespeichert werden.");
     };
     window.addEventListener("pointermove", bewegen);
     window.addEventListener("pointerup", loslassen);
   },
 
   async karteHinzufuegen(typ, x, y) {
-    const antwort = await fetch("/api/karten", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ anlage_id: this.anlage.id, typ, pos_x: x, pos_y: y }),
-    });
+    let antwort;
+    try {
+      antwort = await fetch("/api/karten", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ anlage_id: this.anlage.id, typ, pos_x: x, pos_y: y }),
+      });
+    } catch {
+      zeigeFehler("Karte konnte nicht angelegt werden.");
+      return;
+    }
+    if (!antwort.ok) {
+      zeigeFehler("Karte konnte nicht angelegt werden.");
+      return;
+    }
     const karte = await antwort.json();
     this.anlage.karten.push(karte);
     this.zeichne();
@@ -156,10 +221,8 @@ const Editor = {
     leinwand.addEventListener("pointerdown", (e) => {
       if (e.target.closest(".karte")) return;
       this.auswahl = null;
-      Panel.leeren();
-      document.querySelectorAll(".karte.gewaehlt").forEach((g) =>
-        g.classList.remove("gewaehlt")
-      );
+      panelLeeren();
+      this.entferneAuswahlKlasse();
       const start = { x: e.clientX, y: e.clientY };
       const anfang = { ...this.sicht };
       const bewegen = (m) => {
@@ -195,7 +258,17 @@ const Editor = {
 
     window.addEventListener("keydown", async (e) => {
       if (e.key !== "Delete" || this.auswahl === null) return;
-      await fetch(`/api/karten/${this.auswahl}`, { method: "DELETE" });
+      let antwort;
+      try {
+        antwort = await fetch(`/api/karten/${this.auswahl}`, { method: "DELETE" });
+      } catch {
+        zeigeFehler("Karte konnte nicht geloescht werden.");
+        return;
+      }
+      if (!antwort.ok) {
+        zeigeFehler("Karte konnte nicht geloescht werden.");
+        return;
+      }
       this.auswahl = null;
       await this.laden(this.anlage.id);
     });
@@ -206,5 +279,5 @@ window.addEventListener("DOMContentLoaded", async () => {
   Editor.bindeLeinwand();
   await Palette.laden();
   await Editor.laden(window.ANLAGE_ID);
-  Pfeile.binde(Editor);
+  pfeileBinden(Editor);
 });

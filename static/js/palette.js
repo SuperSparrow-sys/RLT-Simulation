@@ -2,7 +2,18 @@
 
 const Palette = {
   async laden() {
-    const gruppen = await (await fetch("/api/palette")).json();
+    let antwort;
+    try {
+      antwort = await fetch("/api/palette");
+    } catch {
+      zeigeFehler("Palette konnte nicht geladen werden.");
+      return;
+    }
+    if (!antwort.ok) {
+      zeigeFehler("Palette konnte nicht geladen werden.");
+      return;
+    }
+    const gruppen = await antwort.json();
     const behaelter = document.getElementById("palette");
     behaelter.textContent = "";
 
@@ -10,8 +21,14 @@ const Palette = {
       "Luftbehandlung", "Verteilung", "Räume", "Regelung",
       "Zeit und Betrieb", "Quellen und Senken", "Verbraucher",
     ];
+    // Unbekannte Gruppen (kuenftige Kartentypen) sollen ans Ende sortieren,
+    // nicht an den Anfang - indexOf() liefert fuer sie -1.
+    const rang = (name) => {
+      const index = reihenfolge.indexOf(name);
+      return index === -1 ? reihenfolge.length : index;
+    };
     const namen = Object.keys(gruppen).sort(
-      (a, b) => reihenfolge.indexOf(a) - reihenfolge.indexOf(b)
+      (a, b) => rang(a) - rang(b) || a.localeCompare(b, "de")
     );
 
     for (const name of namen) {

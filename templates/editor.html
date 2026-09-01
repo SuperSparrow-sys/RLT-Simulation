@@ -7,6 +7,8 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
+  <div id="fehlermeldung" class="fehlermeldung" hidden></div>
+
   <div class="app">
     <aside class="palette" id="palette"></aside>
 
@@ -27,9 +29,9 @@
   </div>
 
   <script>window.ANLAGE_ID = {{ anlage_id }};</script>
+  <!-- pfeile.js (Task 22) und panel.js (Task 23) ergaenzen ihre eigenen
+       Script-Tags hier, sobald ihre Dateien angelegt sind. -->
   <script src="{{ url_for('static', filename='js/palette.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/pfeile.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/panel.js') }}"></script>
   <script src="{{ url_for('static', filename='js/editor.js') }}"></script>
 </body>
 </html>

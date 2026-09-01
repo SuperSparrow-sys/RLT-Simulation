@@ -60,3 +60,8 @@ html, body {
 .panel { width: 280px; flex-shrink: 0; background: var(--surface);
          border-left: 1px solid var(--border-light); overflow-y: auto;
          padding: 16px; }
+
+.fehlermeldung { position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+                 background: var(--danger); color: #fff; padding: 8px 18px;
+                 border-radius: 6px; font-size: 13px; z-index: 10;
+                 box-shadow: 0 2px 6px rgba(0,0,0,.2); }
