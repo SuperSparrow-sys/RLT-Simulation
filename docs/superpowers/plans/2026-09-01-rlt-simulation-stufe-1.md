@@ -2467,6 +2467,18 @@ def test_sammler_ohne_luft_liefert_nullzustand():
     aus, _ = Sammler().berechne({}, {}, {})
     assert aus["luft_aus"].V == 0.0
     assert aus["luft_aus"].T == 0.0
+
+
+def test_sammler_mischt_seinen_eigenen_ausgang_nicht_mit():
+    """Der Solver legt die Abnahme des Ausgangs ebenfalls in 'ein' ab."""
+    ein = {
+        "luft_ein_1": Luft(V=8000.0, T=20.0, x=8.0),
+        "luft_ein_2": Luft(V=2000.0, T=10.0, x=3.0),
+        "luft_aus": Luft(V=10000.0),
+    }
+    aus, _ = Sammler().berechne(ein, {}, {})
+    assert aus["luft_aus"].V == pytest.approx(10000.0)
+    assert aus["luft_aus"].T == pytest.approx((8000 * 20.0 + 2000 * 10.0) / 10000)
 ```
 
 `tests/bausteine/test_quellen.py`:
@@ -2649,7 +2661,13 @@ class Sammler(Baustein):
     AUSGABEN = ["T_aus", "F_aus", "V"]
 
     def berechne(self, ein, p, zustand):
-        straenge = [w for w in ein.values() if isinstance(w, Luft)]
+        # Nur ueber die eigenen Eingaenge sammeln. Der Solver legt auch die
+        # Abnahme des Luftausgangs in 'ein' ab; wuerde die mitgemischt, zaehlte
+        # der Sammler seinen eigenen Ausgang als weiteren Strang mit.
+        straenge = [
+            w for s, w in ein.items()
+            if s.startswith("luft_ein") and isinstance(w, Luft)
+        ]
         gesamt = sum(s.V for s in straenge)
 
         if gesamt <= 0:
@@ -2990,27 +3008,26 @@ class EinfacherRaum(Baustein):
             V * w.T for V, (_, w) in zip(V_zu, zuluft)
         ) / 3600.0 * LUFT_WAERMEKAPAZITAET
 
-        if summe_zu >= summe_ab:
-            T_frei = (waerme_zuluft + Q_i + k * T_AU) / (C_zu + k)
-            bezug = summe_zu
-        else:
+        # Die Fallunterscheidung wird EINMAL getroffen und danach nur noch
+        # benutzt. Ueberwiegt die Abluft, stroemt die Differenz als Infiltration
+        # von aussen nach; das schlaegt gleichermassen auf Temperatur, Feuchte
+        # und Heizbedarf durch. Bei Gleichstand ist C_inf null und beide Zweige
+        # gehen ineinander ueber.
+        abluft_ueberwiegt = summe_ab > summe_zu
+        C_inf = 0.0
+        bezug = summe_zu
+        if abluft_ueberwiegt:
             C_inf = (summe_ab - summe_zu) / 3600.0 * LUFT_WAERMEKAPAZITAET
-            T_frei = (C_inf * T_AU + waerme_zuluft + Q_i + k * T_AU) / (C_inf + C_zu + k)
             bezug = summe_ab
 
+        T_frei = (C_inf * T_AU + waerme_zuluft + Q_i + k * T_AU) / (C_inf + C_zu + k)
         T_Raum = max(T_frei, p["sollwert_stat"])
 
-        if summe_zu >= summe_ab:
-            feuchte_mischung = sum(
-                V * w.x for V, (_, w) in zip(V_zu, zuluft)
-            ) / summe_zu
-            F_Raum = min(feuchte_mischung + M_i * 1000.0 / summe_zu / 1.2, 99.9)
-        else:
-            feuchte_mischung = (
-                sum(V * w.x for V, (_, w) in zip(V_zu, zuluft))
-                + F_AU * (summe_ab - summe_zu)
-            ) / summe_ab
-            F_Raum = min(feuchte_mischung + M_i * 1000.0 / summe_ab / 1.2, 99.9)
+        feuchte_zuluft = sum(V * w.x for V, (_, w) in zip(V_zu, zuluft))
+        feuchte_mischung = (
+            feuchte_zuluft + F_AU * (summe_ab - summe_zu if abluft_ueberwiegt else 0.0)
+        ) / bezug
+        F_Raum = min(feuchte_mischung + M_i * 1000.0 / bezug / 1.2, 99.9)
 
         QH_stat = 0.0
         if p["sollwert_stat"] > T_frei:
@@ -3019,7 +3036,7 @@ class EinfacherRaum(Baustein):
                 V / 3600.0 * LUFT_WAERMEKAPAZITAET * (w.T - p["sollwert_stat"])
                 for V, (_, w) in zip(V_zu, zuluft)
             )
-            if summe_zu < summe_ab:
+            if abluft_ueberwiegt:
                 QH_stat -= (summe_ab - summe_zu) / 3600.0 * LUFT_WAERMEKAPAZITAET * (
                     T_AU - p["sollwert_stat"]
                 )
@@ -5728,6 +5745,32 @@ def test_speichergroessen_sehen_in_jeder_iteration_den_stundenanfang():
     assert einmal == pytest.approx(aus["T_Raum"], rel=1e-9)
 
 
+def test_raum_erfaehrt_seine_abluftmenge_vom_abluftventilator():
+    """Anlage!AH33 - die Abluftmenge des Raums kommt vom Abluftventilator."""
+    karten = {
+        1: karte(1, "wetter"),
+        2: karte(2, "aussenluft"),
+        3: karte(3, "ventilator", {"V_max": 8200.0, "PE_max": 0.001, "regelart": "-"}),
+        4: karte(4, "einfacher_raum", {"spez_transmission": 0.5, "sollwert_stat": -50.0}),
+        5: karte(5, "ventilator",
+                 {"rolle": "abluft", "V_max": 4500.0, "PE_max": 0.001, "regelart": "-"}),
+        6: karte(6, "fortluft"),
+    }
+    g = verbinde(
+        karten,
+        [
+            (1, "T_AU", 2, "T_AU"),
+            (1, "F_AU", 2, "F_AU"),
+            (2, "luft_aus", 3, "luft_ein"),
+            (3, "luft_aus", 4, "zuluft_ein_1"),
+            (4, "abluft_aus_1", 5, "luft_ein"),
+            (5, "luft_aus", 6, "luft_ein"),
+        ],
+    )
+    lauf = solver.Solver(g).starte(wetterstunden(1, t_au=0.0))
+    assert lauf.stunden[0][4]["abluft_aus_1"].V == pytest.approx(4500.0)
+
+
 def test_zustandsgroessen_werden_zur_naechsten_stunde_fortgeschrieben():
     karten = {1: karte(1, "raum", {"start_temperatur": 20.0, "spez_beleuchtung": 0.0})}
     g = graph.Anlagengraph(karten=karten, verbindungen=[])
@@ -5837,12 +5880,21 @@ class Solver:
     def __init__(self, anlagengraph):
         self.graph = anlagengraph
         self.reihenfolge = anlagengraph.reihenfolge()
+        self.abnahme = {}
 
     # -- Rueckwaertslauf --------------------------------------------------
 
     def _volumenstroeme(self):
-        """Ermittelt je Lufteingang den geforderten Volumenstrom."""
+        """Ermittelt je Lufteingang den geforderten Volumenstrom.
+
+        Nebenbei wird in self.abnahme festgehalten, wieviel an jedem Luftausgang
+        stromabwaerts abgenommen wird. Der Raum braucht das: seine Abluftmengen
+        stehen in der Excel nicht bei ihm, sondern kommen vom Abluftventilator
+        (Anlage!AH33 und AH35 lesen beide aus M42, dem Volumenstrom des
+        Abluftventilators).
+        """
         gefordert = {}  # port_id -> m³/h
+        self.abnahme = {}  # port_id eines Luftausgangs -> m³/h
 
         for karte_id in reversed(self.reihenfolge):
             karte = self.graph.karten[karte_id]
@@ -5855,6 +5907,7 @@ class Solver:
                     if v.von_port.id == port.id:
                         menge += gefordert.get(v.nach_port.id, 0.0)
                 aus_bedarf[port.schluessel] = menge
+                self.abnahme[port.id] = menge
 
             eigener = karte.baustein.bedarf(aus_bedarf, karte.parameter)
             for schluessel, menge in eigener.items():
@@ -5876,6 +5929,16 @@ class Solver:
 
     def _eingaenge(self, karte, ausgaben, gefordert):
         ein = {}
+
+        # Luftausgaenge zuerst: die Karte erfaehrt, wieviel stromabwaerts von ihr
+        # abgenommen wird. Karten, die das nicht brauchen, ignorieren es einfach;
+        # der Raum dagegen liest daraus, wie viele Abluftstraenge er hat und wie
+        # gross sie sind. Karten mit dynamischen Lufteingaengen muessen deshalb
+        # ueber das Praefix ihres EINGANGS sammeln, nicht ueber alle Luftwerte.
+        for port in karte.ports:
+            if port.art == basis.LUFT and port.richtung == basis.AUSGANG:
+                ein[port.schluessel] = Luft(V=self.abnahme.get(port.id, 0.0))
+
         for port in karte.ports:
             if port.richtung != basis.EINGANG:
                 continue
