@@ -209,6 +209,27 @@ def test_einzelne_verbindung_von_hand(app):
             )
 
 
+def test_port_id_findet_den_anschluss(app):
+    """anlagen.port_id ist der einzige Weg, an eine Anschluss-Id zu kommen -
+
+    Vorlagen sollen dafuer keine eigene SQL-Abfrage schreiben."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        raum = anlagen.karte_anlegen(anlage, "einfacher_raum", 0.0, 0.0)
+
+        daten = anlagen.als_json(anlage)
+        erwartet = next(
+            p["id"] for k in daten["karten"] for p in k["ports"]
+            if k["id"] == raum and p["schluessel"] == "F_Raum"
+        )
+
+        assert anlagen.port_id(raum, "F_Raum") == erwartet
+
+        with pytest.raises(KeyError, match="gibt es nicht"):
+            anlagen.port_id(raum, "unbekannter_anschluss")
+
+
 def test_handverdrahtung_verzweigt_keinen_luftkanal(app):
     """Auch von Hand fuehrt ein Luftausgang an genau eine Stelle."""
     with app.app_context():

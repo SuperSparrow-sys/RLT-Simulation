@@ -225,6 +225,23 @@ def pfeil_loeschen(pfeil_id):
     db.commit()
 
 
+def port_id(karte_id, schluessel):
+    """Anschluss-Id einer Karte ueber ihren Schluessel.
+
+    Fuer Vorlagen, die eine Verbindung ausdruecklich statt automatisch setzen
+    wollen (siehe verbindung_anlegen) - core/anlagen.py bleibt so der einzige Ort,
+    der Schema-Wissen ueber die Datenbank hat.
+    """
+    db = get_db()
+    zeile = db.execute(
+        "SELECT id FROM port WHERE karte_id = ? AND schluessel = ?",
+        (karte_id, schluessel),
+    ).fetchone()
+    if zeile is None:
+        raise KeyError(f"Anschluss '{schluessel}' gibt es nicht an Karte {karte_id}")
+    return zeile["id"]
+
+
 def verbindung_anlegen(anlage_id, von_port_id, nach_port_id):
     """Verbindet zwei Anschluesse ausdruecklich, ohne zu raten.
 
