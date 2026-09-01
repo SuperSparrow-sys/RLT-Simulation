@@ -1,0 +1,470 @@
+======================================================================
+MODULE: Berechnungen.bas ( _VBA_PROJECT_CUR/VBA/Berechnungen )
+======================================================================
+Attribute VB_Name = "Berechnungen"
+Sub Wetterdaten_verarbeiten()
+Attribute Wetterdaten_verarbeiten.VB_Description = "Makro am 10.09.02 von Boellinger, Andreas aufgezeichnet"
+Attribute Wetterdaten_verarbeiten.VB_ProcData.VB_Invoke_Func = "b\n14"
+'
+' Wetterdaten_verarbeiten Makro
+' Makro am 10.09.02 von Boellinger, Andreas aufgezeichnet
+'
+zeile1 = Worksheets("Anlage").Range("Datensatz1").Value
+zeileN = Worksheets("Anlage").Range("DatensatzN").Value
+nzeile = zeileN - zeile1 + 1
+
+ActiveWindow.WindowState = xlMinimized
+
+If nzeile > 100 Then
+  Call Rechenzeit_schaetzen(nzeile, antwort)
+Else
+  antwort = 1
+End If
+
+' --- 1=ok, 2=abbrechen ---
+If Int(antwort) = 1 Then
+
+' Tabelle ERGEBNIS vorbereiten
+ActiveWindow.WindowState = xlMinimized
+Sheets("Ergebnis").Select
+Worksheets("Ergebnis").Range("A18:x8800").ClearContents
+Range("A1").Select
+' Spaltentitel
+Worksheets("Ergebnis").Cells(18, 1).Value = "Datum/Zeit"
+Worksheets("Ergebnis").Cells(18, 2).Value = "AU-Temp"
+Worksheets("Ergebnis").Cells(18, 3).Value = "AU-Feucht"
+Worksheets("Ergebnis").Cells(18, 4).Value = "Strom HT"
+Worksheets("Ergebnis").Cells(18, 5).Value = "Strom NT"
+Worksheets("Ergebnis").Cells(18, 6).Value = "Wärme"
+Worksheets("Ergebnis").Cells(18, 7).Value = "Kälte"
+Worksheets("Ergebnis").Cells(18, 8).Value = "Wasser"
+Worksheets("Ergebnis").Cells(18, 9).Value = Worksheets("Anlage").Range("nWert1").Value
+Worksheets("Ergebnis").Cells(18, 10).Value = Worksheets("Anlage").Range("nWert2").Value
+Worksheets("Ergebnis").Cells(18, 11).Value = Worksheets("Anlage").Range("nWert3").Value
+Worksheets("Ergebnis").Cells(18, 12).Value = Worksheets("Anlage").Range("nWert4").Value
+Worksheets("Ergebnis").Cells(18, 13).Value = Worksheets("Anlage").Range("nWert5").Value
+Worksheets("Ergebnis").Cells(18, 14).Value = Worksheets("Anlage").Range("nWert6").Value
+Worksheets("Ergebnis").Cells(18, 15).Value = Worksheets("Anlage").Range("nWert7").Value
+Worksheets("Ergebnis").Cells(18, 16).Value = Worksheets("Anlage").Range("nWert8").Value
+Worksheets("Ergebnis").Cells(18, 17).Value = Worksheets("Anlage").Range("nWert9").Value
+Worksheets("Ergebnis").Cells(18, 18).Value = Worksheets("Anlage").Range("nWert10").Value
+' Einheiten
+Worksheets("Ergebnis").Cells(19, 1).Value = "ttmm hh:mm"
+Worksheets("Ergebnis").Cells(19, 2).Value = "°C"
+Worksheets("Ergebnis").Cells(19, 3).Value = "g/kg"
+Worksheets("Ergebnis").Cells(19, 4).Value = "kW(h)"
+Worksheets("Ergebnis").Cells(19, 5).Value = "kW(h)"
+Worksheets("Ergebnis").Cells(19, 6).Value = "kW(h)"
+Worksheets("Ergebnis").Cells(19, 7).Value = "kW(h)"
+Worksheets("Ergebnis").Cells(19, 8).Value = "kg(/h)"
+Worksheets("Ergebnis").Cells(19, 9).Value = Worksheets("Anlage").Range("eWert1").Value
+Worksheets("Ergebnis").Cells(19, 10).Value = Worksheets("Anlage").Range("eWert2").Value
+Worksheets("Ergebnis").Cells(19, 11).Value = Worksheets("Anlage").Range("eWert3").Value
+Worksheets("Ergebnis").Cells(19, 12).Value = Worksheets("Anlage").Range("eWert4").Value
+Worksheets("Ergebnis").Cells(19, 13).Value = Worksheets("Anlage").Range("eWert5").Value
+Worksheets("Ergebnis").Cells(19, 14).Value = Worksheets("Anlage").Range("eWert6").Value
+Worksheets("Ergebnis").Cells(19, 15).Value = Worksheets("Anlage").Range("eWert7").Value
+Worksheets("Ergebnis").Cells(19, 16).Value = Worksheets("Anlage").Range("eWert8").Value
+Worksheets("Ergebnis").Cells(19, 17).Value = Worksheets("Anlage").Range("eWert9").Value
+Worksheets("Ergebnis").Cells(19, 18).Value = Worksheets("Anlage").Range("eWert10").Value
+Sheets("Anlage").Select
+'
+' Wetterdaten einlesen und Schreiberdaten in ERGEBNIS übertragen
+
+np = 0
+For n = zeile1 To zeileN
+  np = np + 1
+' Wetterdaten in ANLAGE übertragen
+    Worksheets("Anlage").Range("Datum").Value = Worksheets("Wetterdaten").Cells(n, 1).Value
+    Worksheets("Anlage").Range("T_AU").Value = Worksheets("Wetterdaten").Cells(n, 2).Value
+    Worksheets("Anlage").Range("F_AU").Value = Worksheets("Wetterdaten").Cells(n, 3).Value
+    Worksheets("Anlage").Range("QH_H").Value = Worksheets("Wetterdaten").Cells(n, "H").Value
+    Worksheets("Anlage").Range("QH_N").Value = Worksheets("Wetterdaten").Cells(n, "G").Value
+    Worksheets("Anlage").Range("QH_O").Value = Worksheets("Wetterdaten").Cells(n, "E").Value
+    Worksheets("Anlage").Range("QH_S").Value = Worksheets("Wetterdaten").Cells(n, "D").Value
+    Worksheets("Anlage").Range("QH_W").Value = Worksheets("Wetterdaten").Cells(n, "F").Value
+
+'  Wetter- und Schreiberdaten in ERGEBNIS übertragen
+    Worksheets("Ergebnis").Cells(19 + np, 1).Value = Worksheets("Wetterdaten").Cells(n, 1).Value
+    Worksheets("Ergebnis").Cells(19 + np, 2).Value = Worksheets("Wetterdaten").Cells(n, 2).Value
+    Worksheets("Ergebnis").Cells(19 + np, 3).Value = Worksheets("Wetterdaten").Cells(n, 3).Value
+    
+    Worksheets("Ergebnis").Cells(19 + np, 4).Value = Worksheets("Anlage").Range("Strom_HT").Value
+    Worksheets("Ergebnis").Cells(19 + np, 5).Value = Worksheets("Anlage").Range("Strom_NT").Value
+    Worksheets("Ergebnis").Cells(19 + np, 6).Value = Worksheets("Anlage").Range("Wärme").Value
+    Worksheets("Ergebnis").Cells(19 + np, 7).Value = Worksheets("Anlage").Range("Kälte").Value
+    Worksheets("Ergebnis").Cells(19 + np, 8).Value = Worksheets("Anlage").Range("Wasser").Value
+      
+    Worksheets("Ergebnis").Cells(19 + np, 9).Value = Worksheets("Anlage").Range("Wert1").Value
+    Worksheets("Ergebnis").Cells(19 + np, 10).Value = Worksheets("Anlage").Range("Wert2").Value
+    Worksheets("Ergebnis").Cells(19 + np, 11).Value = Worksheets("Anlage").Range("Wert3").Value
+    Worksheets("Ergebnis").Cells(19 + np, 12).Value = Worksheets("Anlage").Range("Wert4").Value
+    Worksheets("Ergebnis").Cells(19 + np, 13).Value = Worksheets("Anlage").Range("Wert5").Value
+    Worksheets("Ergebnis").Cells(19 + np, 14).Value = Worksheets("Anlage").Range("Wert6").Value
+    Worksheets("Ergebnis").Cells(19 + np, 15).Value = Worksheets("Anlage").Range("Wert7").Value
+    Worksheets("Ergebnis").Cells(19 + np, 16).Value = Worksheets("Anlage").Range("Wert8").Value
+    Worksheets("Ergebnis").Cells(19 + np, 17).Value = Worksheets("Anlage").Range("Wert9").Value
+    Worksheets("Ergebnis").Cells(19 + np, 18).Value = Worksheets("Anlage").Range("Wert10").Value
+    Speicher
+Next
+Beep
+End If
+ActiveWindow.WindowState = xlMaximized
+Range("A1").Select
+
+End Sub
+
+
+Sub Rechenzeit_schaetzen(nzeile, antwort)
+
+testanfang = Time
+ntest = 20
+For n = 1 To ntest
+' Wetterdaten in ANLAGE übertragen
+    Worksheets("Anlage").Range("Datum").Value = Worksheets("Wetterdaten").Cells(4 + n, 1).Value
+    Worksheets("Anlage").Range("T_AU").Value = Worksheets("Wetterdaten").Cells(4 + n, 2).Value
+    Worksheets("Anlage").Range("F_AU").Value = Worksheets("Wetterdaten").Cells(4 + n, 3).Value
+    Worksheets("Anlage").Range("QH_H").Value = Worksheets("Wetterdaten").Cells(4 + n, "H").Value
+    Worksheets("Anlage").Range("QH_N").Value = Worksheets("Wetterdaten").Cells(4 + n, "G").Value
+    Worksheets("Anlage").Range("QH_O").Value = Worksheets("Wetterdaten").Cells(4 + n, "E").Value
+    Worksheets("Anlage").Range("QH_S").Value = Worksheets("Wetterdaten").Cells(4 + n, "D").Value
+    Worksheets("Anlage").Range("QH_W").Value = Worksheets("Wetterdaten").Cells(4 + n, "F").Value
+   
+'  Wetter- und Schreiberdaten in ERGEBNIS übertragen
+    Worksheets("Ergebnis").Cells(19 + n, 1).Value = Worksheets("Wetterdaten").Cells(4 + n, 1).Value
+    Worksheets("Ergebnis").Cells(19 + n, 2).Value = Worksheets("Wetterdaten").Cells(4 + n, 2).Value
+    Worksheets("Ergebnis").Cells(19 + n, 3).Value = Worksheets("Wetterdaten").Cells(4 + n, 3).Value
+    
+    Worksheets("Ergebnis").Cells(19 + n, 4).Value = Worksheets("Anlage").Range("Strom_HT").Value
+    Worksheets("Ergebnis").Cells(19 + n, 5).Value = Worksheets("Anlage").Range("Strom_NT").Value
+    Worksheets("Ergebnis").Cells(19 + n, 6).Value = Worksheets("Anlage").Range("Wärme").Value
+    Worksheets("Ergebnis").Cells(19 + n, 7).Value = Worksheets("Anlage").Range("Kälte").Value
+    Worksheets("Ergebnis").Cells(19 + n, 8).Value = Worksheets("Anlage").Range("Wasser").Value
+      
+    Worksheets("Ergebnis").Cells(19 + n, 9).Value = Worksheets("Anlage").Range("Wert1").Value
+    Worksheets("Ergebnis").Cells(19 + n, 10).Value = Worksheets("Anlage").Range("Wert2").Value
+    Worksheets("Ergebnis").Cells(19 + n, 11).Value = Worksheets("Anlage").Range("Wert3").Value
+    Worksheets("Ergebnis").Cells(19 + n, 12).Value = Worksheets("Anlage").Range("Wert4").Value
+    Worksheets("Ergebnis").Cells(19 + n, 13).Value = Worksheets("Anlage").Range("Wert5").Value
+    Worksheets("Ergebnis").Cells(19 + n, 14).Value = Worksheets("Anlage").Range("Wert6").Value
+    Worksheets("Ergebnis").Cells(19 + n, 15).Value = Worksheets("Anlage").Range("Wert7").Value
+    Worksheets("Ergebnis").Cells(19 + n, 16).Value = Worksheets("Anlage").Range("Wert8").Value
+    Worksheets("Ergebnis").Cells(19 + n, 17).Value = Worksheets("Anlage").Range("Wert9").Value
+    Worksheets("Ergebnis").Cells(19 + n, 18).Value = Worksheets("Anlage").Range("Wert10").Value
+Next
+testende = Time
+zeit = (testende - testanfang) * 3600 * 24 * nzeile / ntest
+If zeit < 120 Then
+  dauer = "Ihre Simulation dauert ca." + Str(Int(zeit)) + " sec"
+Else
+  dauer = "Ihre Simulation dauert ca." + Str(Int((zeit + 30) / 60)) + " min"
+End If
+antwort = MsgBox(dauer, 1)
+End Sub
+
+Sub Speicher()
+'Überträgt den Endwert auf den Startwert
+    With Application
+        .Iteration = False
+    End With
+    i = 0
+    For Each c In Sheets("Anlage").Range("Speicherwert")
+        If i = 1 Then
+           c.Value = endwert
+           i = 0
+        Else
+          endwert = c.Value
+          i = 1
+        End If
+    Next c
+    With Application
+        .Iteration = True
+    End With
+
+
+End Sub
+
+======================================================================
+MODULE: DieseArbeitsmappe.cls ( _VBA_PROJECT_CUR/VBA/DieseArbeitsmappe )
+======================================================================
+Attribute VB_Name = "DieseArbeitsmappe"
+Attribute VB_Base = "0{00020819-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+
+======================================================================
+MODULE: Tabelle1.cls ( _VBA_PROJECT_CUR/VBA/Tabelle1 )
+======================================================================
+Attribute VB_Name = "Tabelle1"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+Attribute VB_Control = "Jahr, 132, 0, MSForms, CommandButton"
+Attribute VB_Control = "heiss, 608, 1, MSForms, CommandButton"
+Attribute VB_Control = "Jahr4, 612, 2, MSForms, CommandButton"
+Attribute VB_Control = "kalt, 610, 3, MSForms, CommandButton"
+Attribute VB_Control = "feucht, 611, 4, MSForms, CommandButton"
+Attribute VB_Control = "eigen, 613, 5, MSForms, CommandButton"
+Attribute VB_Control = "Speicher_weiter, 996, 6, MSForms, CommandButton"
+Private Sub eigen_Click()
+Range("Simulation") = "eig. Datum"
+frm_Simulation.Show
+End Sub
+
+Private Sub feucht_Click()
+Range("Simulation") = "Feuchter Tag"
+Range("Datensatz1") = 5380
+Range("DatensatzN") = 5403
+frm_Simulation.Show
+End Sub
+
+Private Sub heiss_Click()
+Range("Simulation") = "Heißer Tag"
+Range("Datensatz1") = 5860
+Range("DatensatzN") = 5883
+frm_Simulation.Show
+End Sub
+
+Private Sub Jahr_Click()
+Range("Simulation") = "Jahr"
+Range("Datensatz1") = 5
+Range("DatensatzN") = 8765
+
+frm_Simulation.Show
+End Sub
+
+Private Sub Jahr4_Click()
+Range("Simulation") = "Jahr"
+Range("Datensatz1") = 5
+Range("DatensatzN") = 8765
+frm_Simulation.Show
+End Sub
+
+Private Sub kalt_Click()
+Range("Simulation") = "Kalter Tag"
+Range("Datensatz1") = 820
+Range("DatensatzN") = 843
+frm_Simulation.Show
+End Sub
+
+Private Sub Speicher_weiter_Click()
+    Call Speicher
+
+End Sub
+
+
+======================================================================
+MODULE: Tabelle2.cls ( _VBA_PROJECT_CUR/VBA/Tabelle2 )
+======================================================================
+Attribute VB_Name = "Tabelle2"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+
+======================================================================
+MODULE: Tabelle3.cls ( _VBA_PROJECT_CUR/VBA/Tabelle3 )
+======================================================================
+Attribute VB_Name = "Tabelle3"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+
+======================================================================
+MODULE: Modul1.bas ( _VBA_PROJECT_CUR/VBA/Modul1 )
+======================================================================
+Attribute VB_Name = "Modul1"
+Sub Makro1()
+Attribute Makro1.VB_Description = "Makro am 09.01.2008 von steffen.haller aufgezeichnet"
+Attribute Makro1.VB_ProcData.VB_Invoke_Func = " \n14"
+'
+' Makro1 Makro
+' Makro am 09.01.2008 von steffen.haller aufgezeichnet
+'
+
+'
+    With Application
+        .Iteration = False
+        .MaxChange = 0.001
+    End With
+    ActiveWorkbook.PrecisionAsDisplayed = False
+    Range("K66").Select
+End Sub
+
+======================================================================
+MODULE: frm_Simulation.frm ( _VBA_PROJECT_CUR/VBA/frm_Simulation )
+======================================================================
+Attribute VB_Name = "frm_Simulation"
+Attribute VB_Base = "0{AFDE3FA6-E1F4-4101-8FE1-E8F46EA680CB}{F379E0EE-40BB-4E18-B187-03135053DC0A}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = False
+Public Abbrechen
+
+Sub Daten_berechnen()
+'
+'Wetterdaten_verarbeiten Makro
+'10.09.02 von Boellinger, Andreas aufgezeichnet
+'15.01.08 Hal: Fortschrittsbalken eingeführt
+
+    LabelProgress.Width = 0
+    Dim Zähler As Integer
+    Dim RowMax As Integer, ColMax As Integer
+    Dim r As Integer, c As Integer
+    Dim Fertig As Single
+
+Arbeitsdatei = ThisWorkbook.Name
+Startzeit = Time
+zeile1 = Worksheets("Anlage").Range("Datensatz1").Value
+zeileN = Worksheets("Anlage").Range("DatensatzN").Value
+nzeile = zeileN - zeile1 + 1
+
+Application.ScreenUpdating = False
+
+' Tabelle ERGEBNIS vorbereiten
+Sheets("Ergebnis").Select
+Worksheets("Ergebnis").Range("A18:x8800").ClearContents
+Range("A1").Select
+' Spaltentitel
+Worksheets("Ergebnis").Cells(18, 1).Value = "Datum/Zeit"
+Worksheets("Ergebnis").Cells(18, 2).Value = "AU-Temp"
+Worksheets("Ergebnis").Cells(18, 3).Value = "AU-Feucht"
+Worksheets("Ergebnis").Cells(18, 4).Value = "Strom HT"
+Worksheets("Ergebnis").Cells(18, 5).Value = "Strom NT"
+Worksheets("Ergebnis").Cells(18, 6).Value = "Wärme"
+Worksheets("Ergebnis").Cells(18, 7).Value = "Kälte"
+Worksheets("Ergebnis").Cells(18, 8).Value = "Wasser"
+Worksheets("Ergebnis").Cells(18, 9).Value = Worksheets("Anlage").Range("nWert1").Value
+Worksheets("Ergebnis").Cells(18, 10).Value = Worksheets("Anlage").Range("nWert2").Value
+Worksheets("Ergebnis").Cells(18, 11).Value = Worksheets("Anlage").Range("nWert3").Value
+Worksheets("Ergebnis").Cells(18, 12).Value = Worksheets("Anlage").Range("nWert4").Value
+Worksheets("Ergebnis").Cells(18, 13).Value = Worksheets("Anlage").Range("nWert5").Value
+Worksheets("Ergebnis").Cells(18, 14).Value = Worksheets("Anlage").Range("nWert6").Value
+Worksheets("Ergebnis").Cells(18, 15).Value = Worksheets("Anlage").Range("nWert7").Value
+Worksheets("Ergebnis").Cells(18, 16).Value = Worksheets("Anlage").Range("nWert8").Value
+Worksheets("Ergebnis").Cells(18, 17).Value = Worksheets("Anlage").Range("nWert9").Value
+Worksheets("Ergebnis").Cells(18, 18).Value = Worksheets("Anlage").Range("nWert10").Value
+' Einheiten
+Worksheets("Ergebnis").Cells(19, 1).Value = "ttmm hh:mm"
+Worksheets("Ergebnis").Cells(19, 2).Value = "°C"
+Worksheets("Ergebnis").Cells(19, 3).Value = "g/kg"
+Worksheets("Ergebnis").Cells(19, 4).Value = "kW(h)"
+Worksheets("Ergebnis").Cells(19, 5).Value = "kW(h)"
+Worksheets("Ergebnis").Cells(19, 6).Value = "kW(h)"
+Worksheets("Ergebnis").Cells(19, 7).Value = "kW(h)"
+Worksheets("Ergebnis").Cells(19, 8).Value = "kg(/h)"
+Worksheets("Ergebnis").Cells(19, 9).Value = Worksheets("Anlage").Range("eWert1").Value
+Worksheets("Ergebnis").Cells(19, 10).Value = Worksheets("Anlage").Range("eWert2").Value
+Worksheets("Ergebnis").Cells(19, 11).Value = Worksheets("Anlage").Range("eWert3").Value
+Worksheets("Ergebnis").Cells(19, 12).Value = Worksheets("Anlage").Range("eWert4").Value
+Worksheets("Ergebnis").Cells(19, 13).Value = Worksheets("Anlage").Range("eWert5").Value
+Worksheets("Ergebnis").Cells(19, 14).Value = Worksheets("Anlage").Range("eWert6").Value
+Worksheets("Ergebnis").Cells(19, 15).Value = Worksheets("Anlage").Range("eWert7").Value
+Worksheets("Ergebnis").Cells(19, 16).Value = Worksheets("Anlage").Range("eWert8").Value
+Worksheets("Ergebnis").Cells(19, 17).Value = Worksheets("Anlage").Range("eWert9").Value
+Worksheets("Ergebnis").Cells(19, 18).Value = Worksheets("Anlage").Range("eWert10").Value
+Sheets("Anlage").Select
+'
+' Wetterdaten einlesen und Schreiberdaten in ERGEBNIS übertragen
+
+np = 0
+For n = zeile1 To zeileN
+  np = np + 1
+' Wetterdaten in ANLAGE übertragen
+    Worksheets("Anlage").Range("Datum").Value = Worksheets("Wetterdaten").Cells(n, 1).Value
+    Worksheets("Anlage").Range("T_AU").Value = Worksheets("Wetterdaten").Cells(n, 2).Value
+    Worksheets("Anlage").Range("F_AU").Value = Worksheets("Wetterdaten").Cells(n, 3).Value
+    Worksheets("Anlage").Range("QH_H").Value = Worksheets("Wetterdaten").Cells(n, "H").Value
+    Worksheets("Anlage").Range("QH_N").Value = Worksheets("Wetterdaten").Cells(n, "G").Value
+    Worksheets("Anlage").Range("QH_O").Value = Worksheets("Wetterdaten").Cells(n, "E").Value
+    Worksheets("Anlage").Range("QH_S").Value = Worksheets("Wetterdaten").Cells(n, "D").Value
+    Worksheets("Anlage").Range("QH_W").Value = Worksheets("Wetterdaten").Cells(n, "F").Value
+
+'  Wetter- und Schreiberdaten in ERGEBNIS übertragen
+    Worksheets("Ergebnis").Cells(19 + np, 1).Value = Worksheets("Wetterdaten").Cells(n, 1).Value
+    Worksheets("Ergebnis").Cells(19 + np, 2).Value = Worksheets("Wetterdaten").Cells(n, 2).Value
+    Worksheets("Ergebnis").Cells(19 + np, 3).Value = Worksheets("Wetterdaten").Cells(n, 3).Value
+    
+    Worksheets("Ergebnis").Cells(19 + np, 4).Value = Worksheets("Anlage").Range("Strom_HT").Value
+    Worksheets("Ergebnis").Cells(19 + np, 5).Value = Worksheets("Anlage").Range("Strom_NT").Value
+    Worksheets("Ergebnis").Cells(19 + np, 6).Value = Worksheets("Anlage").Range("Wärme").Value
+    Worksheets("Ergebnis").Cells(19 + np, 7).Value = Worksheets("Anlage").Range("Kälte").Value
+    Worksheets("Ergebnis").Cells(19 + np, 8).Value = Worksheets("Anlage").Range("Wasser").Value
+      
+    Worksheets("Ergebnis").Cells(19 + np, 9).Value = Worksheets("Anlage").Range("Wert1").Value
+    Worksheets("Ergebnis").Cells(19 + np, 10).Value = Worksheets("Anlage").Range("Wert2").Value
+    Worksheets("Ergebnis").Cells(19 + np, 11).Value = Worksheets("Anlage").Range("Wert3").Value
+    Worksheets("Ergebnis").Cells(19 + np, 12).Value = Worksheets("Anlage").Range("Wert4").Value
+    Worksheets("Ergebnis").Cells(19 + np, 13).Value = Worksheets("Anlage").Range("Wert5").Value
+    Worksheets("Ergebnis").Cells(19 + np, 14).Value = Worksheets("Anlage").Range("Wert6").Value
+    Worksheets("Ergebnis").Cells(19 + np, 15).Value = Worksheets("Anlage").Range("Wert7").Value
+    Worksheets("Ergebnis").Cells(19 + np, 16).Value = Worksheets("Anlage").Range("Wert8").Value
+    Worksheets("Ergebnis").Cells(19 + np, 17).Value = Worksheets("Anlage").Range("Wert9").Value
+    Worksheets("Ergebnis").Cells(19 + np, 18).Value = Worksheets("Anlage").Range("Wert10").Value
+    Speicher
+    
+'Fortschrittsbalken
+    If Abbrechen = True Then Exit For
+    i_fort = i_fort + 1
+    If i_fort > 23 Then
+        Fertig = np / nzeile
+        With frm_Simulation
+            Me.Caption = Format(Fertig, "0%")
+            .LabelProgress.Width = Fertig * (.FrameProgress.Width - 5)
+        End With
+        zeit = (Time - Startzeit) * 3600 * 24 * nzeile / np - ((Time - Startzeit) * 3600 * 24)
+        If zeit < 120 Then
+          dauer = "verbleibende Zeit ca." + Str(Int(zeit)) + " sec"
+        Else
+         dauer = "verbleibende Zeit ca." + Str(Int((zeit + 30) / 60)) + " min"
+        End If
+        Info_Dauer = dauer
+
+        DoEvents
+        i_fort = 0
+    End If
+    
+
+Next
+Beep
+
+Application.ScreenUpdating = True
+
+Range("A1").Select
+If Abbrechen = False Then
+    MsgBox ("Berechnung erfolgreich beendet, Dauer: " & Str(Int((Time - Startzeit) * 3600 * 24)) & " sec.")
+Else
+    MsgBox "Simulation abgebrochen"
+End If
+Unload frm_Simulation
+End Sub
+
+Private Sub btn_Abbrechen_Click()
+  Abbrechen = True
+End Sub
+
+
+Private Sub UserForm_Activate()
+   Abbrechen = False
+   LabelProgress.Width = 0
+   Call Daten_berechnen
+End Sub
+

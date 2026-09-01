@@ -49,7 +49,7 @@ Benutzerverwaltung, Mehrbenutzer-Bearbeitung derselben Leinwand.
 
 ## 2. Kartenkatalog
 
-30 Kartentypen in sieben Palettengruppen. Die Spaltenangabe verweist auf den
+31 Kartentypen in sieben Palettengruppen. Die Spaltenangabe verweist auf den
 Bausteinblock in der Excel.
 
 ### 2.1 Luftbehandlung
@@ -117,7 +117,8 @@ mehrere Räume bedient.
 | Karte | Excel | Inhalt |
 |---|---|---|
 | Wetterdaten | `F2:H22` (`Wetter`) | liefert T_AU, x_AU und die fünf Strahlungswerte der aktuellen Stunde |
-| Außenluft / Fortluft | — | Anschlusspunkte am Anfang und Ende eines Luftwegs |
+| Außenluft | — | Anschlusspunkt am Anfang eines Luftwegs; wandelt die Wettersignale in einen Luftzustand |
+| Fortluft | — | Anschlusspunkt am Ende eines Abluftwegs |
 
 ### 2.7 Verbraucher und Auswertung
 
@@ -185,8 +186,20 @@ Ports werden **automatisch** erzeugt, sobald eine Karte auf die Leinwand kommt.
 Von Hand wird nie ein Port angelegt.
 
 **Rollen.** Neben der Art (Luft oder Signal) trägt jeder Port eine Rolle: Zuluft,
-Abluft, Außenluft, Fortluft, Umluft, Stellgröße, Istwert, Sollwert, Messwert.
-Die Rolle steuert die automatische Verdrahtung.
+Abluft, Außenluft, Fortluft, Umluft, Luftweg, Stellgröße, Istwert, Sollwert,
+Messwert sowie die vier Energierollen Strom, Wärme, Kälte und Wasser. Die Rolle
+steuert die automatische Verdrahtung.
+
+Für Luftwege gilt eine Verträglichkeitstabelle: Außenluft darf auf Zuluft folgen,
+Abluft auf Fortluft oder Umluft — Zuluft auf Abluft dagegen nie. Verteiler und
+Sammler tragen die neutrale Rolle Luftweg und passen in jeden Strang. Ohne diese
+Regeln würde ein Pfeil von der Wärmerückgewinnung zur Fortluft den Zuluftstrang
+erwischen.
+
+Die Energierollen sind nötig, damit die Bilanzkarte richtig angeschlossen wird: die
+Leistung eines Ventilators trägt die Rolle Strom, die eines Erhitzers Wärme, die
+eines Kühlers Kälte, der Verbrauch eines Befeuchters Wasser. Ein Pfeil von einer
+beliebigen Karte auf die Bilanz landet dadurch immer in der richtigen Spalte.
 
 **Dynamische Ports.** Ein Port kann als `dynamisch` deklariert sein. Sobald der letzte
 freie Port dieser Rolle belegt wird, wächst ein weiterer nach; beim Trennen schrumpft
@@ -446,7 +459,7 @@ stimmt, und schützt künftige Änderungen.
 ## 9. Reihenfolge
 
 **Erste Version** — Rechenkern und Editor gemeinsam:
-Datenbank, Bausteinbibliothek mit allen 30 Karten, Solver, Editor mit Palette und
+Datenbank, Bausteinbibliothek mit allen 31 Karten, Solver, Editor mit Palette und
 automatischer Verdrahtung, TRY-Upload, Simulationslauf, Jahresbilanz als Tabelle,
 Vorlage „AX_SIM 2.1", Vergleichstest gegen die Excel.
 
