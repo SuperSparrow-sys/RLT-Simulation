@@ -1,0 +1,26 @@
+:root {
+  --bg: #f8f9fa;
+  --surface: #ffffff;
+  --border: #dadce0;
+  --border-light: #e8eaed;
+  --text: #3c4043;
+  --text-secondary: #5f6368;
+  --blue: #1a73e8;
+  --blue-tint: #e8f0fe;
+  --danger: #d93025;
+  --radius: 10px;
+  --font-body: Roboto, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+
+.app { display: flex; height: 100vh; }
