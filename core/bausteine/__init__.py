@@ -8,7 +8,7 @@ from core.bausteine import basis, stoffdaten  # noqa: F401
 
 MODULE = [
     "erhitzer", "kuehler", "wrg", "mischkammer",
-    "dampfbefeuchter", "luftwaescher",
+    "dampfbefeuchter", "luftwaescher", "ventilator",
 ]
 
 
