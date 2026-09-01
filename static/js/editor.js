@@ -2,11 +2,6 @@
 
 const NS = "http://www.w3.org/2000/svg";
 
-/* Panel (Task 23) ist noch nicht angelegt; ohne diesen Schutz wuerde jeder
-   Aufruf mit einem ReferenceError abbrechen und die Funktion, in der er
-   steht, vorzeitig verlassen - auch dann, wenn danach noch wichtiger Code
-   folgt (etwa das Registrieren der Zieh-Listener). Task 23 entfernt die
-   Abfrage wieder, sobald panel.js existiert. */
 function pfeileZeichnen(anlage) {
   Pfeile.zeichneAlle(anlage);
 }
@@ -14,10 +9,10 @@ function pfeileBinden(editor) {
   Pfeile.binde(editor);
 }
 function panelZeigen(karte) {
-  if (typeof Panel !== "undefined") Panel.zeige(karte);
+  Panel.zeige(karte);
 }
 function panelLeeren() {
-  if (typeof Panel !== "undefined") Panel.leeren();
+  Panel.leeren();
 }
 
 /* Modester, einheitlicher Umgang mit fehlgeschlagenen Anfragen: kurze
