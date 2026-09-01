@@ -5656,7 +5656,7 @@ unproblematisch und deutlich besser lesbar.
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_graph.py -v`
-Expected: 22 passed
+Expected: 21 passed
 
 - [ ] **Step 5: Commit**
 
