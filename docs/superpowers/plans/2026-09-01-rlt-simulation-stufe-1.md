@@ -10240,13 +10240,383 @@ git commit -m "Testanlage und Plausibilitaetspruefung ueber ein volles Jahr"
 
 ---
 
+## Task 26: Signalrollen schärfen
+
+**Diese Aufgabe wird vor Task 17 ausgeführt, obwohl sie hinten steht.** Sie ist aus
+einem Durchstich nach Task 16 entstanden: Eine von Hand zusammengesteckte kleine
+Anlage wurde gespeichert, geladen und gerechnet — und dabei falsch verdrahtet.
+
+**Was schiefging.** Ein Pfeil vom Zuluftventilator zum Raum verband nicht nur den
+Luftweg, sondern auch die Austrittstemperatur des Ventilators mit dem Eingang für die
+**Außentemperatur** des Raums. Der anschließende Pfeil von der Wetterkarte fand diesen
+Eingang belegt und verteilte seine Werte auf das, was übrig war: die Südstrahlung
+landete auf der Feuchte, die Oststrahlung auf der inneren Wärmelast.
+
+**Warum.** Die Rolle `MESSWERT` trägt 66 der Signalanschlüsse — Außentemperatur,
+Strahlung, Ventilatoraustritt, innere Lasten, Betriebssignale, Protokollspalten. Bei
+so grober Einteilung passt fast alles auf fast alles, und die Reihenfolge entscheidet.
+Ein Namensgleichstand wird zwar höher bewertet, rettet aber nur, solange der
+gleichnamige Anschluss noch frei ist.
+
+**Files:**
+- Modify: `core/bausteine/basis.py`, `core/graph.py`,
+  `core/bausteine/wochenzeitplan.py`, `monatsprofil.py`, `ferien.py`,
+  `tageslastprofil.py`, `anlagenbetrieb.py`, `heizungspumpen.py`, `zirkulation.py`,
+  `beleuchtung.py`, `datenlogger.py`, `statische_heizung.py`, `p_regler.py`
+- Test: `tests/test_graph.py`, `tests/bausteine/test_zeitplaene.py`
+
+- [ ] **Step 1: Write the failing tests**
+
+An `tests/test_graph.py` anhängen:
+
+```python
+def test_ventilator_belegt_nicht_die_aussentemperatur_des_raums():
+    """Der Austritt eines Ventilators ist nicht die Aussentemperatur.
+
+    Vor der Verschaerfung der Signalrollen verband ein Pfeil vom Ventilator zum
+    Raum ausser dem Luftweg auch T_aus mit T_AU - beide trugen die Rolle Messwert.
+    Danach fand die Wetterkarte den Eingang belegt und verteilte ihre Strahlung auf
+    Feuchte und innere Last.
+    """
+    ventilator, raum = karte(1, "ventilator"), karte(2, "einfacher_raum")
+    paare = graph.verdrahte(ventilator, raum, belegt=set())
+    assert [(v.schluessel, n.basis) for v, n in paare] == [("luft_aus", "zuluft_ein")]
+
+
+def test_wetterkarte_trifft_die_gleichnamigen_eingaenge_des_raums():
+    wetter, raum = karte(1, "wetter"), karte(2, "raum")
+    zuordnung = {v.schluessel: n.schluessel for v, n in graph.verdrahte(wetter, raum, set())}
+    assert zuordnung == {
+        "T_AU": "T_AU", "F_AU": "F_AU", "QH_S": "QH_S", "QH_O": "QH_O",
+        "QH_W": "QH_W", "QH_N": "QH_N", "QH_H": "QH_H",
+    }
+
+
+def test_zeitplan_findet_den_anlagenbetrieb():
+    zeitplan, betrieb = karte(1, "wochenzeitplan"), karte(2, "anlagenbetrieb")
+    paare = graph.verdrahte(zeitplan, betrieb, belegt=set())
+    assert [(v.schluessel, n.basis) for v, n in paare] == [("betrieb", "zeitplan")]
+
+
+def test_ferien_und_lastgang_finden_ihre_eigenen_eingaenge():
+    betrieb = karte(9, "anlagenbetrieb")
+    belegt = set()
+    for typ, erwartet in (("ferien", "ferien"), ("tageslastprofil", "tagesprofil")):
+        paare = graph.verdrahte(karte(1, typ), betrieb, belegt)
+        assert [n.basis for _, n in paare] == [erwartet], typ
+        belegt |= {n.id for _, n in paare}
+
+
+def test_anlagenbetrieb_erreicht_die_verbraucher():
+    betrieb, licht = karte(1, "anlagenbetrieb"), karte(2, "beleuchtung")
+    zuordnung = {v.schluessel: n.schluessel for v, n in graph.verdrahte(betrieb, licht, set())}
+    assert zuordnung.get("betrieb") == "betrieb"
+
+
+def test_messwerte_landen_im_datenlogger():
+    wrg, logger = karte(1, "wrg"), karte(2, "datenlogger")
+    paare = graph.verdrahte(wrg, logger, belegt=set())
+    assert [(v.schluessel, n.schluessel) for v, n in paare] == [("Q_WRG", "wert_1")]
+
+
+def test_raum_meldet_seinen_heizbedarf_an_die_statische_heizung():
+    raum, heizung = karte(1, "einfacher_raum"), karte(2, "statische_heizung")
+    zuordnung = {v.schluessel: n.schluessel for v, n in graph.verdrahte(raum, heizung, set())}
+    assert zuordnung.get("QH_stat") == "bedarf"
+
+
+def test_regler_greift_auf_die_traege_stufe():
+    """In der Excel traegt nur Regler 2 einen Sollwert; Regler 1 steht auf '???'.
+
+    Ein Pfeil vom Regler auf einen Erhitzer muss deshalb die traege Stufe nehmen,
+    sonst regelt die Anlage gegen einen Sollwert von null.
+    """
+    regler, erhitzer = karte(1, "p_regler"), karte(2, "erhitzer")
+    paare = graph.verdrahte(regler, erhitzer, belegt=set())
+    hin = [(v.schluessel, n.schluessel) for v, n in paare if v.karte_id == 1]
+    zurueck = [(v.schluessel, n.schluessel) for v, n in paare if v.karte_id == 2]
+    assert hin == [("ausgang_2", "stellgroesse")]
+    assert zurueck == [("T_aus", "istwert_2")]
+```
+
+An `tests/bausteine/test_zeitplaene.py` anhängen:
+
+```python
+def test_anlagenbetrieb_verrechnet_mehrere_zeitplaene():
+    """Die Mappe fuehrt zwei Zeitplanbloecke nebeneinander (Anlage!AK4 und AO4).
+
+    Hier duerfen beide auf dieselbe Betriebskarte laufen; sie werden multipliziert.
+    Bei nur einem angeschlossenen Zeitplan ist das genau die Formel AL37.
+    """
+    ein = {"zeitplan_1": 1.0, "zeitplan_2": 0.0, "ferien": 0.0, "tagesprofil": 1.0}
+    aus, _ = Anlagenbetrieb().berechne(ein, {}, {})
+    assert aus["betrieb"] == 0.0
+
+    ein = {"zeitplan_1": 1.0, "zeitplan_2": 1.0, "ferien": 0.0, "tagesprofil": 0.5}
+    aus, _ = Anlagenbetrieb().berechne(ein, {}, {})
+    assert aus["betrieb"] == 1.0
+    assert aus["stellgrad"] == pytest.approx(50.0)
+```
+
+- [ ] **Step 2: Run the tests to see them fail**
+
+Run: `./venv/bin/pytest tests/test_graph.py tests/bausteine/test_zeitplaene.py -v`
+Expected: mehrere Fehlschläge — unter anderem verbindet der Ventilator `T_aus` mit
+`T_AU`, und die Zeitplankarten finden den Anlagenbetrieb nicht.
+
+- [ ] **Step 3: Neue Signalrollen in `core/bausteine/basis.py`**
+
+Unter den vorhandenen Signalrollen ergänzen:
+
+```python
+# Signalrollen fuer Betrieb und Protokoll. Ohne sie muesste alles ueber MESSWERT
+# laufen, und beim Verbinden passte fast jeder Signalausgang auf fast jeden
+# Signaleingang - ein Ventilatoraustritt zum Beispiel auf den Eingang fuer die
+# Aussentemperatur eines Raums.
+ZEITPLAN = "zeitplan"
+FERIEN = "ferien"
+LASTGANG = "lastgang"
+BETRIEB = "betrieb"
+PROTOKOLL = "protokoll"
+
+# Rollen, die nur auf sich selbst passen.
+PAARWEISE_ROLLEN = (
+    STELLGROESSE, ZEITPLAN, FERIEN, LASTGANG, BETRIEB,
+    STROM, WAERME, KAELTE, WASSER,
+)
+```
+
+- [ ] **Step 4: Die Bewertung der Signalpaare in `core/graph.py`**
+
+`_punkte` bekommt für Signale einen eigenen Zweig:
+
+```python
+def _signalpunkte(von, nach):
+    """Wie gut passen zwei Signalanschluesse zueinander?
+
+    Entscheidend ist, dass MESSWERT NICHT auf MESSWERT passt. Ein Messwert ist eine
+    benannte physikalische Groesse - Aussentemperatur, Strahlung, Austrittstemperatur.
+    Zwei davon gehoeren nur zusammen, wenn sie denselben Namen tragen. Ohne diese
+    Einschraenkung landete die Suedstrahlung auf dem Feuchteeingang eines Raums,
+    sobald der gleichnamige Anschluss schon belegt war.
+    """
+    if von.basis == nach.basis:
+        return 3
+    if von.rolle == nach.rolle and von.rolle in basis.PAARWEISE_ROLLEN:
+        return 2
+    if von.rolle == basis.MESSWERT and nach.rolle == basis.ISTWERT:
+        return 2
+    if von.rolle == basis.MESSWERT and nach.rolle == basis.PROTOKOLL:
+        return 1     # niedrig, damit ein Namenstreffer immer vorgeht
+    return 0
+```
+
+und in `_punkte` ersetzt dieser Zweig alles nach der Luftbehandlung:
+
+```python
+def _punkte(von, nach):
+    """Wie gut passen zwei Ports zueinander? Hoeher ist besser, 0 heisst gar nicht."""
+    if von.art != nach.art:
+        return 0
+    if von.richtung != basis.AUSGANG or nach.richtung != basis.EINGANG:
+        return 0
+    if von.art == basis.LUFT:
+        punkte = _luftpunkte(von, nach)
+        return 3 if (punkte and von.basis == nach.basis) else punkte
+    return _signalpunkte(von, nach)
+```
+
+- [ ] **Step 5: Die Rollen an den Karten**
+
+| Datei | Port | Richtung | bisher | neu |
+|---|---|---|---|---|
+| `wochenzeitplan.py` | `betrieb` | aus | MESSWERT | `ZEITPLAN` |
+| `monatsprofil.py` | `betrieb` | aus | MESSWERT | `ZEITPLAN` |
+| `ferien.py` | `ferien` | aus | MESSWERT | `FERIEN` |
+| `tageslastprofil.py` | `lastgang_1/2/3` | aus | MESSWERT | `LASTGANG` |
+| `anlagenbetrieb.py` | `zeitplan` | ein | MESSWERT | `ZEITPLAN`, **dynamisch** |
+| `anlagenbetrieb.py` | `ferien` | ein | MESSWERT | `FERIEN` |
+| `anlagenbetrieb.py` | `tagesprofil` | ein | MESSWERT | `LASTGANG` |
+| `anlagenbetrieb.py` | `betrieb` | aus | MESSWERT | `BETRIEB` |
+| `heizungspumpen.py` | `betrieb` | ein | MESSWERT | `BETRIEB` |
+| `zirkulation.py` | `betrieb` | ein | MESSWERT | `BETRIEB` |
+| `beleuchtung.py` | `betrieb` | ein | MESSWERT | `BETRIEB` |
+| `datenlogger.py` | `wert_1` … `wert_10` | ein | MESSWERT | `PROTOKOLL` |
+| `statische_heizung.py` | `bedarf` | ein | MESSWERT | `ISTWERT` |
+
+Alle anderen Rollen bleiben unverändert. `anlagenbetrieb.stellgrad` bleibt
+`STELLGROESSE`, damit es die Ventilatoren erreicht.
+
+- [ ] **Step 6: Anlagenbetrieb nimmt mehrere Zeitpläne**
+
+Weil `zeitplan` jetzt dynamisch ist, sammelt `berechne` über das Präfix und
+multipliziert. Die Mappe führt zwei Zeitplanblöcke nebeneinander (`Anlage!AK4` und
+`AO4`); hier dürfen beide auf dieselbe Betriebskarte laufen. Bei genau einem
+angeschlossenen Zeitplan ist das Ergebnis identisch mit `Anlage!AL37`.
+
+```python
+    def berechne(self, ein, p, zustand):
+        # Mehrere Zeitplaene wirken wie hintereinandergeschaltete Schalter: die
+        # Anlage laeuft nur, wenn alle sie freigeben. Bei einem einzigen Zeitplan
+        # ist das genau Anlage!AL37.
+        zeitplaene = [
+            float(w) for s, w in ein.items()
+            if s.startswith("zeitplan") and isinstance(w, (int, float))
+        ]
+        zeitplan = 1.0
+        for wert in zeitplaene:
+            zeitplan *= wert
+
+        ferien = float(ein.get("ferien", 0.0))
+        profil = float(ein.get("tagesprofil", 1.0))
+
+        betrieb = zeitplan * (1.0 - ferien)
+        stellgrad = betrieb * profil * 100.0
+        return {"betrieb": betrieb, "stellgrad": stellgrad}, zustand
+```
+
+- [ ] **Step 7: Der P-Regler nimmt die träge Stufe zuerst**
+
+In der Mappe trägt nur „Regler 2 (träge)" einen Sollwert; „Regler 1 (schnell)" steht
+auf `???` (siehe `Anlage!M59` gegen `K55`). Ein Pfeil auf einen Erhitzer muss deshalb
+die träge Stufe treffen. Weil die Zuordnung bei Gleichstand der Reihenfolge der
+Anschlüsse folgt, wird Stufe 2 in `PORTS` **vor** Stufe 1 deklariert:
+
+```python
+    PORTS = [
+        # Stufe 2 steht bewusst zuerst: In der Excel traegt nur der traege Regler
+        # einen Sollwert (Anlage!M59), waehrend der schnelle auf '???' steht. Bei
+        # gleicher Bewertung entscheidet die Reihenfolge, und ein Pfeil soll die
+        # Stufe treffen, die tatsaechlich regelt.
+        Port("sollwert_2", SIGNAL, EINGANG, SOLLWERT),
+        Port("istwert_2", SIGNAL, EINGANG, ISTWERT),
+        Port("ausgang_2", SIGNAL, AUSGANG, STELLGROESSE),
+        Port("sollwert_1", SIGNAL, EINGANG, SOLLWERT),
+        Port("istwert_1", SIGNAL, EINGANG, ISTWERT),
+        Port("ausgang_1", SIGNAL, AUSGANG, STELLGROESSE),
+    ]
+```
+
+- [ ] **Step 8: Run the tests**
+
+Run: `./venv/bin/pytest -q`
+Expected: alle Tests bestanden, einschließlich der acht neuen.
+
+- [ ] **Step 9: Durchstich von Hand**
+
+```bash
+./venv/bin/python werkzeuge/durchstich.py
+```
+
+Dieses kleine Werkzeug baut eine Anlage über die Speicherschicht, lädt sie zurück und
+rechnet sie 24 Stunden. Es ist neu anzulegen — `werkzeuge/durchstich.py`:
+
+```python
+"""Baut eine kleine Anlage ueber die Speicherschicht und rechnet sie durch.
+
+Kein Test, sondern ein Handgriff zum Nachsehen: Er zeigt jede Verdrahtung, die beim
+Ziehen der Pfeile entsteht, und rechnet die Anlage anschliessend 24 Stunden. Damit
+faellt auf, wenn ein Pfeil etwas anderes verbindet als gemeint - so wurde die zu
+grobe Rolle MESSWERT gefunden.
+"""
+
+import sys
+import tempfile
+from datetime import datetime, timedelta
+from pathlib import Path
+
+WURZEL = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(WURZEL))
+
+
+def main():
+    import core.config as cfg
+
+    cfg.DB_PATH = Path(tempfile.mkdtemp()) / "durchstich.db"
+
+    from app import create_app
+    from core import anlagen, database, solver
+
+    app = create_app()
+    with app.app_context():
+        database.init_db()
+        projekt = anlagen.projekt_anlegen("Durchstich")
+        anlage = anlagen.anlage_anlegen(projekt, "Kleine Anlage")
+
+        def karte(typ, x, y, **p):
+            return anlagen.karte_anlegen(anlage, typ, x, y, p)
+
+        wetter = karte("wetter", 0, 0)
+        aussen = karte("aussenluft", 150, 0)
+        erhitzer = karte("erhitzer", 300, 0, V_nenn=8200.0, QH_max=100.0, dp_nenn=50.0)
+        zuluft = karte("ventilator", 450, 0, V_max=8200.0, PE_max=4.9, regelart="F")
+        raum = karte("einfacher_raum", 600, 0,
+                     spez_transmission=0.5, sollwert_stat=-50.0)
+        abluft = karte("ventilator", 600, 200, rolle="abluft",
+                       V_max=8200.0, PE_max=3.0, regelart="F")
+        fort = karte("fortluft", 150, 200)
+        regler = karte("p_regler", 300, 320, xp_2=5.0, sollwert_2=20.0)
+        bilanz = karte("bilanz", 800, 200)
+
+        namen = {k["id"]: k["name"] for k in anlagen.als_json(anlage)["karten"]}
+        for von, nach in [
+            (wetter, aussen), (aussen, erhitzer), (erhitzer, zuluft),
+            (zuluft, raum), (raum, abluft), (abluft, fort), (wetter, raum),
+            (regler, erhitzer), (zuluft, bilanz), (abluft, bilanz), (erhitzer, bilanz),
+        ]:
+            pfeil = anlagen.pfeil_anlegen(anlage, von, nach)
+            verbindungen = ", ".join(
+                f"{v['von_schluessel']} -> {v['nach_schluessel']}"
+                for v in pfeil["verbindungen"]
+            )
+            print(f"{namen[von]:24} -> {namen[nach]:24} {verbindungen}")
+
+        graph = anlagen.lade_graph(anlage)
+        beginn = datetime(2024, 1, 15)
+        stunden = [
+            {
+                "zeitpunkt": beginn + timedelta(hours=i), "t_au": 0.0, "x_au": 4.0,
+                "str_s": 0.0, "str_o": 0.0, "str_w": 0.0, "str_n": 0.0, "str_h": 0.0,
+            }
+            for i in range(24)
+        ]
+        lauf = solver.Solver(graph).starte(stunden)
+
+        print(f"\n{len(lauf.stunden)} Stunden gerechnet, "
+              f"{len(lauf.warnungen)} Warnungen")
+        print(f"Temperatur nach dem Erhitzer: "
+              f"{lauf.stunden[0][erhitzer]['T_aus']:.2f} °C (Sollwert 20)")
+        print(f"Raumtemperatur:               "
+              f"{lauf.stunden[0][raum]['T_Raum']:.2f} °C")
+        print("Bilanz ueber 24 Stunden:      " + ", ".join(
+            f"{name} {wert:.2f}" for name, wert in lauf.bilanz.items()))
+
+
+if __name__ == "__main__":
+    main()
+```
+
+Erwartet wird, dass der Pfeil vom Ventilator zum Raum **nur** den Luftweg verbindet,
+dass die Wetterkarte Außentemperatur und Feuchte auf die gleichnamigen Eingänge legt,
+und dass die Temperatur nach dem Erhitzer nahe bei 20 °C liegt statt bei 0 °C.
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add core tests werkzeuge/durchstich.py
+git commit -m "Signalrollen geschaerft: Messwerte passen nur noch namensgleich"
+```
+
+---
+
 ## Abschluss von Stufe 1
 
 - [ ] **Alle Tests laufen lassen**
 
 Run: `./venv/bin/pytest -v`
 Expected: alle Tests bestanden, einschliesslich des Jahresabgleichs gegen die Excel
-(Task 20) und der Plausibilitaetspruefung an der Testanlage (Task 25).
+(Task 20), der Plausibilitaetspruefung an der Testanlage (Task 25) und der
+verschaerften Signalrollen (Task 26).
 
 - [ ] **Beide Werkzeuge von Hand laufen lassen und die Ausgaben in den Bericht nehmen**
 
@@ -10276,3 +10646,5 @@ git commit -m "Stufe 1 abgeschlossen: Rechenkern, Editor, Jahresabgleich und Pla
 
 Open-Meteo-Import mit Jahresvergleich, Diagramme, Varianten-Gegenueberstellung,
 HTML- und PDF-Bericht mit ReportLab sowie die Ausgabe nach CSV und Excel.
+
+---
