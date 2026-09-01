@@ -5773,7 +5773,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from core import graph, solver
+from core import config, graph, solver
 from core.bausteine import basis, lade_alle
 
 lade_alle()
@@ -5993,26 +5993,43 @@ def test_abbruch_beendet_den_lauf_vorzeitig():
 
 
 def test_fehlende_konvergenz_wird_gemeldet_aber_bricht_nicht_ab():
-    """Zwei Erhitzer, die sich gegenseitig aufschaukeln."""
+    """Ein zu scharf eingestellter Regler an einem stark ueberdimensionierten Erhitzer.
+
+    500 kW auf 1000 m³/h heben die Luft um mehr als tausend Kelvin, sobald der Regler
+    aufmacht. Mit Xp = 5 ueberschiesst er in jedem Durchgang und schwingt, statt sich
+    einzupendeln. Der Lauf muss trotzdem weiterlaufen und jede betroffene Stunde
+    benennen - eine Anlage, die in einzelnen Stunden schwingt, soll immer noch eine
+    brauchbare Jahressumme liefern.
+    """
     karten = {
         1: karte(1, "wetter"),
         2: karte(2, "aussenluft"),
-        3: karte(3, "erhitzer", {"V_nenn": 1000.0, "QH_max": 1e6, "dp_nenn": 0.0}),
+        3: karte(3, "erhitzer", {"V_nenn": 1000.0, "QH_max": 500.0, "dp_nenn": 0.0}),
         4: karte(4, "ventilator", {"V_max": 1000.0, "PE_max": 0.001, "regelart": "-"}),
         5: karte(5, "fortluft"),
+        6: karte(6, "p_regler", {"xp_1": 10.0, "xp_2": 5.0, "sollwert_2": 20.0}),
     }
     g = verbinde(
         karten,
         [
             (1, "T_AU", 2, "T_AU"),
+            (1, "F_AU", 2, "F_AU"),
             (2, "luft_aus", 3, "luft_ein"),
             (3, "luft_aus", 4, "luft_ein"),
             (4, "luft_aus", 5, "luft_ein"),
-            (3, "QH", 3, "stellgroesse"),
+            (6, "ausgang_2", 3, "stellgroesse"),
+            (3, "T_aus", 6, "istwert_2"),
         ],
     )
-    lauf = solver.Solver(g).starte(wetterstunden(1))
-    assert len(lauf.stunden) == 1
+    lauf = solver.Solver(g).starte(wetterstunden(3))
+
+    # Der Lauf bricht nicht ab
+    assert len(lauf.stunden) == 3
+    # und er meldet jede betroffene Stunde mit Nummer und Restabweichung
+    assert len(lauf.warnungen) == 3
+    assert lauf.warnungen[0]["stunde"] == 1
+    assert lauf.warnungen[0]["abweichung"] > config.MAX_AENDERUNG
+    assert "nicht konvergiert" in lauf.warnungen[0]["text"]
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -6185,21 +6202,18 @@ class Solver:
                 else:
                     zustand = dict(zustaende.get(karte_id, {}))
                 zustand["stunde"] = stunde
-                for port in karte.ports:
-                    if port.art == basis.LUFT and port.richtung == basis.EINGANG:
-                        if not self.graph.eingaenge_von(karte_id):
-                            zustand["bedarf"] = gefordert.get(port.id, 0.0)
 
+                # Die Aussenluftkarte hat keinen Lufteingang - sie erfaehrt erst
+                # hier, wieviel die Anlage von ihr fordert. Der Wert steht schon
+                # aus dem Rueckwaertslauf bereit; ihn ein zweites Mal aus den
+                # Verbindungen aufzusummieren waere dieselbe Regel zweimal
+                # geschrieben, und die beiden koennten auseinanderlaufen.
                 if karte.typ == "aussenluft":
                     ausgang = next(
                         p for p in karte.ports
                         if p.art == basis.LUFT and p.richtung == basis.AUSGANG
                     )
-                    menge = 0.0
-                    for v in self.graph.verbindungen:
-                        if v.von_port.id == ausgang.id:
-                            menge += gefordert.get(v.nach_port.id, 0.0)
-                    zustand["bedarf"] = menge
+                    zustand["bedarf"] = self.abnahme.get(ausgang.id, 0.0)
 
                 werte, zustand_neu = karte.baustein.berechne(
                     ein, karte.parameter, zustand
