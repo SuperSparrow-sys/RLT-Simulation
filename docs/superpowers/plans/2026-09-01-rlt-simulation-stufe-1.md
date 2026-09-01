@@ -117,6 +117,8 @@ def test_init_db_legt_tabellen_an(tmp_path, monkeypatch):
             for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")
         }
     assert {"projekt", "anlage", "karte", "port", "pfeil", "verbindung"} <= namen
+    spalten = {r[1] for r in db.execute("PRAGMA table_info(port)")}
+    assert "basis" in spalten, "Der Basisname eines Ports gehoert in die Datenbank"
 
 
 def test_fremdschluessel_sind_aktiv(tmp_path, monkeypatch):
@@ -230,6 +232,7 @@ CREATE TABLE IF NOT EXISTS port (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     karte_id      INTEGER NOT NULL REFERENCES karte(id) ON DELETE CASCADE,
     schluessel    TEXT NOT NULL,
+    basis         TEXT NOT NULL,
     art           TEXT NOT NULL,
     richtung      TEXT NOT NULL,
     rolle         TEXT NOT NULL,
@@ -615,8 +618,9 @@ git commit -m "Referenzdaten aus der Excel-Mappe als Pruefgrundlage exportiert"
     `ZULUFT`, `ABLUFT`, `AUSSENLUFT`, `FORTLUFT`, `UMLUFT`, `STELLGROESSE`,
     `ISTWERT`, `SOLLWERT`, `MESSWERT` sowie die Energierollen `STROM`,
     `WAERME`, `KAELTE`, `WASSER`
-  - `basis.Baustein` mit `berechne(ein, p, zustand) -> (aus, zustand)` und
-    `bedarf(aus_bedarf, p) -> dict`
+  - `basis.Baustein` mit `berechne(ein, p, zustand) -> (aus, zustand)`,
+    `bedarf(aus_bedarf, p) -> dict`, `anfangszustand(p) -> dict` und dem
+    Klassenmerkmal `ZUSTAND_UEBER_ITERATION` (Vorgabe `False`)
   - `basis.registriere(klasse)`, `basis.hole(kennung)`, `basis.alle()`
   - `stoffdaten.p_saett(T)`, `stoffdaten.x_saett(T)`, `stoffdaten.enthalpie(T, x)`,
     `stoffdaten.rel_feuchte(T, x)`
@@ -861,8 +865,23 @@ class Luft:
 
 
 class Baustein:
-    """Oberklasse aller Kartentypen."""
+    """Oberklasse aller Kartentypen.
 
+    ZUSTAND_UEBER_ITERATION unterscheidet die beiden Arten von Gedaechtnis:
+
+    * False (Vorgabe) - Speichergroessen von Stunde zu Stunde, etwa Raum- und
+      Wandtemperatur. Innerhalb einer Stunde sehen alle Iterationen denselben
+      Startwert; erst am Ende der Stunde wird fortgeschrieben. Das entspricht
+      dem VBA-Unterprogramm Speicher().
+    * True - Groessen, die sich ueber die Iterationen selbst aufbauen. Das sind
+      die Regler: in der Excel bezieht sich ihr Ausgang auf den eigenen Vorwert
+      (K51 = J57 - Regelabweichung/Xp), wodurch sie waehrend der iterativen
+      Neuberechnung integrieren. Ohne dieses Kennzeichen wuerde ein Regler je
+      Stunde nur einen einzigen Proportionalschritt machen und den Sollwert nie
+      erreichen.
+    """
+
+    ZUSTAND_UEBER_ITERATION: bool = False
     KENNUNG: str = ""
     NAME: str = ""
     GRUPPE: str = ""
@@ -971,7 +990,7 @@ def lade_alle():
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/bausteine -v`
-Expected: 9 passed
+Expected: 11 passed
 
 - [ ] **Step 5: Commit**
 
@@ -3530,6 +3549,10 @@ def klemme(wert, unten=0.0, oben=100.0):
 
 @registriere
 class PRegler(Baustein):
+    # Der Ausgang bezieht sich auf seinen eigenen Vorwert - er baut sich ueber
+    # die Iterationen des Vorwaertslaufs auf, genau wie in der Excel.
+    ZUSTAND_UEBER_ITERATION = True
+
     KENNUNG = "p_regler"
     NAME = "P-Regler"
     GRUPPE = "Regelung"
@@ -3604,6 +3627,10 @@ STUFEN = (
 
 @registriere
 class Sequenzregler(Baustein):
+    # Der Ausgang bezieht sich auf seinen eigenen Vorwert - er baut sich ueber
+    # die Iterationen des Vorwaertslaufs auf, genau wie in der Excel.
+    ZUSTAND_UEBER_ITERATION = True
+
     KENNUNG = "sequenzregler"
     NAME = "Sequenzregler"
     GRUPPE = "Regelung"
@@ -3668,6 +3695,10 @@ from core.bausteine.basis import (
 
 @registriere
 class HystereseRegler(Baustein):
+    # Der Ausgang bezieht sich auf seinen eigenen Vorwert - er baut sich ueber
+    # die Iterationen des Vorwaertslaufs auf, genau wie in der Excel.
+    ZUSTAND_UEBER_ITERATION = True
+
     KENNUNG = "hysterese_regler"
     NAME = "Hysterese-Regler"
     GRUPPE = "Regelung"
@@ -3723,6 +3754,10 @@ from core.bausteine.sequenzregler import STUFEN
 
 @registriere
 class RaumZuluftKaskade(Baustein):
+    # Der Ausgang bezieht sich auf seinen eigenen Vorwert - er baut sich ueber
+    # die Iterationen des Vorwaertslaufs auf, genau wie in der Excel.
+    ZUSTAND_UEBER_ITERATION = True
+
     KENNUNG = "kaskade"
     NAME = "Raum-/Zuluft-Kaskade"
     GRUPPE = "Regelung"
@@ -5418,6 +5453,52 @@ def test_geschlossener_regelkreis_konvergiert():
     assert lauf.stunden[0][3]["QH"] > 0.0
 
 
+def test_regler_erreicht_den_sollwert_innerhalb_einer_stunde():
+    """Der Regler integriert ueber die Iterationen - wie Application.Iteration."""
+    karten = {
+        1: karte(1, "wetter"),
+        2: karte(2, "aussenluft"),
+        3: karte(3, "erhitzer", {"V_nenn": 8200.0, "QH_max": 200.0, "dp_nenn": 0.0}),
+        4: karte(4, "ventilator", {"V_max": 8200.0, "PE_max": 0.001, "regelart": "-"}),
+        5: karte(5, "fortluft"),
+        6: karte(6, "p_regler",
+                 {"xp_1": 10.0, "xp_2": 5.0, "sollwert_2": 18.0}),
+    }
+    g = verbinde(
+        karten,
+        [
+            (1, "T_AU", 2, "T_AU"),
+            (1, "F_AU", 2, "F_AU"),
+            (2, "luft_aus", 3, "luft_ein"),
+            (3, "luft_aus", 4, "luft_ein"),
+            (4, "luft_aus", 5, "luft_ein"),
+            (6, "ausgang_2", 3, "stellgroesse"),
+            (3, "T_aus", 6, "istwert_2"),
+        ],
+    )
+    lauf = solver.Solver(g).starte(wetterstunden(1, t_au=0.0))
+    assert lauf.warnungen == []
+    # Ohne Integration ueber die Iterationen bliebe die Temperatur bei 0 °C
+    assert lauf.stunden[0][3]["T_aus"] == pytest.approx(18.0, abs=0.05)
+
+
+def test_speichergroessen_sehen_in_jeder_iteration_den_stundenanfang():
+    """Raum- und Wandtemperatur duerfen innerhalb einer Stunde nicht mitlaufen."""
+    karten = {1: karte(1, "raum", {"start_temperatur": 20.0, "spez_beleuchtung": 0.0})}
+    g = graph.Anlagengraph(karten=karten, verbindungen=[])
+    lauf = solver.Solver(g).starte(wetterstunden(1, t_au=0.0))
+    einmal = lauf.stunden[0][1]["T_Raum"]
+
+    # Dieselbe Stunde einzeln gerechnet muss denselben Wert liefern
+    from core.bausteine import basis as b
+    raum = b.hole("raum")()
+    p = karten[1].parameter
+    ein = {k: 0.0 for k in ("T_AU", "F_AU", "QH_S", "QH_O", "QH_W", "QH_N",
+                            "QH_H", "waermelast", "feuchtelast", "QH_stat")}
+    aus, _ = raum.berechne(ein, p, raum.anfangszustand(p))
+    assert einmal == pytest.approx(aus["T_Raum"], rel=1e-9)
+
+
 def test_zustandsgroessen_werden_zur_naechsten_stunde_fortgeschrieben():
     karten = {1: karte(1, "raum", {"start_temperatur": 20.0, "spez_beleuchtung": 0.0})}
     g = graph.Anlagengraph(karten=karten, verbindungen=[])
@@ -5608,6 +5689,13 @@ class Solver:
         ausgaben = {}
         letzte_abweichung = float("inf")
 
+        # Zwei Arten von Gedaechtnis, siehe Baustein.ZUSTAND_UEBER_ITERATION:
+        # Speichergroessen sehen in jeder Iteration den Stundenanfang, Regler
+        # sehen ihren eigenen Wert aus der vorigen Iteration.
+        iterationszustaende = {
+            karte_id: dict(werte) for karte_id, werte in zustaende.items()
+        }
+
         for durchgang in range(config.MAX_ITERATIONEN):
             vorher = {k: dict(v) for k, v in ausgaben.items()}
             neue_zustaende = {}
@@ -5616,7 +5704,10 @@ class Solver:
                 karte = self.graph.karten[karte_id]
                 ein = self._eingaenge(karte, ausgaben, gefordert)
 
-                zustand = dict(zustaende.get(karte_id, {}))
+                if karte.baustein.ZUSTAND_UEBER_ITERATION:
+                    zustand = dict(iterationszustaende.get(karte_id, {}))
+                else:
+                    zustand = dict(zustaende.get(karte_id, {}))
                 zustand["stunde"] = stunde
                 for port in karte.ports:
                     if port.art == basis.LUFT and port.richtung == basis.EINGANG:
@@ -5641,6 +5732,7 @@ class Solver:
                 zustand_neu.pop("bedarf", None)
                 ausgaben[karte_id] = werte
                 neue_zustaende[karte_id] = zustand_neu
+                iterationszustaende[karte_id] = zustand_neu
 
                 # Eingangsgroessen mitschreiben, damit sie protokolliert werden koennen
                 for schluessel, wert in ein.items():
@@ -5711,7 +5803,7 @@ class Solver:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_solver.py -v`
-Expected: 9 passed
+Expected: 11 passed
 
 - [ ] **Step 5: Commit**
 
@@ -5946,9 +6038,10 @@ def karte_anlegen(anlage_id, typ, pos_x=0.0, pos_y=0.0, parameter=None, name=Non
 
     for port in graph.erzeuge_ports(klasse, werte, karte_id, ab_id=0):
         db.execute(
-            "INSERT INTO port (karte_id, schluessel, art, richtung, rolle, nummer) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (karte_id, port.schluessel, port.art, port.richtung, port.rolle, port.nummer),
+            "INSERT INTO port (karte_id, schluessel, basis, art, richtung, rolle, nummer) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (karte_id, port.schluessel, port.basis, port.art, port.richtung,
+             port.rolle, port.nummer),
         )
     db.commit()
     return karte_id
@@ -5997,10 +6090,8 @@ def _karte_instanz(zeile, ports):
         ports=[
             graph.PortInstanz(
                 id=p["id"], karte_id=p["karte_id"], schluessel=p["schluessel"],
-                basis=p["schluessel"].rsplit("_", 1)[0]
-                if p["schluessel"].rsplit("_", 1)[-1].isdigit() else p["schluessel"],
-                art=p["art"], richtung=p["richtung"], rolle=p["rolle"],
-                nummer=p["nummer"],
+                basis=p["basis"], art=p["art"], richtung=p["richtung"],
+                rolle=p["rolle"], nummer=p["nummer"],
             )
             for p in ports
         ],
@@ -6068,10 +6159,10 @@ def pfeil_anlegen(anlage_id, von_karte_id, nach_karte_id):
     for karte in (von, nach):
         for port in graph.fehlende_ports(karte, neu_belegt):
             db.execute(
-                "INSERT INTO port (karte_id, schluessel, art, richtung, rolle, nummer) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (karte.id, port.schluessel, port.art, port.richtung, port.rolle,
-                 port.nummer),
+                "INSERT INTO port (karte_id, schluessel, basis, art, richtung, rolle, "
+                "nummer) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (karte.id, port.schluessel, port.basis, port.art, port.richtung,
+                 port.rolle, port.nummer),
             )
 
     db.commit()
