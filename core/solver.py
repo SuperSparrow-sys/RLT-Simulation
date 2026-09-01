@@ -158,21 +158,18 @@ class Solver:
                 else:
                     zustand = dict(zustaende.get(karte_id, {}))
                 zustand["stunde"] = stunde
-                for port in karte.ports:
-                    if port.art == basis.LUFT and port.richtung == basis.EINGANG:
-                        if not self.graph.eingaenge_von(karte_id):
-                            zustand["bedarf"] = gefordert.get(port.id, 0.0)
 
+                # Die Aussenluftkarte hat keinen Lufteingang - sie erfaehrt erst
+                # hier, wieviel die Anlage von ihr fordert. Der Wert steht schon
+                # aus dem Rueckwaertslauf bereit; ihn ein zweites Mal aus den
+                # Verbindungen aufzusummieren waere dieselbe Regel zweimal
+                # geschrieben, und die beiden koennten auseinanderlaufen.
                 if karte.typ == "aussenluft":
                     ausgang = next(
                         p for p in karte.ports
                         if p.art == basis.LUFT and p.richtung == basis.AUSGANG
                     )
-                    menge = 0.0
-                    for v in self.graph.verbindungen:
-                        if v.von_port.id == ausgang.id:
-                            menge += gefordert.get(v.nach_port.id, 0.0)
-                    zustand["bedarf"] = menge
+                    zustand["bedarf"] = self.abnahme.get(ausgang.id, 0.0)
 
                 werte, zustand_neu = karte.baustein.berechne(
                     ein, karte.parameter, zustand
