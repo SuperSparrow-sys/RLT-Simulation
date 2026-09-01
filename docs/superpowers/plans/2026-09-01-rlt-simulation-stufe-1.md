@@ -92,7 +92,7 @@ Die Excel-Mappe wurde mitten in der iterativen Berechnung gespeichert. Daraus fo
 **Interfaces:**
 - Consumes: nichts
 - Produces: `core.config.DB_PATH`, `core.config.PORT`, `core.database.get_db()`,
-  `core.database.close_db(exc=None)`, `core.database.init_db()`,
+  `core.database.close_db(exception=None)`, `core.database.init_db()`,
   `app.create_app() -> Flask`
 
 - [ ] **Step 1: Write the failing test**
