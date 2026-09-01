@@ -30,6 +30,14 @@ class Verteiler(Baustein):
     AUSGABEN = ["warnung"]
 
     def __init__(self):
+        # Vertrag mit dem Solver: Diese beiden Felder gehoeren NICHT zum
+        # Stundenzustand, sondern zur Topologie. Der Solver fuellt sie einmal je
+        # Lauf im Rueckwaertslauf (core/solver.py, _volumenstroeme) und laesst sie
+        # danach unveraendert - 'abgaenge' sind die Schluessel der angelegten
+        # Luftausgaenge, 'bedarf_je_abgang' der Volumenstrom, den jeder Gang
+        # stromabwaerts anfordert. Deshalb stehen sie hier und nicht im
+        # 'zustand'-Woerterbuch, das je Stunde neu gesetzt und fortgeschrieben
+        # wird. Ohne Solver - etwa im Test - sind beide von Hand zu setzen.
         self.abgaenge = []
         self.bedarf_je_abgang = {}
 
@@ -52,7 +60,7 @@ class Verteiler(Baustein):
             else:
                 verteilt = {a: luft.V / len(rest) for a in rest}
         elif summe > luft.V:
-            faktor = luft.V / summe if summe else 0.0
+            faktor = luft.V / summe   # summe > luft.V >= 0, also nie null
             verteilt = {a: v * faktor for a, v in gefordert.items()}
             warnung = "Volumenstrom reicht nicht fuer alle Gaenge"
         else:

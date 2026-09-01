@@ -5,6 +5,7 @@ Portanlage in der Datenbank und Ergebnisspalten werden aus dieser Deklaration
 erzeugt - ein neuer Kartentyp ist deshalb genau eine neue Datei.
 """
 
+import copy
 from dataclasses import dataclass
 
 # Portarten
@@ -47,7 +48,7 @@ class Param:
     schluessel: str
     label: str
     einheit: str
-    vorgabe: float | str
+    vorgabe: float | str | list | dict
     auswahl: tuple = ()
 
 
@@ -103,7 +104,15 @@ class Baustein:
 
     @classmethod
     def vorgabeparameter(cls) -> dict:
-        return {p.schluessel: p.vorgabe for p in cls.PARAMETER}
+        """Frische Vorgabewerte fuer eine neue Karte.
+
+        Es wird tief kopiert, weil Vorgaben auch Listen und Tabellen sein
+        koennen - Zeitplaene, Lastgaenge, Ferienzeitraeume, Anteile eines
+        Verteilers. Ohne Kopie teilten sich alle Karten desselben Typs dasselbe
+        Objekt, und die erste Aenderung an einer Karte schluege auf alle
+        anderen und auf die Klassenvorgabe durch.
+        """
+        return {p.schluessel: copy.deepcopy(p.vorgabe) for p in cls.PARAMETER}
 
     @classmethod
     def port(cls, schluessel: str) -> Port:

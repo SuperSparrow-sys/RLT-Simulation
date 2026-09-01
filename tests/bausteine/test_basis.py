@@ -68,6 +68,35 @@ def test_hole_meldet_unbekannten_typ():
         basis.hole("kein_baustein")
 
 
+def test_vorgabeparameter_teilen_keine_veraenderlichen_werte():
+    """Listen und Tabellen muessen je Karte eigene Objekte sein."""
+
+    @basis.registriere
+    class MitListe(basis.Baustein):
+        KENNUNG = "test_liste"
+        NAME = "Mit Liste"
+        GRUPPE = "Test"
+        SYMBOL = "test.svg"
+        PARAMETER = [
+            basis.Param("plan", "Plan", "-", [1.0, 2.0]),
+            basis.Param("anteile", "Anteile", "%", {}),
+        ]
+        PORTS = []
+        AUSGABEN = []
+
+        def berechne(self, ein, p, zustand):
+            return {}, zustand
+
+    erste = MitListe.vorgabeparameter()
+    zweite = MitListe.vorgabeparameter()
+    erste["plan"].append(3.0)
+    erste["anteile"]["luft_aus_1"] = 70.0
+
+    assert zweite["plan"] == [1.0, 2.0]
+    assert zweite["anteile"] == {}
+    assert MitListe.PARAMETER[0].vorgabe == [1.0, 2.0]
+
+
 def test_vorgabeparameter_werden_aus_der_deklaration_gebildet():
     @basis.registriere
     class MitVorgabe(basis.Baustein):
