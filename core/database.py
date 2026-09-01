@@ -68,6 +68,35 @@ CREATE INDEX IF NOT EXISTS idx_pfeil_anlage  ON pfeil(anlage_id);
 CREATE INDEX IF NOT EXISTS idx_verb_pfeil    ON verbindung(pfeil_id);
 """
 
+SCHEMA += """
+CREATE TABLE IF NOT EXISTS wetterdatensatz (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    name          TEXT NOT NULL,
+    quelle        TEXT NOT NULL,
+    ort           TEXT NOT NULL DEFAULT '',
+    breite        REAL,
+    laenge        REAL,
+    jahr          INTEGER,
+    zeitzone      TEXT NOT NULL DEFAULT 'Europe/Berlin',
+    notiz         TEXT NOT NULL DEFAULT '',
+    erstellt_am   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS wetterstunde (
+    datensatz_id  INTEGER NOT NULL REFERENCES wetterdatensatz(id) ON DELETE CASCADE,
+    stunde        INTEGER NOT NULL,
+    zeitpunkt     TEXT NOT NULL,
+    t_au          REAL NOT NULL,
+    x_au          REAL NOT NULL,
+    str_s         REAL NOT NULL DEFAULT 0,
+    str_o         REAL NOT NULL DEFAULT 0,
+    str_w         REAL NOT NULL DEFAULT 0,
+    str_n         REAL NOT NULL DEFAULT 0,
+    str_h         REAL NOT NULL DEFAULT 0,
+    PRIMARY KEY (datensatz_id, stunde)
+);
+"""
+
 
 def retry_on_lock(func):
     @wraps(func)

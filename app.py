@@ -24,9 +24,11 @@ def create_app():
     app.teardown_appcontext(close_db)
 
     from routes import anlagen as anlagen_routen, pages
+    from routes import wetter as wetter_routen
 
     app.register_blueprint(pages.bp)
     app.register_blueprint(anlagen_routen.bp)
+    app.register_blueprint(wetter_routen.bp)
 
     with app.app_context():
         init_db()
