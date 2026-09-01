@@ -5093,10 +5093,10 @@ gesamt = sum(len(v) for v in gruppen.values())
 for name, klassen in sorted(gruppen.items()):
     print(f'{name}: {len(klassen)}')
 print('gesamt:', gesamt)
-assert gesamt == 31, gesamt
+assert gesamt == 33, gesamt
 "
 ```
-Expected: `gesamt: 31`
+Expected: `gesamt: 33`
 
 - [ ] **Step 6: Commit**
 
@@ -11145,6 +11145,372 @@ nach dem Erhitzer liegt nahe 20 °C.
 
 ---
 
+## Task 27: Regelung der Vorlage wie in der Excel
+
+**Diese Aufgabe läuft nach Task 18 und vor Task 19.** Sie ist aus dem ersten
+vollständigen Jahreslauf entstanden, den der Controller nach Task 18 gefahren hat.
+
+**Was der Lauf zeigte.** Die Vorlage rechnet, aber weit an der Mappe vorbei: Wärme
+615 statt 329 MWh, Kälte 271 statt 45 MWh, Wasser 955 statt 112 m³. Die Ursache ist
+nicht die Physik der Bausteine — die stimmt zellgenau — sondern die **Regelung**: Die
+Mappe verschaltet ihre Regler erheblich verschachtelter, als die Vorlage es nachbaute.
+
+Drei Unterschiede, alle im Formeltext belegt:
+
+1. **Beim Luftwäscher sind Soll- und Istwert vertauscht.** `Anlage!AB55 = AH46` nimmt
+   als *Sollwert* die Raumfeuchte, `AB56` als *Istwert* die feste Zahl 5 g/kg (beim
+   zweiten Wäscher 6 g/kg). Befeuchtet wird, wenn der Raum trockener ist als diese
+   Zahl. Die Vorlage hängte den Regler an die Austrittstemperatur des Wäschers, die
+   naturgemäß immer über 5 liegt — der Wäscher lief das ganze Jahr auf Vollast.
+
+2. **Der Kühler wird von zwei Reglern gestellt:**
+   `Anlage!S16 = MAX(100-S61, S72)`. `S61` ist ein Regler auf die Raumfeuchte
+   (Sollwert 9 g/kg, Istwert `AH46` = F_Raum), dessen Ausgang **invertiert** eingeht —
+   er entfeuchtet. `S72` ist ein Regler auf die Raumtemperatur (Sollwert `AH45` =
+   T_Raum, Istwert fest 22 °C) — er kühlt.
+
+3. **Der Erhitzer ist mit dem Luftwäscher verriegelt:**
+   `Anlage!V16 = MAX(IF(AB16=100;50;0); V72)`. Läuft der Wäscher, öffnet der Erhitzer
+   auf mindestens 50 %, um die adiabatisch gekühlte Luft nachzuwärmen.
+
+Dafür fehlen zwei kleine Bausteine und ein Parameter.
+
+**Files:**
+- Create: `core/bausteine/maximalwert.py`, `core/bausteine/faktor.py`
+- Modify: `core/bausteine/hysterese_regler.py`, `core/bausteine/p_regler.py`,
+  `core/bausteine/__init__.py`, `core/vorlagen/ax_sim_2_1.py`
+- Test: `tests/bausteine/test_signalglieder.py`, `tests/bausteine/test_regler.py`,
+  `tests/test_vorlage.py`
+
+- [ ] **Step 1: Write the failing tests**
+
+`tests/bausteine/test_signalglieder.py`:
+
+```python
+import pytest
+
+from core.bausteine.faktor import Faktor
+from core.bausteine.maximalwert import Maximalwert
+
+
+def test_maximalwert_nimmt_den_groessten_eingang():
+    """Anlage!S16 = MAX(100-S61; S72) - zwei Regler stellen ein Ventil."""
+    aus, _ = Maximalwert().berechne({"ein_1": 30.0, "ein_2": 75.0}, {}, {})
+    assert aus["ausgang"] == pytest.approx(75.0)
+
+
+def test_maximalwert_ohne_eingang_ist_null():
+    aus, _ = Maximalwert().berechne({}, {}, {})
+    assert aus["ausgang"] == 0.0
+
+
+def test_maximalwert_kann_einen_eingang_invertieren():
+    """Der Entfeuchtungsregler geht in der Excel als 100 - Ausgang ein."""
+    p = {"invertiert": ["ein_1"]}
+    aus, _ = Maximalwert().berechne({"ein_1": 30.0, "ein_2": 55.0}, p, {})
+    assert aus["ausgang"] == pytest.approx(70.0)
+
+
+def test_faktor_skaliert_und_begrenzt():
+    """Anlage!V16 - IF(Waescher=100; 50; 0) ist 0,5 mal das Waeschersignal."""
+    aus, _ = Faktor().berechne({"ein": 100.0}, {"faktor": 0.5}, {})
+    assert aus["ausgang"] == pytest.approx(50.0)
+
+    aus, _ = Faktor().berechne({"ein": 0.0}, {"faktor": 0.5}, {})
+    assert aus["ausgang"] == pytest.approx(0.0)
+```
+
+An `tests/bausteine/test_regler.py` anhängen:
+
+```python
+def test_hysterese_nimmt_den_istwert_auch_als_parameter():
+    """Anlage!AB56 - der Istwert des Waescherreglers ist eine feste Zahl.
+
+    Die Mappe dreht die uebliche Zuordnung um: der Sollwert kommt als Raumfeuchte
+    von aussen, der Istwert steht als Konstante daneben. Befeuchtet wird, wenn der
+    Raum trockener ist als diese Konstante.
+    """
+    p = hysterese_parameter(hysterese=0.1, istwert=5.0)
+
+    trocken, _ = HystereseRegler().berechne({"sollwert": 2.9}, p, {"zustand": 0.0})
+    feucht, _ = HystereseRegler().berechne({"sollwert": 7.0}, p, {"zustand": 0.0})
+
+    assert trocken["ausgang"] == 100.0
+    assert feucht["ausgang"] == 0.0
+```
+
+An `tests/test_vorlage.py` anhängen:
+
+```python
+def test_waescherregler_misst_die_raumfeuchte(app):
+    """Sonst laeuft der Waescher das ganze Jahr auf Vollast."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("Referenz")
+        anlage = ax_sim_2_1.baue(projekt, "AX_SIM 2.1")
+        daten = anlagen.als_json(anlage)
+
+    nach_id = {k["id"]: k for k in daten["karten"]}
+    ports = {p["id"]: (nach_id[k["id"]]["name"], p["schluessel"])
+             for k in daten["karten"] for p in k["ports"]}
+    verbindungen = [
+        (ports[v["von_port_id"]], ports[v["nach_port_id"]])
+        for pfeil in daten["pfeile"] for v in pfeil["verbindungen"]
+    ]
+    an_die_waescherregler = [
+        (von, nach) for von, nach in verbindungen
+        if "Regler Luftwäscher" in nach[0]
+    ]
+    assert an_die_waescherregler, "Die Waescherregler bekommen gar keinen Messwert"
+    for von, nach in an_die_waescherregler:
+        assert von[1] == "F_Raum", f"{von} -> {nach}"
+        assert nach[1] == "sollwert", f"{von} -> {nach}"
+
+
+def test_kuehler_wird_von_zwei_reglern_gestellt(app):
+    """Anlage!S16 = MAX(100-S61; S72) - Entfeuchtung und Kuehlung."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("Referenz")
+        anlage = ax_sim_2_1.baue(projekt, "AX_SIM 2.1")
+        daten = anlagen.als_json(anlage)
+
+    typen = [k["typ"] for k in daten["karten"]]
+    assert typen.count("maximalwert") >= 2, "je Kuehler ein Maximalglied"
+    assert typen.count("faktor") >= 2, "je Erhitzer ein Faktorglied fuer die Verriegelung"
+```
+
+- [ ] **Step 2: Run the tests to see them fail**
+
+Run: `./venv/bin/pytest tests/bausteine/test_signalglieder.py tests/bausteine/test_regler.py tests/test_vorlage.py -v`
+Expected: `ModuleNotFoundError` für die beiden neuen Bausteine, dazu Fehlschläge in
+den drei neuen Vorlagentests.
+
+- [ ] **Step 3: Das Maximalglied**
+
+`core/bausteine/maximalwert.py`:
+
+```python
+"""Groesster von mehreren Signalwerten, einzelne davon umgekehrt gezaehlt.
+
+In der Mappe stellt nicht immer ein Regler allein ein Ventil. Der Kuehler etwa
+folgt Anlage!S16 = MAX(100-S61; S72): ein Regler entfeuchtet, der andere kuehlt,
+und geoeffnet wird so weit, wie der fordernde von beiden es verlangt. Der
+Entfeuchtungsregler geht dabei umgekehrt ein - sein Ausgang wird von 100 abgezogen.
+"""
+
+from core.bausteine.basis import (
+    AUSGANG, EINGANG, SIGNAL, STELLGROESSE, Baustein, Param, Port, registriere,
+)
+
+
+@registriere
+class Maximalwert(Baustein):
+    KENNUNG = "maximalwert"
+    NAME = "Maximalwert"
+    GRUPPE = "Regelung"
+    SYMBOL = "maximalwert.svg"
+
+    PARAMETER = [
+        Param("invertiert", "umgekehrt gezählte Eingänge", "-", []),
+    ]
+
+    PORTS = [
+        Port("ein", SIGNAL, EINGANG, STELLGROESSE, dynamisch=True),
+        Port("ausgang", SIGNAL, AUSGANG, STELLGROESSE),
+    ]
+
+    AUSGABEN = ["ausgang"]
+
+    def berechne(self, ein, p, zustand):
+        umgekehrt = set(p.get("invertiert") or [])
+        werte = []
+        for schluessel, wert in ein.items():
+            if not schluessel.startswith("ein") or not isinstance(wert, (int, float)):
+                continue
+            werte.append(100.0 - float(wert) if schluessel in umgekehrt else float(wert))
+
+        return {"ausgang": max(werte) if werte else 0.0}, zustand
+```
+
+- [ ] **Step 4: Das Faktorglied**
+
+`core/bausteine/faktor.py`:
+
+```python
+"""Ein Signal mit einem festen Faktor, begrenzt auf 0 bis 100 Prozent.
+
+Damit laesst sich die Verriegelung aus Anlage!V16 ausdruecken: IF(AB16=100; 50; 0)
+ist nichts anderes als das halbe Waeschersignal, weil ein Hystereseregler nur 0
+oder 100 ausgibt. Der Erhitzer oeffnet dadurch auf 50 Prozent, sobald der
+Luftwaescher laeuft, und waermt die adiabatisch gekuehlte Luft nach.
+"""
+
+from core.bausteine.basis import (
+    AUSGANG, EINGANG, SIGNAL, STELLGROESSE, Baustein, Param, Port, registriere,
+)
+
+
+@registriere
+class Faktor(Baustein):
+    KENNUNG = "faktor"
+    NAME = "Faktor"
+    GRUPPE = "Regelung"
+    SYMBOL = "faktor.svg"
+
+    PARAMETER = [Param("faktor", "Faktor", "-", 1.0)]
+
+    PORTS = [
+        Port("ein", SIGNAL, EINGANG, STELLGROESSE),
+        Port("ausgang", SIGNAL, AUSGANG, STELLGROESSE),
+    ]
+
+    AUSGABEN = ["ausgang"]
+
+    def berechne(self, ein, p, zustand):
+        wert = float(ein.get("ein", 0.0)) * p["faktor"]
+        return {"ausgang": max(0.0, min(wert, 100.0))}, zustand
+```
+
+- [ ] **Step 5: Der Hystereseregler bekommt einen Istwert-Parameter**
+
+Wie beim Sollwert gilt: ist der Port nicht belegt, zählt der Parameter. In der Mappe
+ist der Istwert des Wäscherreglers eine feste Zahl (`Anlage!AB56` = 5, `AB67` = 6),
+und der Sollwert kommt von außen.
+
+```python
+    PARAMETER = [
+        Param("hysterese", "Hysterese", "-", 0.1),
+        Param("sollwert", "Sollwert", "-", 0.0),
+        # Anlage!AB56: Beim Waescherregler steht hier eine feste Zahl, und der
+        # Sollwert kommt als Raumfeuchte von aussen. Befeuchtet wird, wenn der Raum
+        # trockener ist als diese Zahl.
+        Param("istwert", "Istwert (fest)", "-", 0.0),
+    ]
+```
+
+und in `berechne`:
+
+```python
+        istwert = float(ein.get("istwert", p["istwert"]))
+```
+
+- [ ] **Step 6: Der P-Regler bekommt ebenfalls einen Istwert-Parameter**
+
+Aus demselben Grund: `Anlage!S71` ist die feste Zahl 22, während der Sollwert `S70`
+die Raumtemperatur ist.
+
+```python
+        Param("istwert_1", "Istwert 1 (fest)", "-", 0.0),
+        Param("istwert_2", "Istwert 2 (fest)", "-", 0.0),
+```
+
+und in `berechne` entsprechend `float(ein.get("istwert_1", p["istwert_1"]))` sowie
+`float(ein.get("istwert_2", p["istwert_2"]))`.
+
+- [ ] **Step 7: Die Vorlage neu verdrahten**
+
+In `core/vorlagen/ax_sim_2_1.py` wird der Regelungsabschnitt ersetzt. Je Gerät:
+
+```python
+    # -- Regelung, Anlage!I52:W72 -------------------------------------
+    #
+    # Die Mappe stellt ihre Ventile nicht mit je einem Regler. Der Kuehler folgt
+    # Anlage!S16 = MAX(100-S61; S72) aus einem Entfeuchtungs- und einem
+    # Kuehlregler, und der Erhitzer folgt V16 = MAX(IF(Waescher=100;50;0); V72),
+    # oeffnet also mindestens halb, sobald der Luftwaescher laeuft.
+
+    regler_vor = karte(
+        "p_regler", 440, 400, "Regler Vorerhitzer",
+        xp_1=10.0, xp_2=5.0, sollwert_2=19.0,          # Anlage!N52, N54, M59
+    )
+
+    # Kuehler Halle: Entfeuchtung (Sollwert 9 g/kg, Istwert = Raumfeuchte) und
+    # Kuehlung (Sollwert = Raumtemperatur, Istwert fest 22 °C)
+    entfeuchter_1 = karte(
+        "p_regler", 780, 20, "Entfeuchtungsregler Halle",
+        xp_1=10.0, xp_2=5.0, sollwert_2=9.0,           # Anlage!S59
+    )
+    kuehlregler_1 = karte(
+        "p_regler", 780, 100, "Kühlregler Halle",
+        xp_1=10.0, xp_2=5.0, istwert_2=22.0,           # Anlage!S71
+    )
+    kuehlerstellung_1 = karte(
+        "maximalwert", 780, 180, "Stellung Kühler Halle",
+        invertiert=["ein_1"],                          # Anlage!S16: 100 - S61
+    )
+
+    # Erhitzer Halle: Nachwaermen nach dem Waescher, mindestens 50 %
+    erhitzerregler_1 = karte(
+        "p_regler", 960, 20, "Regler Erhitzer Halle",
+        xp_1=10.0, xp_2=5.0, sollwert_2=20.0,          # Anlage!V59
+    )
+    nachwaermen_1 = karte(
+        "faktor", 960, 100, "Nachwärmen Halle", faktor=0.5,   # Anlage!V16
+    )
+    erhitzerstellung_1 = karte(
+        "maximalwert", 960, 180, "Stellung Erhitzer Halle",
+    )
+
+    waescherregler_1 = karte(
+        "hysterese_regler", 1320, 20, "Regler Luftwäscher Halle",
+        hysterese=0.1, istwert=5.0,                    # Anlage!AB54, AB56
+    )
+```
+
+und ebenso für das zweite Gerät mit `istwert=6.0` (`Anlage!AB67`). Die Pfeile des
+Regelungsteils lauten dann je Gerät:
+
+```python
+        # Feuchte: der Sollwert ist die Raumfeuchte, der Istwert eine feste Zahl
+        (raum, waescherregler_1),
+        (waescherregler_1, waescher_1),
+
+        # Kuehler: Entfeuchtung invertiert, Kuehlung direkt, groesseres gewinnt
+        (raum, entfeuchter_1),
+        (raum, kuehlregler_1),
+        (entfeuchter_1, kuehlerstellung_1),
+        (kuehlregler_1, kuehlerstellung_1),
+        (kuehlerstellung_1, kuehler_1),
+
+        # Erhitzer: eigener Regler oder Nachwaermen, groesseres gewinnt
+        (erhitzer_1, erhitzerregler_1),
+        (waescherregler_1, nachwaermen_1),
+        (erhitzerregler_1, erhitzerstellung_1),
+        (nachwaermen_1, erhitzerstellung_1),
+        (erhitzerstellung_1, erhitzer_1),
+```
+
+**Wichtig:** Die Pfeile `(raum, waescherregler_1)`, `(raum, entfeuchter_1)` und
+`(raum, kuehlregler_1)` treffen mehrdeutige Anschlüsse — der Raum bietet mehrere
+Messwerte an, und nach der Regel aus Task 26 bleibt ein namenloser Istwert dann frei.
+Diese drei werden deshalb mit `anlagen.verbindung_anlegen` ausdrücklich gesetzt:
+`F_Raum → sollwert` beim Wäscherregler, `F_Raum → istwert_2` beim Entfeuchter,
+`T_Raum → sollwert_2` beim Kühlregler. Genau dafür gibt es diese Funktion.
+
+- [ ] **Step 8: Tests laufen lassen**
+
+Run: `./venv/bin/pytest -q`
+Expected: alle Tests bestanden.
+
+- [ ] **Step 9: Den Jahreslauf fahren und die Abweichung berichten**
+
+```bash
+./venv/bin/python werkzeuge/abgleich.py
+```
+
+Der Lauf dauert einige Minuten. **Die Zahlen müssen sich der Mappe deutlich nähern**,
+und die Zahl der nicht konvergierten Stunden muss deutlich sinken. Ob sie die Toleranz
+von 0,5 Prozent schon erreichen, ist hier noch nicht gefordert — das ist Task 20.
+Berichtet wird, was tatsächlich herauskam, ohne Beschönigung.
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add core tests
+git commit -m "Regelung der Vorlage wie in der Excel: Maximalglied, Faktorglied, feste Istwerte"
+```
+
+---
+
 ## Abschluss von Stufe 1
 
 - [ ] **Alle Tests laufen lassen**
@@ -11182,5 +11548,7 @@ git commit -m "Stufe 1 abgeschlossen: Rechenkern, Editor, Jahresabgleich und Pla
 
 Open-Meteo-Import mit Jahresvergleich, Diagramme, Varianten-Gegenueberstellung,
 HTML- und PDF-Bericht mit ReportLab sowie die Ausgabe nach CSV und Excel.
+
+---
 
 ---
