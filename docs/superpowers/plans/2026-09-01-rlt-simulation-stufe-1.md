@@ -3607,7 +3607,7 @@ class Raum(Baustein):
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/bausteine/test_raum.py -v`
-Expected: 11 passed
+Expected: 12 passed
 
 - [ ] **Step 5: Commit**
 
@@ -5759,7 +5759,6 @@ git commit -m "Graph mit Portanlage, automatischer Verdrahtung und Sortierung"
 
 **Interfaces:**
 - Produces:
-  - `solver.Ergebnis(werte, warnungen, iterationen)` je Stunde
   - `solver.Solver(graph)` mit
     `starte(wetterstunden, fortschritt=None, abbruch=None) -> Lauf`
   - `solver.Lauf(stunden, bilanz, warnungen)` — `stunden` ist eine Liste von
@@ -6280,7 +6279,7 @@ class Solver:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_solver.py -v`
-Expected: 11 passed
+Expected: 12 passed
 
 - [ ] **Step 5: Commit**
 
