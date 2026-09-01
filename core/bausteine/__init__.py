@@ -6,7 +6,7 @@ Ein neuer Kartentyp braucht nur eine neue Datei und eine Zeile in DIESE Liste.
 
 from core.bausteine import basis, stoffdaten  # noqa: F401
 
-MODULE = []
+MODULE = ["erhitzer", "kuehler"]
 
 
 def lade_alle():
