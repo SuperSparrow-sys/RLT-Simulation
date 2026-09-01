@@ -6,3 +6,8 @@ bp = Blueprint("pages", __name__)
 @bp.route("/")
 def index():
     return render_template("index.html")
+
+
+@bp.route("/anlage/<int:anlage_id>")
+def editor(anlage_id):
+    return render_template("editor.html", anlage_id=anlage_id)

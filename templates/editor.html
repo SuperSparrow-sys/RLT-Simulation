@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RLT-Simulation</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <div class="app">
+    <aside class="palette" id="palette"></aside>
+
+    <main class="buehne">
+      <header class="leiste">
+        <span class="titel" id="anlagenname">Anlage</span>
+        <button class="knopf-haupt" id="btn-simulieren">Simulieren</button>
+      </header>
+      <svg id="leinwand">
+        <g id="welt">
+          <g id="pfeile"></g>
+          <g id="karten"></g>
+        </g>
+      </svg>
+    </main>
+
+    <aside class="panel" id="panel"></aside>
+  </div>
+
+  <script>window.ANLAGE_ID = {{ anlage_id }};</script>
+  <script src="{{ url_for('static', filename='js/palette.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/pfeile.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/panel.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/editor.js') }}"></script>
+</body>
+</html>

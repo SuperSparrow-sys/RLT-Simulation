@@ -24,3 +24,39 @@ html, body {
 }
 
 .app { display: flex; height: 100vh; }
+
+.palette { width: 220px; flex-shrink: 0; background: var(--surface);
+           border-right: 1px solid var(--border-light); overflow-y: auto;
+           padding: 12px; }
+.gruppe { font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+          color: var(--text-secondary); margin: 16px 0 6px; }
+.gruppe-liste { display: flex; flex-direction: column; gap: 2px; }
+.palette-eintrag { display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+                   border-radius: 6px; cursor: grab; color: var(--text); }
+.palette-eintrag:hover { background: var(--blue-tint); }
+.palette-eintrag img { width: 20px; height: 20px; }
+
+.buehne { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.leiste { height: 52px; display: flex; align-items: center; gap: 16px;
+          padding: 0 16px; background: var(--surface);
+          border-bottom: 1px solid var(--border-light); }
+.titel { font-size: 16px; font-weight: 500; }
+.knopf-haupt { margin-left: auto; border: none; background: var(--blue);
+               color: #fff; border-radius: 20px; padding: 8px 20px;
+               font-size: 14px; cursor: pointer; }
+
+#leinwand { flex: 1; background: var(--bg); touch-action: none; cursor: grab; }
+.karte-rahmen { fill: var(--surface); stroke: var(--border); }
+.karte.gewaehlt .karte-rahmen { stroke: var(--blue); stroke-width: 2; }
+.karte { color: var(--text-secondary); cursor: move; }
+.karte-name { font-size: 12px; fill: var(--text); }
+.karte-werte { font-size: 10px; fill: var(--text-secondary); }
+.port { fill: var(--surface); stroke: var(--text-secondary); }
+.port-luft { r: 5; stroke-width: 2; }
+.port-signal { stroke-dasharray: 2 2; }
+.port.ziel-moeglich { fill: var(--blue); stroke: var(--blue); }
+.port.ziel-unmoeglich { opacity: .25; }
+
+.panel { width: 280px; flex-shrink: 0; background: var(--surface);
+         border-left: 1px solid var(--border-light); overflow-y: auto;
+         padding: 16px; }
