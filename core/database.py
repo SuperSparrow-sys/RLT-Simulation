@@ -62,11 +62,6 @@ CREATE TABLE IF NOT EXISTS verbindung (
     von_port_id    INTEGER NOT NULL REFERENCES port(id) ON DELETE CASCADE,
     nach_port_id   INTEGER NOT NULL REFERENCES port(id) ON DELETE CASCADE
 );
-
-CREATE INDEX IF NOT EXISTS idx_karte_anlage  ON karte(anlage_id);
-CREATE INDEX IF NOT EXISTS idx_port_karte    ON port(karte_id);
-CREATE INDEX IF NOT EXISTS idx_pfeil_anlage  ON pfeil(anlage_id);
-CREATE INDEX IF NOT EXISTS idx_verb_pfeil    ON verbindung(pfeil_id);
 """
 
 SCHEMA += """
@@ -132,7 +127,20 @@ CREATE TABLE IF NOT EXISTS bilanz (
     preis          REAL NOT NULL DEFAULT 0,
     kosten         REAL NOT NULL DEFAULT 0
 );
+"""
 
+# Getrennt von SCHEMA und erst NACH _migriere() ausgefuehrt (siehe init_db()):
+# ein Index auf einer Spalte, die eine bestehende Datenbank noch nicht hat
+# (z.B. 'kennung' vor dieser Aenderung), schlaegt sofort mit 'no such column'
+# fehl - und zwar schon beim Anlegen der Tabellen, bevor _migriere() die
+# fehlende Spalte ueberhaupt nachtragen konnte. Erst Tabellen (SCHEMA), dann
+# fehlende Spalten (_migriere), dann erst Indizes darauf - jede andere
+# Reihenfolge bricht beim naechsten Start gegen eine aeltere Datenbank ab.
+INDIZES = """
+CREATE INDEX IF NOT EXISTS idx_karte_anlage  ON karte(anlage_id);
+CREATE INDEX IF NOT EXISTS idx_port_karte    ON port(karte_id);
+CREATE INDEX IF NOT EXISTS idx_pfeil_anlage  ON pfeil(anlage_id);
+CREATE INDEX IF NOT EXISTS idx_verb_pfeil    ON verbindung(pfeil_id);
 CREATE INDEX IF NOT EXISTS idx_zeitreihe_sim ON zeitreihe(simulation_id);
 CREATE INDEX IF NOT EXISTS idx_bilanz_sim    ON bilanz(simulation_id);
 CREATE INDEX IF NOT EXISTS idx_simulation_kennung ON simulation(kennung);
@@ -182,6 +190,7 @@ def init_db():
     db = get_db()
     db.executescript(SCHEMA)
     _migriere(db)
+    db.executescript(INDIZES)
     _aufraeume_verwaiste_laeufe(db)
     db.commit()
 
@@ -192,6 +201,8 @@ def _migriere(db):
     'CREATE TABLE IF NOT EXISTS' legt eine neue Spalte in einer bereits
     bestehenden Tabelle nicht nachtraeglich an - ohne dies wuerde eine lokale
     Datenbank aus einer frueheren Version mit 'no such column' abbrechen.
+    Muss vor INDIZES laufen (siehe Kommentar dort) - jede neue Spalte, auf
+    der spaeter ein Index steht, gehoert hierher, nicht dazu.
     """
     spalten = {z["name"] for z in db.execute("PRAGMA table_info(pfeil)")}
     if "mehrdeutig" not in spalten:
