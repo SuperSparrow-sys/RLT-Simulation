@@ -125,11 +125,14 @@ VERBOTEN = {
 }
 
 # Luftwege, die sinnvoll aufeinander folgen, ohne dieselbe Rolle zu tragen.
+# Umluft ist zurueckgefuehrte ABLUFT - der einzige Umluftanschluss im Programm ist
+# der Umlufteingang der Mischkammer. Zuluft gehoert dort nicht hin; sie darf nur
+# ueber den Aussenlufteingang in die Mischkammer laufen, und das faengt die
+# Vorgabewertung von 1 ab.
 FOLGT_AUF = {
     (basis.AUSSENLUFT, basis.ZULUFT),
     (basis.ABLUFT, basis.FORTLUFT),
     (basis.ABLUFT, basis.UMLUFT),
-    (basis.ZULUFT, basis.UMLUFT),
 }
 
 
@@ -208,6 +211,39 @@ def verdrahte(von_karte, nach_karte, belegt):
         ]
 
     return vorwaerts + rueckwaerts
+
+
+def alternativen(von_karte, nach_karte, belegt):
+    """Gleich gut bewertete Zuordnungen, die 'verdrahte' NICHT gewaehlt hat.
+
+    Wenn eine Karte mehrere Luftrollen anbietet und die Gegenkarte einen neutralen
+    Anschluss hat, ist die Zuordnung echt mehrdeutig: Eine Waermerueckgewinnung an
+    einem Sammler koennte den Zuluft- oder den Abluftstrang meinen. 'verdrahte'
+    entscheidet dann nach der Reihenfolge, in der die Ports angelegt wurden - das
+    ist verlaesslich wiederholbar, aber nicht unbedingt das, was gemeint war.
+
+    Diese Funktion nennt die verworfenen Moeglichkeiten, damit der Editor den Pfeil
+    als mehrdeutig kennzeichnen und zur Korrektur anbieten kann. Sie raet nicht
+    besser - sie macht sichtbar, dass geraten wurde.
+    """
+    gewaehlt = {(v.id, n.id) for v, n in verdrahte(von_karte, nach_karte, belegt)}
+    genommene_ziele = {n for _, n in gewaehlt}
+    genommene_quellen = {v for v, _ in gewaehlt}
+
+    verworfen = []
+    for v in von_karte.ports:
+        if v.id in belegt or v.richtung != basis.AUSGANG:
+            continue
+        for n in nach_karte.ports:
+            if n.id in belegt or n.richtung != basis.EINGANG:
+                continue
+            if not _punkte(v, n) or (v.id, n.id) in gewaehlt:
+                continue
+            # Nur echte Konkurrenz zaehlt: eine Zuordnung, die um denselben
+            # Anschluss gestritten und verloren hat.
+            if v.id in genommene_quellen or n.id in genommene_ziele:
+                verworfen.append((v, n))
+    return verworfen
 
 
 class Anlagengraph:

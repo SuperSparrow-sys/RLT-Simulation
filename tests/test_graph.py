@@ -144,6 +144,51 @@ def test_datenlogger_belegt_die_spalten_der_reihe_nach():
     assert ziele[:2] == ["wert_1", "wert_2"]
 
 
+def test_zuluft_darf_nicht_in_den_umlufteingang():
+    """Umluft ist zurueckgefuehrte Abluft, nicht Zuluft.
+
+    Der einzige Umluftanschluss im Programm ist mischkammer.umluft_ein. Ein
+    Erhitzer, der auf eine Mischkammer gezogen wird, gehoert an den
+    Aussenlufteingang - etwa als Vorerhitzer im Aussenluftweg.
+    """
+    erhitzer, mischkammer = karte(1, "erhitzer"), karte(2, "mischkammer")
+    zuordnung = {
+        v.schluessel: n.schluessel
+        for v, n in graph.verdrahte(erhitzer, mischkammer, belegt=set())
+    }
+    assert zuordnung.get("luft_aus") == "aussenluft_ein"
+
+
+def test_abluft_darf_in_den_umlufteingang():
+    raum, mischkammer = karte(1, "einfacher_raum"), karte(2, "mischkammer")
+    zuordnung = {
+        v.basis: n.schluessel
+        for v, n in graph.verdrahte(raum, mischkammer, belegt=set())
+    }
+    assert zuordnung.get("abluft_aus") == "umluft_ein"
+
+
+def test_mehrdeutige_zuordnung_wird_gemeldet():
+    """Die WRG ist die einzige Karte mit zwei Luftrollen am Ausgang.
+
+    An einem neutralen Sammler ist damit nicht entscheidbar, ob der Zuluft- oder
+    der Abluftstrang gemeint ist. Die Wahl faellt wiederholbar nach der
+    Portreihenfolge; die verworfene Moeglichkeit muss aber benennbar bleiben,
+    damit der Editor den Pfeil als mehrdeutig kennzeichnen kann.
+    """
+    wrg, sammler = karte(1, "wrg"), karte(2, "sammler")
+    gewaehlt = graph.verdrahte(wrg, sammler, belegt=set())
+    verworfen = graph.alternativen(wrg, sammler, belegt=set())
+
+    assert [v.schluessel for v, _ in gewaehlt] == ["zuluft_aus"]
+    assert [v.schluessel for v, _ in verworfen] == ["abluft_aus"]
+
+
+def test_eindeutige_zuordnung_meldet_keine_alternative():
+    erhitzer, kuehler = karte(1, "erhitzer"), karte(2, "kuehler")
+    assert graph.alternativen(erhitzer, kuehler, belegt=set()) == []
+
+
 def test_belegte_ports_werden_uebersprungen():
     a, b = karte(1, "erhitzer"), karte(2, "kuehler")
     belegt = {p.id for p in a.ports if p.schluessel == "luft_aus"}
