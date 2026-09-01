@@ -28,10 +28,17 @@ class PRegler(Baustein):
     SYMBOL = "p_regler.svg"
 
     PARAMETER = [
-        Param("xp_1", "Xp Regler 1 (schnell)", "-", 10.0),
-        Param("xp_2", "Xp Regler 2 (träge)", "-", 5.0),
+        # Anlage!K52 speist Ausgang 1, K54 speist Ausgang 2 - der "schnelle"
+        # Regler hat die kleinere Bandbreite, weil die einen kraeftigeren
+        # Eingriff je Durchgang bedeutet.
+        Param("xp_1", "Xp Regler 1 (schnell)", "-", 5.0),
+        Param("xp_2", "Xp Regler 2 (träge)", "-", 10.0),
         Param("sollwert_1", "Sollwert 1", "-", 0.0),
         Param("sollwert_2", "Sollwert 2", "°C", 20.0),
+        # Anlage!S71 usw.: Bei manchen Reglern steht der Istwert als feste Zahl
+        # daneben, waehrend der Sollwert von aussen kommt (umgekehrte Zuordnung).
+        Param("istwert_1", "Istwert 1 (fest)", "-", 0.0),
+        Param("istwert_2", "Istwert 2 (fest)", "-", 0.0),
     ]
 
     PORTS = [
@@ -63,13 +70,13 @@ class PRegler(Baustein):
         y1 = self._stufe(
             float(zustand.get("y1", 0.0)),
             float(ein.get("sollwert_1", p["sollwert_1"])),
-            float(ein.get("istwert_1", 0.0)),
+            float(ein.get("istwert_1", p["istwert_1"])),
             p["xp_1"],
         )
         y2 = self._stufe(
             float(zustand.get("y2", 0.0)),
             float(ein.get("sollwert_2", p["sollwert_2"])),
-            float(ein.get("istwert_2", 0.0)),
+            float(ein.get("istwert_2", p["istwert_2"])),
             p["xp_2"],
         )
         return {"ausgang_1": y1, "ausgang_2": y2}, {"y1": y1, "y2": y2}

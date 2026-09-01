@@ -12,6 +12,7 @@ MODULE = [
     "verteiler", "sammler", "aussenluft", "fortluft", "wetterkarte",
     "einfacher_raum", "statische_heizung", "raum",
     "p_regler", "sequenzregler", "hysterese_regler", "kaskade",
+    "maximalwert", "faktor",
     "wochenzeitplan", "ferien", "monatsprofil", "tageslastprofil", "anlagenbetrieb",
     "heizungspumpen", "warmwasser", "zirkulation", "beleuchtung",
     "enthalpierechner", "bilanz", "datenlogger",

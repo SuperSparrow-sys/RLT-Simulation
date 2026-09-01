@@ -20,6 +20,10 @@ class HystereseRegler(Baustein):
     PARAMETER = [
         Param("hysterese", "Hysterese", "-", 0.1),
         Param("sollwert", "Sollwert", "-", 0.0),
+        # Anlage!AB56: Beim Waescherregler steht hier eine feste Zahl, und der
+        # Sollwert kommt als Raumfeuchte von aussen. Befeuchtet wird, wenn der Raum
+        # trockener ist als diese Zahl.
+        Param("istwert", "Istwert (fest)", "-", 0.0),
     ]
 
     PORTS = [
@@ -36,7 +40,7 @@ class HystereseRegler(Baustein):
         # Parameter; ein fehlender Sollwert soll deshalb laut mit KeyError
         # zuschlagen statt still zu 0 zu werden.
         sollwert = float(ein.get("sollwert", p["sollwert"]))
-        istwert = float(ein.get("istwert", 0.0))
+        istwert = float(ein.get("istwert", p["istwert"]))
         vorher = float(zustand.get("zustand", 0.0))
         halb = p["hysterese"] / 2.0
 

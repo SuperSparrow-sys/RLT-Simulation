@@ -180,3 +180,19 @@ def test_kaskade_greift_ein_wenn_die_zuluft_zu_warm_wird():
     ein = {"T_AU": 10.0, "T_Raum": 22.0, "T_ZU": 31.0}
     _, zustand = RaumZuluftKaskade().berechne(ein, p, {"e": 0.0})
     assert zustand["e"] == pytest.approx(2.0)
+
+
+def test_hysterese_nimmt_den_istwert_auch_als_parameter():
+    """Anlage!AB56 - der Istwert des Waescherreglers ist eine feste Zahl.
+
+    Die Mappe dreht die uebliche Zuordnung um: der Sollwert kommt als Raumfeuchte
+    von aussen, der Istwert steht als Konstante daneben. Befeuchtet wird, wenn der
+    Raum trockener ist als diese Konstante.
+    """
+    p = hysterese_parameter(hysterese=0.1, istwert=5.0)
+
+    trocken, _ = HystereseRegler().berechne({"sollwert": 2.9}, p, {"zustand": 0.0})
+    feucht, _ = HystereseRegler().berechne({"sollwert": 7.0}, p, {"zustand": 0.0})
+
+    assert trocken["ausgang"] == 100.0
+    assert feucht["ausgang"] == 0.0

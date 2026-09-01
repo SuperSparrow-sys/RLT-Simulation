@@ -13,8 +13,25 @@ jeweils als Kommentar daneben.
 """
 
 from core import anlagen
+from core.database import get_db
 
 BESCHREIBUNG = "Zwei Lüftungsgeräte an gemeinsamer WRG, ein Raum (aus der Excel)"
+
+
+def _port_id(karte_id, schluessel):
+    """Anschluss-Id einer Karte ueber ihren Schluessel, fuer verbindung_anlegen.
+
+    Die automatische Verdrahtung lehnt einen Messwert->Sollwert-Pfeil grundsaetzlich
+    ab (ein Sollwert ist kein Istwert) - genau deshalb braucht es hier die
+    ausdrueckliche Verbindung statt eines Pfeils.
+    """
+    zeile = get_db().execute(
+        "SELECT id FROM port WHERE karte_id = ? AND schluessel = ?",
+        (karte_id, schluessel),
+    ).fetchone()
+    if zeile is None:
+        raise KeyError(f"Anschluss '{schluessel}' gibt es nicht an Karte {karte_id}")
+    return zeile["id"]
 
 
 def baue(projekt_id, name="AX_SIM 2.1"):
@@ -25,6 +42,13 @@ def baue(projekt_id, name="AX_SIM 2.1"):
     def karte(typ, x, y, bezeichnung, **parameter):
         karte_id = anlagen.karte_anlegen(anlage, typ, x, y, parameter, bezeichnung)
         return karte_id
+
+    def verbinde(von_karte_id, von_schluessel, nach_karte_id, nach_schluessel):
+        anlagen.verbindung_anlegen(
+            anlage,
+            _port_id(von_karte_id, von_schluessel),
+            _port_id(nach_karte_id, nach_schluessel),
+        )
 
     # -- Quellen ------------------------------------------------------
     wetter = karte("wetter", 40, 40, "Wetterdaten")
@@ -98,33 +122,78 @@ def baue(projekt_id, name="AX_SIM 2.1"):
     fortluft = karte("fortluft", 40, 420, "Fortluft")
 
     # -- Regelung, Anlage!I52:W72 -------------------------------------
+    #
+    # Die Mappe stellt ihre Ventile nicht mit je einem Regler. Der Kuehler folgt
+    # Anlage!S16 = MAX(100-S61; S72) aus einem Entfeuchtungs- und einem
+    # Kuehlregler, und der Erhitzer folgt V16 = MAX(IF(Waescher=100;50;0); V72),
+    # oeffnet also mindestens halb, sobald der Luftwaescher laeuft.
+
     regler_vor = karte(
         "p_regler", 440, 400, "Regler Vorerhitzer",
-        xp_1=10.0, xp_2=5.0, sollwert_2=19.0,   # Anlage!N52, N54, M59
+        xp_1=5.0, xp_2=10.0, sollwert_2=19.0,          # Anlage!N52, N54, M59
     )
-    regler_erhitzer_1 = karte(
+
+    # Kuehler Halle: Entfeuchtung (Sollwert 9 g/kg, Istwert = Raumfeuchte) und
+    # Kuehlung (Sollwert = Raumtemperatur, Istwert fest 22 °C)
+    entfeuchter_1 = karte(
+        "p_regler", 780, 20, "Entfeuchtungsregler Halle",
+        xp_1=5.0, xp_2=10.0, sollwert_2=9.0,           # Anlage!S59
+    )
+    kuehlregler_1 = karte(
+        "p_regler", 780, 100, "Kühlregler Halle",
+        xp_1=5.0, xp_2=10.0, istwert_2=22.0,           # Anlage!S71
+    )
+    kuehlerstellung_1 = karte(
+        "maximalwert", 780, 180, "Stellung Kühler Halle",
+        invertiert=["ein_1"],                          # Anlage!S16: 100 - S61
+    )
+
+    # Erhitzer Halle: Nachwaermen nach dem Waescher, mindestens 50 %
+    erhitzerregler_1 = karte(
         "p_regler", 960, 20, "Regler Erhitzer Halle",
-        xp_1=10.0, xp_2=5.0, sollwert_2=20.0,   # Anlage!W52, W54, V59
+        xp_1=5.0, xp_2=10.0, sollwert_2=20.0,          # Anlage!V59
     )
-    regler_kuehler_1 = karte(
-        "p_regler", 780, 20, "Regler Kühler Halle",
-        xp_1=10.0, xp_2=5.0, sollwert_2=15.0,   # Anlage!T52, T54, S70
+    nachwaermen_1 = karte(
+        "faktor", 960, 100, "Nachwärmen Halle", faktor=0.5,   # Anlage!V16
     )
-    regler_erhitzer_2 = karte(
-        "p_regler", 960, 440, "Regler Erhitzer Umkleide",
-        xp_1=10.0, xp_2=5.0, sollwert_2=20.0,
+    erhitzerstellung_1 = karte(
+        "maximalwert", 960, 180, "Stellung Erhitzer Halle",
     )
-    regler_kuehler_2 = karte(
-        "p_regler", 780, 440, "Regler Kühler Umkleide",
-        xp_1=10.0, xp_2=5.0, sollwert_2=15.0,
-    )
-    regler_waescher_1 = karte(
+
+    waescherregler_1 = karte(
         "hysterese_regler", 1320, 20, "Regler Luftwäscher Halle",
-        hysterese=0.1, sollwert=2.885138971629036,   # Anlage!AB54, AB55
+        hysterese=0.1, istwert=5.0,                    # Anlage!AB54, AB56
     )
-    regler_waescher_2 = karte(
-        "hysterese_regler", 1320, 440, "Regler Luftwäscher Umkleide",
-        hysterese=0.1, sollwert=2.885138971629036,
+
+    # Kuehler Umkleide: dieselben Sollwerte, ein eigener Regelkreis je Gang
+    entfeuchter_2 = karte(
+        "p_regler", 780, 460, "Entfeuchtungsregler Umkleide",
+        xp_1=5.0, xp_2=10.0, sollwert_2=9.0,
+    )
+    kuehlregler_2 = karte(
+        "p_regler", 780, 540, "Kühlregler Umkleide",
+        xp_1=5.0, xp_2=10.0, istwert_2=22.0,
+    )
+    kuehlerstellung_2 = karte(
+        "maximalwert", 780, 620, "Stellung Kühler Umkleide",
+        invertiert=["ein_1"],
+    )
+
+    # Erhitzer Umkleide: Nachwaermen nach dem eigenen Waescher
+    erhitzerregler_2 = karte(
+        "p_regler", 960, 460, "Regler Erhitzer Umkleide",
+        xp_1=5.0, xp_2=10.0, sollwert_2=20.0,
+    )
+    nachwaermen_2 = karte(
+        "faktor", 960, 540, "Nachwärmen Umkleide", faktor=0.5,
+    )
+    erhitzerstellung_2 = karte(
+        "maximalwert", 960, 620, "Stellung Erhitzer Umkleide",
+    )
+
+    waescherregler_2 = karte(
+        "hysterese_regler", 1320, 460, "Regler Luftwäscher Umkleide",
+        hysterese=0.1, istwert=6.0,                    # Anlage!AB65, AB67
     )
 
     # -- Zeit und Betrieb, Anlage!AK4:AV32 ----------------------------
@@ -180,12 +249,29 @@ def baue(projekt_id, name="AX_SIM 2.1"):
         (wrg, fortluft),
         (wetter, raum),
         (regler_vor, vorerhitzer),
-        (regler_kuehler_1, kuehler_1),
-        (regler_erhitzer_1, erhitzer_1),
-        (regler_kuehler_2, kuehler_2),
-        (regler_erhitzer_2, erhitzer_2),
-        (regler_waescher_1, waescher_1),
-        (regler_waescher_2, waescher_2),
+
+        # Halle: Feuchte, Kuehler (Entfeuchtung + Kuehlung), Erhitzer
+        # (Verriegelung mit dem Waescher + eigener Regler), groesseres gewinnt.
+        # Der Pfeil vom Waescherregler zum Waescher selbst fehlt hier bewusst -
+        # er wird weiter unten von Hand gesetzt (siehe Kommentar dort).
+        (entfeuchter_1, kuehlerstellung_1),
+        (kuehlregler_1, kuehlerstellung_1),
+        (kuehlerstellung_1, kuehler_1),
+        (erhitzer_1, erhitzerregler_1),
+        (waescherregler_1, nachwaermen_1),
+        (erhitzerregler_1, erhitzerstellung_1),
+        (nachwaermen_1, erhitzerstellung_1),
+        (erhitzerstellung_1, erhitzer_1),
+
+        # Umkleide: derselbe Aufbau, ein eigener Regelkreis je Gang.
+        (entfeuchter_2, kuehlerstellung_2),
+        (kuehlregler_2, kuehlerstellung_2),
+        (kuehlerstellung_2, kuehler_2),
+        (erhitzer_2, erhitzerregler_2),
+        (waescherregler_2, nachwaermen_2),
+        (erhitzerregler_2, erhitzerstellung_2),
+        (nachwaermen_2, erhitzerstellung_2),
+        (erhitzerstellung_2, erhitzer_2),
         (zeitplan, betrieb),
         (ferien, betrieb),
         (tagesprofil, betrieb),
@@ -203,5 +289,27 @@ def baue(projekt_id, name="AX_SIM 2.1"):
         (raum, logger),
     ]:
         anlagen.pfeil_anlegen(anlage, von, nach)
+
+    # Der Raum bietet mehrere Messwerte an (T_Raum, F_Raum, QH_stat) - ein
+    # namenloser Sollwert- oder Istwert-Anschluss bleibt nach der Regel aus
+    # Task 26 deshalb frei. Diese sechs Verbindungen (drei je Gang) werden
+    # darum ausdruecklich gesetzt statt automatisch geraten.
+    verbinde(raum, "F_Raum", waescherregler_1, "sollwert")      # Anlage!AB55
+    verbinde(raum, "F_Raum", entfeuchter_1, "istwert_2")        # Anlage!S60
+    verbinde(raum, "T_Raum", kuehlregler_1, "sollwert_2")       # Anlage!S70
+
+    verbinde(raum, "F_Raum", waescherregler_2, "sollwert")      # Anlage!AB66
+    verbinde(raum, "F_Raum", entfeuchter_2, "istwert_2")
+    verbinde(raum, "T_Raum", kuehlregler_2, "sollwert_2")
+
+    # Der Waescherregler speist den Waescher selbst ebenfalls ausdruecklich statt
+    # ueber pfeil_anlegen: ein gewoehnlicher Pfeil haette dabei die automatische
+    # Rueckverdrahtung ausgeloest, die zu jeder Stellgroesse den passenden
+    # Istwert vom Ziel zurueckholt - und den freien "istwert"-Anschluss des
+    # Reglers mit der Waescher-Austrittstemperatur belegt. Genau das war der
+    # urspruengliche Fehler (der Regler haengt am eigenen Austritt); der feste
+    # Istwert-Parameter aus Schritt 5 wuerde dadurch wieder unwirksam.
+    verbinde(waescherregler_1, "ausgang", waescher_1, "stellgroesse")
+    verbinde(waescherregler_2, "ausgang", waescher_2, "stellgroesse")
 
     return anlage

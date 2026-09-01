@@ -87,3 +87,53 @@ def test_api_legt_die_vorlage_an(app):
     )
     assert antwort.status_code == 201
     assert antwort.get_json()["id"] > 0
+
+
+def test_waescherregler_misst_die_raumfeuchte(app):
+    """Sonst laeuft der Waescher das ganze Jahr auf Vollast."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("Referenz")
+        anlage = ax_sim_2_1.baue(projekt, "AX_SIM 2.1")
+        daten = anlagen.als_json(anlage)
+
+    nach_id = {k["id"]: k for k in daten["karten"]}
+    ports = {p["id"]: (nach_id[k["id"]]["name"], p["schluessel"])
+             for k in daten["karten"] for p in k["ports"]}
+    verbindungen = [
+        (ports[v["von_port_id"]], ports[v["nach_port_id"]])
+        for pfeil in daten["pfeile"] for v in pfeil["verbindungen"]
+    ]
+    an_die_waescherregler = [
+        (von, nach) for von, nach in verbindungen
+        if "Regler Luftwäscher" in nach[0]
+    ]
+    assert an_die_waescherregler, "Die Waescherregler bekommen gar keinen Messwert"
+    for von, nach in an_die_waescherregler:
+        assert von[1] == "F_Raum", f"{von} -> {nach}"
+        assert nach[1] == "sollwert", f"{von} -> {nach}"
+
+
+def test_kuehler_wird_von_zwei_reglern_gestellt(app):
+    """Anlage!S16 = MAX(100-S61; S72) - Entfeuchtung und Kuehlung."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("Referenz")
+        anlage = ax_sim_2_1.baue(projekt, "AX_SIM 2.1")
+        daten = anlagen.als_json(anlage)
+
+    typen = [k["typ"] for k in daten["karten"]]
+    assert typen.count("maximalwert") >= 2, "je Kuehler ein Maximalglied"
+    assert typen.count("faktor") >= 2, "je Erhitzer ein Faktorglied fuer die Verriegelung"
+
+
+def test_reglerverstaerkungen_entsprechen_der_excel(app):
+    """Anlage!K52 speist Ausgang 1, K54 speist Ausgang 2 - der traege hat die 10."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("Referenz")
+        anlage = ax_sim_2_1.baue(projekt, "AX_SIM 2.1")
+        daten = anlagen.als_json(anlage)
+
+    regler = [k for k in daten["karten"] if k["typ"] == "p_regler"]
+    assert regler, "die Vorlage hat keine P-Regler"
+    for k in regler:
+        assert k["parameter"]["xp_1"] == 5.0, k["name"]
+        assert k["parameter"]["xp_2"] == 10.0, k["name"]
