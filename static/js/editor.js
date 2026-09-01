@@ -94,6 +94,11 @@ const Editor = {
   anlage: null,
   auswahl: null,
   sicht: { x: 0, y: 0, zoom: 1 },
+  // Nur beim allerersten Laden automatisch einpassen (siehe laden() und
+  // einpassen() weiter unten) - nicht bei jedem erneuten Laden nach einer
+  // Aenderung, sonst risse jede Aenderung (Karte loeschen, Pfeil anlegen)
+  // den Bildausschnitt der Anwenderin unter ihr weg.
+  _nochNichtEingepasst: true,
 
   async laden(anlageId) {
     let antwort;
@@ -110,6 +115,10 @@ const Editor = {
     this.anlage = await antwort.json();
     document.getElementById("anlagenname").textContent = this.anlage.name;
     this.zeichne();
+    if (this._nochNichtEingepasst) {
+      this._nochNichtEingepasst = false;
+      this.einpassen();
+    }
   },
 
   karteNach(id) {
@@ -144,11 +153,19 @@ const Editor = {
     const pad = 10;
     const icon = 20;
     const textX = pad + icon + 8;
-    const zeilenHoehe = 15;
-    const zeilen = zeilenUmbrechen(karte.name, breite - textX - pad, "500 12px Roboto, Arial, sans-serif");
+    // 14px statt der sonst auf der Seite ueblichen 12px (siehe .karte-name
+    // tspan in style.css - beide muessen zusammenbleiben, sonst misst diese
+    // Funktion mit einer anderen Schrift, als tatsaechlich gezeichnet wird):
+    // Bei 36 Karten passt die Vorlage beim automatischen Einpassen nur mit
+    // spuerbarem Herauszoomen ins Bild (siehe Editor.einpassen()) - der
+    // Name ist dort das Wichtigste auf der Karte, eine Stufe groesser haelt
+    // ihn dabei noch lesbar, ohne die Kartenbreite (und damit die Zoomstufe)
+    // zu beruehren, denn nur die Kartenhoehe waechst mit.
+    const zeilenHoehe = 17;
+    const zeilen = zeilenUmbrechen(karte.name, breite - textX - pad, "500 14px Roboto, Arial, sans-serif");
     const nameHoehe = zeilen.length * zeilenHoehe;
     const kopfHoehe = Math.max(icon, nameHoehe);
-    const nameStartY = pad + (kopfHoehe - nameHoehe) / 2 + 10;
+    const nameStartY = pad + (kopfHoehe - nameHoehe) / 2 + 11;
     const gruppenY = pad + kopfHoehe + 16;
     const werteY = gruppenY + 17;
     const hoehe = werteY + 11;
@@ -433,10 +450,140 @@ const Editor = {
         "transform",
         `translate(${this.sicht.x} ${this.sicht.y}) scale(${this.sicht.zoom})`
       );
+    this.aktualisiereMinikarte();
+  },
+
+  /* Berechnet die Weltkoordinaten-Huelle aller Karten (kleinstes Rechteck,
+     das sie alle einschliesst). Von einpassen() und aktualisiereMinikarte()
+     gebraucht, deshalb hier einmal benannt statt an beiden Stellen
+     wiederholt. Liefert null, wenn es keine Karten gibt. */
+  kartenHuelle() {
+    if (!this.anlage || this.anlage.karten.length === 0) return null;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const karte of this.anlage.karten) {
+      const b = karte._breite || this.KARTE_BREITE;
+      const h = karte._hoehe || 96;
+      minX = Math.min(minX, karte.pos_x);
+      minY = Math.min(minY, karte.pos_y);
+      maxX = Math.max(maxX, karte.pos_x + b);
+      maxY = Math.max(maxY, karte.pos_y + h);
+    }
+    return { minX, minY, maxX, maxY };
+  },
+
+  /* Passt Zoomstufe und Bildausschnitt so an, dass alle Karten sichtbar sind
+     - siehe Task: "Beim Öffnen wird die ganze Anlage eingepasst [...] und
+     über einen Knopf jederzeit wieder herstellbar." Ohne das lief eine
+     grosse Vorlage bei 36 Karten weit rechts aus dem Bild, ohne jeden
+     Hinweis darauf, dass da noch mehr ist. */
+  einpassen() {
+    const huelle = this.kartenHuelle();
+    const leinwand = document.getElementById("leinwand");
+    const kasten = leinwand.getBoundingClientRect();
+    if (!huelle || kasten.width === 0 || kasten.height === 0) {
+      this.sicht = { x: 0, y: 0, zoom: 1 };
+      this.aktualisiereSicht();
+      return;
+    }
+    const POLSTER = 70;
+    const inhaltBreite = huelle.maxX - huelle.minX + POLSTER * 2;
+    const inhaltHoehe = huelle.maxY - huelle.minY + POLSTER * 2;
+    // Nicht ueber 1 hinaus vergroessern - bei wenigen Karten soll "Einpassen"
+    // sie in Originalgroesse zentrieren, nicht auf Plakatgroesse aufblasen.
+    const zoom = Math.min(kasten.width / inhaltBreite, kasten.height / inhaltHoehe, 1);
+    this.sicht.zoom = zoom;
+    const mitteX = (huelle.minX + huelle.maxX) / 2;
+    const mitteY = (huelle.minY + huelle.maxY) / 2;
+    this.sicht.x = kasten.width / 2 - mitteX * zoom;
+    this.sicht.y = kasten.height / 2 - mitteY * zoom;
+    this.aktualisiereSicht();
+  },
+
+  /* Zurueckhaltender Positionsanzeiger (siehe Task: "es muss sichtbar
+     bleiben, wo man sich befindet, sobald man hineinzoomt oder
+     verschiebt"). Eine kleine Karte unten rechts, NUR sichtbar, wenn
+     tatsaechlich etwas ausserhalb des aktuellen Bildausschnitts liegt -
+     direkt nach dem Einpassen (per Knopf oder beim ersten Laden) ist sie
+     also weg, weil dann ohnehin alles zu sehen ist. Zeigt jede Karte als
+     kleines Rechteck plus ein Rahmen fuer den aktuell sichtbaren
+     Weltausschnitt. */
+  aktualisiereMinikarte() {
+    const huelle2 = document.getElementById("minikarte-huelle");
+    const svg = document.getElementById("minikarte");
+    if (!huelle2 || !svg) return;
+    const huelle = this.kartenHuelle();
+    const leinwand = document.getElementById("leinwand");
+    const kasten = leinwand.getBoundingClientRect();
+    if (!huelle || kasten.width === 0) {
+      huelle2.hidden = true;
+      return;
+    }
+
+    const sichtX0 = -this.sicht.x / this.sicht.zoom;
+    const sichtY0 = -this.sicht.y / this.sicht.zoom;
+    const sichtX1 = sichtX0 + kasten.width / this.sicht.zoom;
+    const sichtY1 = sichtY0 + kasten.height / this.sicht.zoom;
+    const komplettSichtbar =
+      sichtX0 <= huelle.minX && sichtY0 <= huelle.minY &&
+      sichtX1 >= huelle.maxX && sichtY1 >= huelle.maxY;
+    huelle2.hidden = komplettSichtbar;
+    if (komplettSichtbar) return;
+
+    const MMB = 168, MMH = 108, POLSTER = 4;
+    const inhaltBreite = Math.max(huelle.maxX - huelle.minX, 1);
+    const inhaltHoehe = Math.max(huelle.maxY - huelle.minY, 1);
+    const skala = Math.min((MMB - 2 * POLSTER) / inhaltBreite, (MMH - 2 * POLSTER) / inhaltHoehe);
+    this._minikarteSkala = skala;
+    const ox = POLSTER - huelle.minX * skala;
+    const oy = POLSTER - huelle.minY * skala;
+    this._minikarteVerschiebung = { ox, oy };
+
+    svg.textContent = "";
+    for (const karte of this.anlage.karten) {
+      const b = karte._breite || this.KARTE_BREITE;
+      const h = karte._hoehe || 96;
+      const r = document.createElementNS(NS, "rect");
+      r.setAttribute("x", ox + karte.pos_x * skala);
+      r.setAttribute("y", oy + karte.pos_y * skala);
+      r.setAttribute("width", Math.max(b * skala, 1.5));
+      r.setAttribute("height", Math.max(h * skala, 1.5));
+      r.setAttribute("class", "minikarte-karte");
+      svg.appendChild(r);
+    }
+    const rahmen = document.createElementNS(NS, "rect");
+    rahmen.setAttribute("x", ox + sichtX0 * skala);
+    rahmen.setAttribute("y", oy + sichtY0 * skala);
+    rahmen.setAttribute("width", (sichtX1 - sichtX0) * skala);
+    rahmen.setAttribute("height", (sichtY1 - sichtY0) * skala);
+    rahmen.setAttribute("class", "minikarte-sichtfenster");
+    svg.appendChild(rahmen);
   },
 
   bindeLeinwand() {
     const leinwand = document.getElementById("leinwand");
+
+    const einpassenKnopf = document.getElementById("btn-einpassen");
+    if (einpassenKnopf) {
+      einpassenKnopf.addEventListener("click", () => this.einpassen());
+    }
+
+    // Minikarte anklicken springt an die entsprechende Stelle - macht den
+    // reinen Positionsanzeiger nebenbei zur Navigation, ohne dass das
+    // zusaetzliche Bedienung braucht.
+    const minikarte = document.getElementById("minikarte");
+    if (minikarte) {
+      minikarte.addEventListener("pointerdown", (e) => {
+        if (!this._minikarteSkala) return;
+        const kasten2 = minikarte.getBoundingClientRect();
+        const { ox, oy } = this._minikarteVerschiebung;
+        const weltX = (e.clientX - kasten2.left - ox) / this._minikarteSkala;
+        const weltY = (e.clientY - kasten2.top - oy) / this._minikarteSkala;
+        const zielKasten = leinwand.getBoundingClientRect();
+        this.sicht.x = zielKasten.width / 2 - weltX * this.sicht.zoom;
+        this.sicht.y = zielKasten.height / 2 - weltY * this.sicht.zoom;
+        this.aktualisiereSicht();
+      });
+    }
 
     leinwand.addEventListener("pointerdown", (e) => {
       if (e.target.closest(".karte")) return;
@@ -461,7 +608,10 @@ const Editor = {
     leinwand.addEventListener("wheel", (e) => {
       e.preventDefault();
       const faktor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
-      this.sicht.zoom = Math.min(3, Math.max(0.2, this.sicht.zoom * faktor));
+      // Untere Schranke bewusst unter der ueblichen Einpassen-Zoomstufe
+      // (siehe einpassen()) - sonst liesse sich bei einer besonders grossen
+      // Anlage nicht so weit herauszoomen, wie "Einpassen" selbst braucht.
+      this.sicht.zoom = Math.min(3, Math.max(0.08, this.sicht.zoom * faktor));
       this.aktualisiereSicht();
     }, { passive: false });
 

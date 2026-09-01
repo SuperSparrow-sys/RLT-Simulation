@@ -191,12 +191,30 @@ textarea:focus-visible {
 }
 .knopf-haupt:hover { background: var(--blue-hover); border-color: var(--blue-hover); }
 .knopf-haupt:disabled { background: var(--border); border-color: var(--border); color: var(--text-tertiary); cursor: default; }
-/* Nur in der Kopfleiste soll der Hauptknopf ganz nach rechts wandern - als
-   Vorgabe auf .knopf-haupt selbst griff das faelschlich auch dort, wo die
-   Klasse in einem anderen Fliesskontext wiederverwendet wird (z.B. im
-   Wetter-Formular: dort landete "Hochladen" einsam am rechten Rand, weit
-   weg von den Eingabefeldern, zu denen es gehoert). */
-.leiste .knopf-haupt { margin-left: auto; }
+
+/* Zurueckhaltender als .knopf-haupt - fuer "Einpassen" neben dem Hauptknopf
+   der Kopfleiste, nicht fuer die eine zentrale Handlung der Seite. */
+.knopf-sekundaer {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 7px 14px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.knopf-sekundaer:hover { background: var(--surface-alt); border-color: var(--border-strong); }
+
+/* Nur in der Kopfleiste soll der Hauptknopf (und der Einpassen-Knopf davor)
+   ganz nach rechts wandern - als Vorgabe auf .knopf-haupt selbst griff das
+   faelschlich auch dort, wo die Klasse in einem anderen Fliesskontext
+   wiederverwendet wird (z.B. im Wetter-Formular: dort landete "Hochladen"
+   einsam am rechten Rand, weit weg von den Eingabefeldern, zu denen es
+   gehoert). Der auto-Rand sitzt auf dem ERSTEN der beiden rechten Knoepfe,
+   damit sie als Paar zusammenbleiben statt sich den freien Platz zu teilen.
+   */
+.leiste .knopf-sekundaer { margin-left: auto; }
 
 /* Legende der Pfeilarten: eine natives <details> - klickbar und per Tastatur
    bedienbar (Enter/Leertaste) ganz ohne Skript. */
@@ -284,7 +302,7 @@ textarea:focus-visible {
 .karte[data-gruppe="verbraucher"] .karte-gruppenstreifen { fill: var(--gruppe-verbraucher); }
 
 .karte-name tspan {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
   fill: var(--text);
   font-family: var(--font-body);
@@ -390,6 +408,33 @@ textarea:focus-visible {
   box-shadow: var(--schatten-1);
 }
 .leinwand-hinweis-kasten strong { color: var(--text); font-size: 14px; }
+
+/* ---------- Minikarte (Positionsanzeiger) ----------
+   Zurueckhaltend: nur sichtbar, wenn tatsaechlich etwas ausserhalb des
+   Bildausschnitts liegt (Editor.aktualisiereMinikarte() togglet [hidden]) -
+   direkt nach "Einpassen" ist sie also weg. Unten rechts, klein, dezenter
+   Rahmen statt Schatten/Farbe - ein Hilfsmittel, kein Blickfang. */
+.minikarte-huelle {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: 168px;
+  height: 108px;
+  background: rgba(255, 255, 255, .88);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--schatten-1);
+  cursor: pointer;
+  overflow: hidden;
+}
+#minikarte { width: 100%; height: 100%; display: block; }
+.minikarte-karte { fill: var(--border-strong); }
+.minikarte-sichtfenster {
+  fill: var(--blue-tint);
+  fill-opacity: .5;
+  stroke: var(--blue);
+  stroke-width: 1.5;
+}
 
 /* ---------- Parameterfenster ---------- */
 .panel {
