@@ -2035,6 +2035,17 @@ def test_ventilator_bestimmt_den_volumenstrom_im_rueckwaertslauf():
     assert Ventilator().bedarf({"luft_aus": 0.0}, p) == {"luft_ein": 8200.0}
 
 
+def test_ohne_angeschlossenen_regler_gilt_die_feste_stellgroesse():
+    """Anlage!Y16 - in der Excel ist die Stellgroesse des Ventilators eine Konstante."""
+    p = parameter(
+        V_max=8200.0, dp_max=1400.0, dp_konst=1400.0, PE_max=4.9,
+        regelart="F", stellgroesse=100.0,
+    )
+    aus, _ = Ventilator().berechne({"luft_ein": Luft(V=8200.0, T=20.0, x=5.0)}, p, {})
+    assert aus["PE"] == pytest.approx(4.9, rel=1e-9)
+    assert aus["luft_aus"].V == pytest.approx(8200.0)
+
+
 def test_abluftrolle_vergibt_abluftports():
     p = parameter(rolle="abluft")
     rollen = {port.schluessel: port.rolle for port in Ventilator.ports_fuer(p)}
@@ -2079,6 +2090,7 @@ class Ventilator(Baustein):
         Param("dp_konst", "dp_konst", "Pa", 1400.0),
         Param("PE_max", "PE_max", "kW", 4.9),
         Param("regelart", "FU/DD/-", "-", "F", auswahl=("F", "D", "-")),
+        Param("stellgroesse", "Stellgröße (fest)", "%", 100.0),
     ]
 
     PORTS = [
@@ -2115,7 +2127,10 @@ class Ventilator(Baustein):
 
     def berechne(self, ein, p, zustand):
         luft = ein.get("luft_ein", Luft())
-        u = float(ein.get("stellgroesse", 0.0))
+        # Ist der Stellgroessen-Port nicht belegt, gilt der eingestellte Wert. In der
+        # Excel steht die Stellgroesse des Ventilators ebenfalls als feste Zelle
+        # (Anlage!Y16 = 100 %), sie wird dort nicht vom Zeitplan gestellt.
+        u = float(ein.get("stellgroesse", p["stellgroesse"]))
 
         V = self.volumenstrom(u, p)
         dp = 0.0
@@ -5309,7 +5324,7 @@ unproblematisch und deutlich besser lesbar.
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_graph.py -v`
-Expected: 21 passed
+Expected: 22 passed
 
 - [ ] **Step 5: Commit**
 
@@ -6958,7 +6973,7 @@ def baue(projekt_id, name="AX_SIM 2.1"):
     zuluft_1 = karte(
         "ventilator", 1140, 120, "Zuluftventilator Halle",
         rolle="zuluft", V_max=8200.0, dp_max=1400.0, dp_konst=1400.0,
-        PE_max=4.9, regelart="F",
+        PE_max=4.9, regelart="F", stellgroesse=100.0,   # Anlage!Y16
     )
     waescher_1 = karte(
         "luftwaescher", 1320, 120, "Luftwäscher Halle",
@@ -6977,7 +6992,7 @@ def baue(projekt_id, name="AX_SIM 2.1"):
     zuluft_2 = karte(
         "ventilator", 1140, 320, "Zuluftventilator Umkleide",
         rolle="zuluft", V_max=4000.0, dp_max=1190.0, dp_konst=4000.0,
-        PE_max=1.7, regelart="F",
+        PE_max=1.7, regelart="F", stellgroesse=100.0,   # Anlage!Y38
     )
     waescher_2 = karte(
         "luftwaescher", 1320, 320, "Luftwäscher Umkleide",
@@ -6994,7 +7009,7 @@ def baue(projekt_id, name="AX_SIM 2.1"):
     abluft = karte(
         "ventilator", 1320, 480, "Abluftventilator",
         rolle="abluft", V_max=10000.0, dp_max=750.0, dp_konst=600.0,
-        PE_max=3.3, regelart="F",
+        PE_max=3.3, regelart="F", stellgroesse=90.0,    # Anlage!M38
     )
     fortluft = karte("fortluft", 40, 420, "Fortluft")
 
@@ -7090,9 +7105,6 @@ def baue(projekt_id, name="AX_SIM 2.1"):
         (zeitplan, betrieb),
         (ferien, betrieb),
         (tagesprofil, betrieb),
-        (betrieb, zuluft_1),
-        (betrieb, zuluft_2),
-        (betrieb, abluft),
         (zuluft_1, bilanz),
         (zuluft_2, bilanz),
         (abluft, bilanz),
@@ -7156,6 +7168,16 @@ def anlage_aus_vorlage():
         return jsonify({"fehler": str(fehler)}), 400
     return jsonify({"id": anlage_id}), 201
 ```
+
+**Warum der Anlagenbetrieb nicht auf die Ventilatoren verdrahtet ist.** In der Excel
+sind die Stellgrößen der drei Ventilatoren feste Zellen — 100 %, 100 % und 90 % —, der
+Zeitplanblock steht daneben, greift aber nicht auf sie durch. Der aufgezeichnete
+Jahreslauf bestätigt das: er weist in jeder der 8760 Stunden dieselben 9,708 kW aus,
+und 9,708 kW × 8760 h = 85,046 MWh sind genau die Stromsumme im Blatt `Ergebnis`.
+Würde der Zeitplan die Ventilatoren stellen, läge die Jahressumme weit darunter und der
+Abgleich in Task 20 könnte nicht aufgehen. Die Karte `Anlagenbetrieb` bleibt deshalb auf
+der Leinwand — sie gehört zur Anlage und ist für eigene Rechnungen da —, wird aber nicht
+mit den Ventilatoren verbunden.
 
 **Wichtig bei der Umsetzung:** Falls ein Pfeil in der obigen Liste keinen passenden
 Anschluss findet, wirft `pfeil_anlegen` einen `ValueError` mit den Namen beider
