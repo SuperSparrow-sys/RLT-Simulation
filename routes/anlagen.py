@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 
-from core import anlagen
+from core import anlagen, vorlagen
 
 bp = Blueprint("anlagen", __name__, url_prefix="/api")
 
@@ -32,6 +32,23 @@ def projekt_anlegen():
 def anlage_anlegen():
     daten = request.get_json(force=True)
     anlage_id = anlagen.anlage_anlegen(daten["projekt_id"], daten["name"])
+    return jsonify({"id": anlage_id}), 201
+
+
+@bp.get("/vorlagen")
+def vorlagen_liste():
+    return jsonify(vorlagen.alle())
+
+
+@bp.post("/anlagen/aus_vorlage")
+def anlage_aus_vorlage():
+    daten = request.get_json(force=True)
+    try:
+        anlage_id = vorlagen.baue(
+            daten["vorlage"], daten["projekt_id"], daten.get("name", "Neue Anlage")
+        )
+    except KeyError as fehler:
+        return jsonify({"fehler": str(fehler)}), 400
     return jsonify({"id": anlage_id}), 201
 
 
