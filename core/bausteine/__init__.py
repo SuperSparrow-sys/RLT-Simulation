@@ -10,6 +10,7 @@ MODULE = [
     "erhitzer", "kuehler", "wrg", "mischkammer",
     "dampfbefeuchter", "luftwaescher", "ventilator",
     "verteiler", "sammler", "aussenluft", "fortluft", "wetterkarte",
+    "einfacher_raum", "statische_heizung",
 ]
 
 
