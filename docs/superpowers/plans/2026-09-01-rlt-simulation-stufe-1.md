@@ -2828,9 +2828,11 @@ git commit -m "Bausteine Verteiler, Sammler, Aussenluft, Fortluft und Wetterkart
 - Test: `tests/bausteine/test_einfacher_raum.py`
 
 **Interfaces:**
-- Produces: `einfacher_raum.EinfacherRaum` (Kennung `"einfacher_raum"`), Methode
-  `freie_temperatur(zuluft, abluft_soll, T_AU, Q_i, p) -> float`; Ausgaben
-  `T_Raum`, `F_Raum`, `QH_stat`. `statische_heizung.StatischeHeizung`
+- Produces: `einfacher_raum.EinfacherRaum` (Kennung `"einfacher_raum"`); Ausgaben
+  `T_Raum`, `F_Raum`, `T_frei`, `QH_stat`, `bezugsvolumen`. Die freie
+  Raumtemperatur wird in `berechne` gerechnet und als `T_frei` ausgegeben; eine
+  eigene Methode lohnt nicht, weil sie sechs Argumente braeuchte und nur an einer
+  Stelle verwendet wird. `statische_heizung.StatischeHeizung`
   (Kennung `"statische_heizung"`).
 
 - [ ] **Step 1: Write the failing test**
