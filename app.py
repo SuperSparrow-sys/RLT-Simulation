@@ -23,9 +23,10 @@ def create_app():
 
     app.teardown_appcontext(close_db)
 
-    from routes import pages
+    from routes import anlagen as anlagen_routen, pages
 
     app.register_blueprint(pages.bp)
+    app.register_blueprint(anlagen_routen.bp)
 
     with app.app_context():
         init_db()
