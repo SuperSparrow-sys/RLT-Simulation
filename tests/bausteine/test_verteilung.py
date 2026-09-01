@@ -63,3 +63,15 @@ def test_sammler_ohne_luft_liefert_nullzustand():
     aus, _ = Sammler().berechne({}, {}, {})
     assert aus["luft_aus"].V == 0.0
     assert aus["luft_aus"].T == 0.0
+
+
+def test_sammler_mischt_seinen_eigenen_ausgang_nicht_mit():
+    """Der Solver legt die Abnahme des Ausgangs ebenfalls in 'ein' ab."""
+    ein = {
+        "luft_ein_1": Luft(V=8000.0, T=20.0, x=8.0),
+        "luft_ein_2": Luft(V=2000.0, T=10.0, x=3.0),
+        "luft_aus": Luft(V=10000.0),
+    }
+    aus, _ = Sammler().berechne(ein, {}, {})
+    assert aus["luft_aus"].V == pytest.approx(10000.0)
+    assert aus["luft_aus"].T == pytest.approx((8000 * 20.0 + 2000 * 10.0) / 10000)

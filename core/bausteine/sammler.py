@@ -26,7 +26,13 @@ class Sammler(Baustein):
     AUSGABEN = ["T_aus", "F_aus", "V"]
 
     def berechne(self, ein, p, zustand):
-        straenge = [w for w in ein.values() if isinstance(w, Luft)]
+        # Nur ueber die eigenen Eingaenge sammeln. Der Solver legt auch die
+        # Abnahme des Luftausgangs in 'ein' ab; wuerde die mitgemischt, zaehlte
+        # der Sammler seinen eigenen Ausgang als weiteren Strang mit.
+        straenge = [
+            w for s, w in ein.items()
+            if s.startswith("luft_ein") and isinstance(w, Luft)
+        ]
         gesamt = sum(s.V for s in straenge)
 
         if gesamt <= 0:

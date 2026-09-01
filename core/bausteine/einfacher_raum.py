@@ -65,27 +65,26 @@ class EinfacherRaum(Baustein):
             V * w.T for V, (_, w) in zip(V_zu, zuluft)
         ) / 3600.0 * LUFT_WAERMEKAPAZITAET
 
-        if summe_zu >= summe_ab:
-            T_frei = (waerme_zuluft + Q_i + k * T_AU) / (C_zu + k)
-            bezug = summe_zu
-        else:
+        # Die Fallunterscheidung wird EINMAL getroffen und danach nur noch
+        # benutzt. Ueberwiegt die Abluft, stroemt die Differenz als Infiltration
+        # von aussen nach; das schlaegt gleichermassen auf Temperatur, Feuchte
+        # und Heizbedarf durch. Bei Gleichstand ist C_inf null und beide Zweige
+        # gehen ineinander ueber.
+        abluft_ueberwiegt = summe_ab > summe_zu
+        C_inf = 0.0
+        bezug = summe_zu
+        if abluft_ueberwiegt:
             C_inf = (summe_ab - summe_zu) / 3600.0 * LUFT_WAERMEKAPAZITAET
-            T_frei = (C_inf * T_AU + waerme_zuluft + Q_i + k * T_AU) / (C_inf + C_zu + k)
             bezug = summe_ab
 
+        T_frei = (C_inf * T_AU + waerme_zuluft + Q_i + k * T_AU) / (C_inf + C_zu + k)
         T_Raum = max(T_frei, p["sollwert_stat"])
 
-        if summe_zu >= summe_ab:
-            feuchte_mischung = sum(
-                V * w.x for V, (_, w) in zip(V_zu, zuluft)
-            ) / summe_zu
-            F_Raum = min(feuchte_mischung + M_i * 1000.0 / summe_zu / 1.2, 99.9)
-        else:
-            feuchte_mischung = (
-                sum(V * w.x for V, (_, w) in zip(V_zu, zuluft))
-                + F_AU * (summe_ab - summe_zu)
-            ) / summe_ab
-            F_Raum = min(feuchte_mischung + M_i * 1000.0 / summe_ab / 1.2, 99.9)
+        feuchte_zuluft = sum(V * w.x for V, (_, w) in zip(V_zu, zuluft))
+        feuchte_mischung = (
+            feuchte_zuluft + F_AU * (summe_ab - summe_zu if abluft_ueberwiegt else 0.0)
+        ) / bezug
+        F_Raum = min(feuchte_mischung + M_i * 1000.0 / bezug / 1.2, 99.9)
 
         QH_stat = 0.0
         if p["sollwert_stat"] > T_frei:
@@ -94,7 +93,7 @@ class EinfacherRaum(Baustein):
                 V / 3600.0 * LUFT_WAERMEKAPAZITAET * (w.T - p["sollwert_stat"])
                 for V, (_, w) in zip(V_zu, zuluft)
             )
-            if summe_zu < summe_ab:
+            if abluft_ueberwiegt:
                 QH_stat -= (summe_ab - summe_zu) / 3600.0 * LUFT_WAERMEKAPAZITAET * (
                     T_AU - p["sollwert_stat"]
                 )
