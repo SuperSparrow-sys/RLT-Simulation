@@ -1,7 +1,7 @@
 import tempfile
 from pathlib import Path
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 
 from core.wetter import speicher, try_import
 
@@ -30,6 +30,16 @@ def hochladen():
         stunden = try_import.lese_datei(pfad)
     except ValueError as fehler:
         return jsonify({"fehler": str(fehler)}), 400
+    except Exception:
+        # Beschaedigte oder falsch benannte Dateien melden je nach Bibliothek sehr
+        # verschiedene Fehler - xlrd, openpyxl und das Auspacken des Zip-Behaelters
+        # haben nichts gemeinsam. Wer eine kaputte Datei hochlaedt, soll einen Satz
+        # lesen und keine Fehlerseite.
+        current_app.logger.exception("Wetterdatei nicht lesbar: %s", datei.filename)
+        return jsonify({
+            "fehler": "Die Datei liess sich nicht lesen. Erwartet wird eine "
+                      "TRY-Datei im Format des Blattes 'Wetterdaten'."
+        }), 400
     finally:
         Path(pfad).unlink(missing_ok=True)
 

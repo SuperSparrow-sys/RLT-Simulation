@@ -6,7 +6,7 @@ die Strahlung auf Sued, Ost, West, Nord und die Horizontale in W/m².
 """
 
 import csv
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 SPALTEN = ("t_au", "x_au", "str_s", "str_o", "str_w", "str_n", "str_h")
@@ -16,12 +16,27 @@ SPALTEN = ("t_au", "x_au", "str_s", "str_o", "str_w", "str_n", "str_h")
 EXCEL_NULLPUNKT = datetime(1899, 12, 30)
 
 
-def excel_datum(zahl, jahr=None):
-    zeitpunkt = EXCEL_NULLPUNKT + timedelta(days=float(zahl))
+def excel_datum(wert, jahr=None):
+    """Macht aus einer Datumsangabe einen Zeitstempel auf voller Stunde.
+
+    Der Wert kommt je nach Dateiart unterschiedlich an: aus einer .xls-Datei und
+    aus CSV als Tageszahl seit dem 30.12.1899, aus einer .xlsx-Datei dagegen als
+    fertiger Zeitstempel, weil openpyxl datumsformatierte Zellen selbst umrechnet.
+    Beide Formen muessen hier durch - sonst liest das Programm aus einer als .xlsx
+    gespeicherten Mappe keine einzige Stunde und meldet nur, die Datei enthalte
+    keine Werte.
+    """
+    if isinstance(wert, datetime):
+        zeitpunkt = wert
+    elif isinstance(wert, date):
+        zeitpunkt = datetime(wert.year, wert.month, wert.day)
+    else:
+        zeitpunkt = EXCEL_NULLPUNKT + timedelta(days=float(wert))
+
     # Auf volle Stunden runden - die Excel speichert 0,0416666666 statt 1/24
     zeitpunkt += timedelta(seconds=30 * 60)
     zeitpunkt = zeitpunkt.replace(minute=0, second=0, microsecond=0)
-    if jahr is not None:
+    if jahr is not None and not (zeitpunkt.month == 2 and zeitpunkt.day == 29):
         zeitpunkt = zeitpunkt.replace(year=jahr)
     return zeitpunkt
 
@@ -60,9 +75,13 @@ def _zeilen_aus_csv(pfad):
 
 
 def _semikolon(pfad):
+    # Nicht nur die erste Zeile pruefen: Kopfzeilen sind oft reiner Text ohne
+    # Trennzeichen (z. B. "Kopfzeile"), dann liesse sich daraus kein Trenner
+    # ablesen und es wuerde faelschlich immer Komma gewaehlt, selbst wenn die
+    # Datenzeilen durchgehend mit Semikolon getrennt sind.
     with open(pfad, encoding="utf-8-sig") as datei:
-        kopf = datei.readline()
-    return kopf.count(";") > kopf.count(",")
+        inhalt = datei.read()
+    return inhalt.count(";") > inhalt.count(",")
 
 
 def lese_datei(pfad, jahr=None):

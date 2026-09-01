@@ -77,6 +77,76 @@ def test_ausschnitt_laesst_sich_laden(app):
     assert ausschnitt[0]["t_au"] == pytest.approx(10.0)
 
 
+def _schreibe_probe_xlsx(pfad):
+    """Eine kleine Mappe, deren Datumsspalte als Datum formatiert ist.
+
+    Genau so sieht die Wetterdatei aus, wenn jemand die Vorlage in Excel oeffnet
+    und als .xlsx speichert: openpyxl liefert dann fertige Zeitstempel statt
+    Tageszahlen.
+    """
+    import openpyxl
+
+    mappe = openpyxl.Workbook()
+    blatt = mappe.active
+    blatt.title = "Wetterdaten"
+    for zeile in range(1, 5):
+        blatt.cell(zeile, 1, "Kopfzeile")
+    for i in range(3):
+        blatt.cell(5 + i, 1, datetime(2000, 1, 1, 1 + i))
+        for spalte, wert in enumerate([2.5 + i, 4.4, 0.0, 0.0, 0.0, 0.0, 0.0], start=2):
+            blatt.cell(5 + i, spalte, wert)
+    mappe.save(pfad)
+
+
+def test_xlsx_mit_datumsformatierten_zellen(tmp_path):
+    """Sonst liest das Programm aus einer gespeicherten Mappe null Stunden."""
+    pfad = tmp_path / "probe.xlsx"
+    _schreibe_probe_xlsx(pfad)
+    stunden = try_import.lese_datei(pfad)
+
+    assert len(stunden) == 3
+    assert stunden[0]["zeitpunkt"] == datetime(2000, 1, 1, 1)
+    assert stunden[0]["t_au"] == pytest.approx(2.5)
+    assert stunden[2]["t_au"] == pytest.approx(4.5)
+
+
+def test_csv_mit_beiden_trennzeichen(tmp_path):
+    for trenner in (",", ";"):
+        pfad = tmp_path / f"probe{'komma' if trenner == ',' else 'semikolon'}.csv"
+        zeilen = ["Kopf"] * 4 + [
+            trenner.join(["36526.041666666664", "2.5", "4.4", "0", "0", "0", "0", "0"]),
+            trenner.join(["36526.083333333336", "3.1", "4.6", "0", "0", "0", "0", "0"]),
+        ]
+        pfad.write_text("\n".join(zeilen), encoding="utf-8")
+        stunden = try_import.lese_datei(pfad)
+        assert len(stunden) == 2, trenner
+        assert stunden[0]["t_au"] == pytest.approx(2.5), trenner
+        assert stunden[1]["zeitpunkt"].hour == 2, trenner
+
+
+def test_upload_meldet_eine_kaputte_datei_lesbar(app):
+    """Eine beschaedigte Datei muss einen Satz ergeben, keine Fehlerseite."""
+    import io
+
+    antwort = app.test_client().post(
+        "/api/wetter/upload",
+        data={"datei": (io.BytesIO(b"kein Tabellendokument"), "kaputt.xls")},
+        content_type="multipart/form-data",
+    )
+    assert antwort.status_code == 400
+    assert "lesen" in antwort.get_json()["fehler"]
+
+
+def test_upload_nimmt_die_mappe_an(app):
+    antwort = app.test_client().post(
+        "/api/wetter/upload",
+        data={"datei": (open(REFERENZ, "rb"), "TRY04.xls"), "name": "TRY04"},
+        content_type="multipart/form-data",
+    )
+    assert antwort.status_code == 201
+    assert antwort.get_json()["stunden"] == 8760
+
+
 def test_api_listet_die_datensaetze(app):
     with app.app_context():
         speicher.datensatz_anlegen(
