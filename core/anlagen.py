@@ -33,11 +33,27 @@ def anlage_anlegen(projekt_id, name, notiz=""):
 # -- Karten ---------------------------------------------------------------
 
 def karte_anlegen(anlage_id, typ, pos_x=0.0, pos_y=0.0, parameter=None, name=None):
+    """Legt eine Karte samt ihren Ports an.
+
+    Schlaegt einer der Schreibvorgaenge fehl, werden alle zurueckgenommen. Ohne das
+    blieben angefangene Schreibvorgaenge auf der Verbindung stehen und wuerden vom
+    naechsten erfolgreichen commit() mit festgeschrieben - im Web faellt das nicht
+    auf, weil jede Anfrage ihre eigene Verbindung schliesst, in einem Skript oder
+    einer Testsitzung mit mehreren Aufrufen aber sehr wohl.
+    """
     klasse = basis.hole(typ)
     werte = klasse.vorgabeparameter()
     werte.update(parameter or {})
 
     db = get_db()
+    try:
+        return _karte_schreiben(db, anlage_id, typ, pos_x, pos_y, werte, name, klasse)
+    except Exception:
+        db.rollback()
+        raise
+
+
+def _karte_schreiben(db, anlage_id, typ, pos_x, pos_y, werte, name, klasse):
     cur = db.execute(
         "INSERT INTO karte (anlage_id, typ, name, pos_x, pos_y, parameter) "
         "VALUES (?, ?, ?, ?, ?, ?)",
@@ -111,10 +127,14 @@ def _karte_instanz(zeile, ports):
 def _lade_karte(karte_id):
     db = get_db()
     zeile = db.execute("SELECT * FROM karte WHERE id = ?", (karte_id,)).fetchone()
+    if zeile is None:
+        raise KeyError(f"Karte {karte_id} gibt es nicht")
     ports = db.execute(
         "SELECT * FROM port WHERE karte_id = ? ORDER BY id", (karte_id,)
     ).fetchall()
-    return _karte_instanz(zeile, ports)
+    karte = _karte_instanz(zeile, ports)
+    karte.anlage_id = zeile["anlage_id"]
+    return karte
 
 
 def _belegte_ports(anlage_id):
@@ -135,6 +155,16 @@ def pfeil_anlegen(anlage_id, von_karte_id, nach_karte_id):
     db = get_db()
     von = _lade_karte(von_karte_id)
     nach = _lade_karte(nach_karte_id)
+
+    # Beide Karten muessen zu DIESER Anlage gehoeren. Sonst entstuende ein Pfeil,
+    # dessen Verbindungen beim Laden der Anlage stillschweigend verschwinden - der
+    # Graph waere unvollstaendig, ohne dass irgendwo etwas gemeldet wuerde.
+    for karte in (von, nach):
+        if karte.anlage_id != anlage_id:
+            raise ValueError(
+                f"Die Karte '{karte.name}' gehoert nicht zu dieser Anlage"
+            )
+
     belegt = _belegte_ports(anlage_id)
 
     paare = graph.verdrahte(von, nach, belegt)
@@ -144,6 +174,16 @@ def pfeil_anlegen(anlage_id, von_karte_id, nach_karte_id):
             "zusammen"
         )
 
+    try:
+        return _pfeil_schreiben(
+            db, anlage_id, von_karte_id, nach_karte_id, von, nach, paare, belegt
+        )
+    except Exception:
+        db.rollback()
+        raise
+
+
+def _pfeil_schreiben(db, anlage_id, von_karte_id, nach_karte_id, von, nach, paare, belegt):
     cur = db.execute(
         "INSERT INTO pfeil (anlage_id, von_karte_id, nach_karte_id) VALUES (?, ?, ?)",
         (anlage_id, von_karte_id, nach_karte_id),
@@ -277,6 +317,40 @@ def als_json(anlage_id):
         "karten": karten,
         "pfeile": pfeile,
     }
+
+
+def projekte():
+    """Alle Projekte mit der Zahl ihrer Anlagen."""
+    db = get_db()
+    return [
+        {"id": z["id"], "name": z["name"], "beschreibung": z["beschreibung"],
+         "anlagen": z["anlagen"], "geaendert_am": z["geaendert_am"]}
+        for z in db.execute(
+            "SELECT p.*, (SELECT COUNT(*) FROM anlage a WHERE a.projekt_id = p.id) "
+            "       AS anlagen "
+            "FROM projekt p ORDER BY p.geaendert_am DESC, p.id DESC"
+        )
+    ]
+
+
+def anlagen_von(projekt_id=None):
+    """Alle Anlagen, wahlweise auf ein Projekt eingegrenzt."""
+    db = get_db()
+    abfrage = (
+        "SELECT a.*, p.name AS projekt_name, "
+        "       (SELECT COUNT(*) FROM karte k WHERE k.anlage_id = a.id) AS karten "
+        "FROM anlage a JOIN projekt p ON p.id = a.projekt_id"
+    )
+    werte = []
+    if projekt_id is not None:
+        abfrage += " WHERE a.projekt_id = ?"
+        werte.append(projekt_id)
+    abfrage += " ORDER BY a.id"
+    return [
+        {"id": z["id"], "projekt_id": z["projekt_id"], "projekt_name": z["projekt_name"],
+         "name": z["name"], "notiz": z["notiz"], "karten": z["karten"]}
+        for z in db.execute(abfrage, werte)
+    ]
 
 
 def palette():

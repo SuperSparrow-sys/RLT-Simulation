@@ -111,6 +111,56 @@ def test_graph_laesst_sich_zurueckladen(app):
     assert g.reihenfolge() == [a, b]
 
 
+def test_pfeil_zwischen_zwei_anlagen_wird_verweigert(app):
+    """Sonst entstuende ein Pfeil, dessen Verbindungen beim Laden verschwinden."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        eine = anlagen.anlage_anlegen(projekt, "A")
+        andere = anlagen.anlage_anlegen(projekt, "B")
+        hier = anlagen.karte_anlegen(eine, "erhitzer", 0.0, 0.0)
+        dort = anlagen.karte_anlegen(andere, "kuehler", 0.0, 0.0)
+
+        with pytest.raises(ValueError, match="gehoert nicht zu dieser Anlage"):
+            anlagen.pfeil_anlegen(eine, hier, dort)
+
+
+def test_karte_loeschen_nimmt_ihre_pfeile_mit(app):
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        a = anlagen.karte_anlegen(anlage, "erhitzer", 0.0, 0.0)
+        b = anlagen.karte_anlegen(anlage, "kuehler", 300.0, 0.0)
+        anlagen.pfeil_anlegen(anlage, a, b)
+        anlagen.karte_loeschen(a)
+
+        db = database.get_db()
+        pfeile = db.execute("SELECT COUNT(*) AS n FROM pfeil").fetchone()["n"]
+        verbindungen = db.execute("SELECT COUNT(*) AS n FROM verbindung").fetchone()["n"]
+    assert pfeile == 0
+    assert verbindungen == 0
+
+
+def test_api_listet_projekte_und_anlagen(app):
+    klient = app.test_client()
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("Bürohaus")
+        anlagen.anlage_anlegen(projekt, "Variante A")
+        anlagen.anlage_anlegen(projekt, "Variante B")
+
+    projekte = klient.get("/api/projekte").get_json()
+    assert [p["name"] for p in projekte] == ["Bürohaus"]
+    assert projekte[0]["anlagen"] == 2
+
+    liste = klient.get(f"/api/anlagen?projekt_id={projekt}").get_json()
+    assert [a["name"] for a in liste] == ["Variante A", "Variante B"]
+    assert liste[0]["projekt_name"] == "Bürohaus"
+
+
+def test_api_meldet_unbekannte_karte_als_nicht_gefunden(app):
+    antwort = app.test_client().patch("/api/karten/9999", json={"pos_x": 1.0})
+    assert antwort.status_code == 404
+
+
 def test_api_liefert_die_palette(app):
     klient = app.test_client()
     antwort = klient.get("/api/palette")

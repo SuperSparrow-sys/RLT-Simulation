@@ -10,6 +10,17 @@ def palette():
     return jsonify(anlagen.palette())
 
 
+@bp.get("/projekte")
+def projekte():
+    return jsonify(anlagen.projekte())
+
+
+@bp.get("/anlagen")
+def anlagen_liste():
+    projekt_id = request.args.get("projekt_id", type=int)
+    return jsonify(anlagen.anlagen_von(projekt_id))
+
+
 @bp.post("/projekte")
 def projekt_anlegen():
     daten = request.get_json(force=True)
@@ -43,11 +54,14 @@ def karte_anlegen():
 @bp.patch("/karten/<int:karte_id>")
 def karte_aendern(karte_id):
     daten = request.get_json(force=True)
-    anlagen.karte_aendern(
-        karte_id,
-        pos_x=daten.get("pos_x"), pos_y=daten.get("pos_y"),
-        parameter=daten.get("parameter"), name=daten.get("name"),
-    )
+    try:
+        anlagen.karte_aendern(
+            karte_id,
+            pos_x=daten.get("pos_x"), pos_y=daten.get("pos_y"),
+            parameter=daten.get("parameter"), name=daten.get("name"),
+        )
+    except KeyError as fehler:
+        return jsonify({"fehler": str(fehler)}), 404
     return jsonify({"ok": True})
 
 
