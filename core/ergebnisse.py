@@ -126,3 +126,74 @@ def reihen(simulation_id):
             (simulation_id,),
         )
     ]
+
+
+def letzte_werte(simulation_id):
+    """Der letzte Wert jeder Zeitreihe, gruppiert nach Karte.
+
+    Fuer die Leinwand: nach einem Lauf zeigt jede Karte ihre Werte unter dem
+    Namen (Panel.zeigeWerte). Nur die letzten 4 Bytes des Blocks werden
+    gelesen statt die ganze Zeitreihe zu entpacken - bei einem Jahreslauf mit
+    vielen Karten summiert sich das sonst auf mehrere zehn Megabyte, die hier
+    niemand braucht.
+    """
+    db = get_db()
+    ergebnis = {}
+    for zeile in db.execute(
+        "SELECT karte_id, groesse, werte FROM zeitreihe WHERE simulation_id = ?",
+        (simulation_id,),
+    ):
+        rohdaten = zeile["werte"]
+        if len(rohdaten) < 4:
+            continue
+        letzter = array.array("f")
+        letzter.frombytes(rohdaten[-4:])
+        ergebnis.setdefault(zeile["karte_id"], {})[zeile["groesse"]] = letzter[0]
+    return ergebnis
+
+
+def _stichprobe(elemente, anzahl):
+    """Bis zu 'anzahl' ueber die Liste verteilte Eintraege - kein Ausschnitt vom
+    Anfang, der bei einer taktenden Regelschleife immer dieselbe Ursache zeigt."""
+    if len(elemente) <= anzahl:
+        return list(elemente)
+    schritt = len(elemente) / anzahl
+    return [elemente[int(i * schritt)] for i in range(anzahl)]
+
+
+def lade_warnungen(simulation_id, anzahl=5):
+    """Anzahl und eine repraesentative Stichprobe der Konvergenzwarnungen.
+
+    Ein Jahreslauf kann tausende Warnungen erzeugen (siehe core/solver.py) -
+    die Bilanz zeigt deshalb nur die Zahl und ein paar Beispiele, nie die
+    volle Liste.
+    """
+    db = get_db()
+    zeile = db.execute(
+        "SELECT warnungen FROM simulation WHERE id = ?", (simulation_id,)
+    ).fetchone()
+    alle = json.loads(zeile["warnungen"]) if zeile else []
+    return {"anzahl": len(alle), "beispiele": _stichprobe(alle, anzahl)}
+
+
+def simulationen_von(anlage_id):
+    """Die Simulationslaeufe einer Anlage, juengster zuerst."""
+    db = get_db()
+    zeilen = db.execute(
+        "SELECT s.*, w.name AS wetter_name, "
+        "       (SELECT SUM(b.kosten) FROM bilanz b WHERE b.simulation_id = s.id) "
+        "         AS kosten_gesamt "
+        "FROM simulation s JOIN wetterdatensatz w ON w.id = s.wetterdatensatz_id "
+        "WHERE s.anlage_id = ? ORDER BY s.id DESC",
+        (anlage_id,),
+    ).fetchall()
+    return [
+        {
+            "id": z["id"], "wetter_name": z["wetter_name"],
+            "von_stunde": z["von_stunde"], "bis_stunde": z["bis_stunde"],
+            "status": z["status"], "gestartet_am": z["gestartet_am"],
+            "dauer_s": z["dauer_s"],
+            "kosten_gesamt": z["kosten_gesamt"] or 0.0,
+        }
+        for z in zeilen
+    ]

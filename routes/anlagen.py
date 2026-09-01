@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 
-from core import anlagen, vorlagen
+from core import anlagen, ergebnisse, vorlagen
 
 bp = Blueprint("anlagen", __name__, url_prefix="/api")
 
@@ -55,6 +55,11 @@ def anlage_aus_vorlage():
 @bp.get("/anlagen/<int:anlage_id>")
 def anlage_lesen(anlage_id):
     return jsonify(anlagen.als_json(anlage_id))
+
+
+@bp.get("/anlagen/<int:anlage_id>/simulationen")
+def simulationen(anlage_id):
+    return jsonify(ergebnisse.simulationen_von(anlage_id))
 
 
 @bp.post("/karten")

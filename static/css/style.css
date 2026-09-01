@@ -89,3 +89,68 @@ html, body {
 .pfeil:hover { stroke: var(--blue); }
 .karte.ziel .karte-rahmen { stroke: var(--blue); stroke-width: 2;
                             fill: var(--blue-tint); }
+
+/* Simulationsdialog, Fortschritt und Jahresbilanz */
+
+.dialog-huelle { position: fixed; inset: 0; background: rgba(0,0,0,.35);
+                 display: flex; align-items: center; justify-content: center;
+                 z-index: 20; }
+.dialog { background: var(--surface); border-radius: var(--radius);
+          padding: 24px; min-width: 340px; max-width: 90vw;
+          max-height: 85vh; overflow-y: auto;
+          box-shadow: 0 8px 32px rgba(0,0,0,.2); }
+.dialog-breit { min-width: 560px; }
+.dialog h2 { margin: 0 0 16px; font-size: 16px; font-weight: 500; }
+.dialog-knoepfe { display: flex; gap: 8px; justify-content: flex-end;
+                  margin-top: 20px; }
+.dialog-knoepfe button { border: 1px solid var(--border); background: var(--surface);
+                         border-radius: 20px; padding: 8px 18px; cursor: pointer;
+                         font-family: inherit; font-size: 13px; }
+.dialog-knoepfe button:disabled { opacity: .6; cursor: default; }
+.dialog .knopf-haupt { border: none; background: var(--blue); color: #fff; }
+
+.panel-zeile-nebeneinander { flex-direction: row; gap: 12px; }
+.panel-zeile-nebeneinander .panel-zeile { flex: 1; }
+
+.fruehere-laeufe { list-style: none; margin: 4px 0 0; padding: 0;
+                   max-height: 130px; overflow-y: auto; border: 1px solid var(--border-light);
+                   border-radius: 6px; }
+.frueherer-lauf { display: flex; justify-content: space-between; gap: 12px;
+                  padding: 6px 10px; font-size: 12px; cursor: pointer;
+                  border-bottom: 1px solid var(--border-light); }
+.frueherer-lauf:last-child { border-bottom: none; }
+.frueherer-lauf:hover { background: var(--blue-tint); }
+
+.fortschritt-huelle { position: fixed; inset: 0; background: rgba(0,0,0,.35);
+                      display: flex; align-items: center; justify-content: center;
+                      z-index: 20; }
+.fortschritt { background: var(--surface); border-radius: var(--radius);
+               padding: 24px; min-width: 380px; text-align: center; }
+.fortschritt-text { font-size: 13px; color: var(--text-secondary); }
+.fortschritt-schiene { height: 6px; background: var(--border-light);
+                       border-radius: 3px; margin: 14px 0; overflow: hidden; }
+.fortschritt-schiene div { height: 100%; width: 0; background: var(--blue);
+                           transition: width .2s; }
+.fortschritt button { border: 1px solid var(--border); background: var(--surface);
+                      border-radius: 20px; padding: 8px 18px; cursor: pointer;
+                      font-family: inherit; font-size: 13px; }
+.fortschritt button:disabled { opacity: .6; cursor: default; }
+
+.bilanz { width: 100%; border-collapse: collapse; font-size: 13px; }
+.bilanz th, .bilanz td { padding: 7px 10px; border-bottom: 1px solid var(--border-light);
+                         text-align: left; }
+.bilanz th { font-size: 11px; text-transform: uppercase;
+             color: var(--text-secondary); }
+.bilanz .zahl { text-align: right; font-variant-numeric: tabular-nums; }
+.bilanz tfoot td { font-weight: 500; border-top: 2px solid var(--border); }
+
+.abbruchhinweis { color: var(--warning); font-size: 12px; margin: -8px 0 16px; }
+
+.warnhinweis { margin-top: 14px; font-size: 12px; color: var(--warning); }
+.warnhinweis p { margin: 0; }
+.warnhinweis-ok { color: var(--text-secondary); }
+.warn-mehr { border: none; background: none; color: var(--blue); cursor: pointer;
+            font-size: 12px; font-family: inherit; padding: 0; margin-left: 6px; }
+.warn-beispiele { margin: 8px 0 0; padding-left: 18px; color: var(--text-secondary);
+                  max-height: 120px; overflow-y: auto; }
+.warn-beispiele li { margin-bottom: 3px; }
