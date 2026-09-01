@@ -35,12 +35,16 @@ class PRegler(Baustein):
     ]
 
     PORTS = [
-        Port("sollwert_1", SIGNAL, EINGANG, SOLLWERT),
-        Port("istwert_1", SIGNAL, EINGANG, ISTWERT),
+        # Stufe 2 steht bewusst zuerst: In der Excel traegt nur der traege Regler
+        # einen Sollwert (Anlage!M59), waehrend der schnelle auf '???' steht. Bei
+        # gleicher Bewertung entscheidet die Reihenfolge, und ein Pfeil soll die
+        # Stufe treffen, die tatsaechlich regelt.
         Port("sollwert_2", SIGNAL, EINGANG, SOLLWERT),
         Port("istwert_2", SIGNAL, EINGANG, ISTWERT),
-        Port("ausgang_1", SIGNAL, AUSGANG, STELLGROESSE),
         Port("ausgang_2", SIGNAL, AUSGANG, STELLGROESSE),
+        Port("sollwert_1", SIGNAL, EINGANG, SOLLWERT),
+        Port("istwert_1", SIGNAL, EINGANG, ISTWERT),
+        Port("ausgang_1", SIGNAL, AUSGANG, STELLGROESSE),
     ]
 
     AUSGABEN = ["ausgang_1", "ausgang_2"]

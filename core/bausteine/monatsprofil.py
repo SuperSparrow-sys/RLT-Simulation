@@ -1,7 +1,7 @@
 """Monatsprofil. Formel aus Anlage!AR16 bis AR28."""
 
 from core.bausteine.basis import (
-    AUSGANG, MESSWERT, SIGNAL, Baustein, Param, Port, registriere,
+    AUSGANG, SIGNAL, ZEITPLAN, Baustein, Param, Port, registriere,
 )
 
 
@@ -14,7 +14,7 @@ class Monatsprofil(Baustein):
 
     PARAMETER = [Param("monate", "Monate ein/aus", "-", [True] * 12)]
 
-    PORTS = [Port("betrieb", SIGNAL, AUSGANG, MESSWERT)]
+    PORTS = [Port("betrieb", SIGNAL, AUSGANG, ZEITPLAN)]
 
     AUSGABEN = ["betrieb"]
 

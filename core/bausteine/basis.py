@@ -37,8 +37,24 @@ WAERME = "waerme"
 KAELTE = "kaelte"
 WASSER = "wasser"
 
+# Signalrollen fuer Betrieb und Protokoll. Ohne sie muesste alles ueber MESSWERT
+# laufen, und beim Verbinden passte fast jeder Signalausgang auf fast jeden
+# Signaleingang - ein Ventilatoraustritt zum Beispiel auf den Eingang fuer die
+# Aussentemperatur eines Raums.
+ZEITPLAN = "zeitplan"
+FERIEN = "ferien"
+LASTGANG = "lastgang"
+BETRIEB = "betrieb"
+PROTOKOLL = "protokoll"
+
 LUFTROLLEN = (ZULUFT, ABLUFT, AUSSENLUFT, FORTLUFT, UMLUFT, LUFTWEG)
 ENERGIEROLLEN = (STROM, WAERME, KAELTE, WASSER)
+
+# Rollen, die nur auf sich selbst passen.
+PAARWEISE_ROLLEN = (
+    STELLGROESSE, ZEITPLAN, FERIEN, LASTGANG, BETRIEB,
+    STROM, WAERME, KAELTE, WASSER,
+)
 
 
 @dataclass(frozen=True)

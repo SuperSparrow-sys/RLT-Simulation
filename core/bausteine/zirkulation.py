@@ -1,7 +1,7 @@
 """Zirkulationsleitung. Formeln aus Anlage!AE157 und AE158."""
 
 from core.bausteine.basis import (
-    AUSGANG, EINGANG, MESSWERT, SIGNAL, STROM, WAERME,
+    AUSGANG, BETRIEB, EINGANG, SIGNAL, STROM, WAERME,
     Baustein, Param, Port, registriere,
 )
 
@@ -20,7 +20,7 @@ class Zirkulation(Baustein):
     ]
 
     PORTS = [
-        Port("betrieb", SIGNAL, EINGANG, MESSWERT),
+        Port("betrieb", SIGNAL, EINGANG, BETRIEB),
         Port("QH", SIGNAL, AUSGANG, WAERME),
         Port("PE", SIGNAL, AUSGANG, STROM),
     ]

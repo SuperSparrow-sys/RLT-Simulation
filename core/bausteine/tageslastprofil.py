@@ -1,7 +1,7 @@
 """Tageslastprofil mit drei Lastgaengen. Formel aus Anlage!AT32 bis AV32."""
 
 from core.bausteine.basis import (
-    AUSGANG, MESSWERT, SIGNAL, Baustein, Param, Port, registriere,
+    AUSGANG, LASTGANG, SIGNAL, Baustein, Param, Port, registriere,
 )
 
 
@@ -19,9 +19,9 @@ class Tageslastprofil(Baustein):
     ]
 
     PORTS = [
-        Port("lastgang_1", SIGNAL, AUSGANG, MESSWERT),
-        Port("lastgang_2", SIGNAL, AUSGANG, MESSWERT),
-        Port("lastgang_3", SIGNAL, AUSGANG, MESSWERT),
+        Port("lastgang_1", SIGNAL, AUSGANG, LASTGANG),
+        Port("lastgang_2", SIGNAL, AUSGANG, LASTGANG),
+        Port("lastgang_3", SIGNAL, AUSGANG, LASTGANG),
     ]
 
     AUSGABEN = ["lastgang_1", "lastgang_2", "lastgang_3"]

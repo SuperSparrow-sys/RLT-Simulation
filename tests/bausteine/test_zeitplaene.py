@@ -93,3 +93,19 @@ def test_ferien_sperren_den_betrieb():
     aus, _ = Anlagenbetrieb().berechne(ein, {}, {})
     assert aus["betrieb"] == 0.0
     assert aus["stellgrad"] == 0.0
+
+
+def test_anlagenbetrieb_verrechnet_mehrere_zeitplaene():
+    """Die Mappe fuehrt zwei Zeitplanbloecke nebeneinander (Anlage!AK4 und AO4).
+
+    Hier duerfen beide auf dieselbe Betriebskarte laufen; sie werden multipliziert.
+    Bei nur einem angeschlossenen Zeitplan ist das genau die Formel AL37.
+    """
+    ein = {"zeitplan_1": 1.0, "zeitplan_2": 0.0, "ferien": 0.0, "tagesprofil": 1.0}
+    aus, _ = Anlagenbetrieb().berechne(ein, {}, {})
+    assert aus["betrieb"] == 0.0
+
+    ein = {"zeitplan_1": 1.0, "zeitplan_2": 1.0, "ferien": 0.0, "tagesprofil": 0.5}
+    aus, _ = Anlagenbetrieb().berechne(ein, {}, {})
+    assert aus["betrieb"] == 1.0
+    assert aus["stellgrad"] == pytest.approx(50.0)

@@ -250,3 +250,72 @@ def test_zyklus_wird_aufgebrochen_und_gemeldet():
     reihenfolge = g.reihenfolge()
     assert sorted(reihenfolge) == [1, 2]
     assert g.rueckkanten() == {(2, 1)}
+
+
+def test_ventilator_belegt_nicht_die_aussentemperatur_des_raums():
+    """Der Austritt eines Ventilators ist nicht die Aussentemperatur.
+
+    Vor der Verschaerfung der Signalrollen verband ein Pfeil vom Ventilator zum
+    Raum ausser dem Luftweg auch T_aus mit T_AU - beide trugen die Rolle Messwert.
+    Danach fand die Wetterkarte den Eingang belegt und verteilte ihre Strahlung auf
+    Feuchte und innere Last.
+    """
+    ventilator, raum = karte(1, "ventilator"), karte(2, "einfacher_raum")
+    paare = graph.verdrahte(ventilator, raum, belegt=set())
+    assert [(v.schluessel, n.basis) for v, n in paare] == [("luft_aus", "zuluft_ein")]
+
+
+def test_wetterkarte_trifft_die_gleichnamigen_eingaenge_des_raums():
+    wetter, raum = karte(1, "wetter"), karte(2, "raum")
+    zuordnung = {v.schluessel: n.schluessel for v, n in graph.verdrahte(wetter, raum, set())}
+    assert zuordnung == {
+        "T_AU": "T_AU", "F_AU": "F_AU", "QH_S": "QH_S", "QH_O": "QH_O",
+        "QH_W": "QH_W", "QH_N": "QH_N", "QH_H": "QH_H",
+    }
+
+
+def test_zeitplan_findet_den_anlagenbetrieb():
+    zeitplan, betrieb = karte(1, "wochenzeitplan"), karte(2, "anlagenbetrieb")
+    paare = graph.verdrahte(zeitplan, betrieb, belegt=set())
+    assert [(v.schluessel, n.basis) for v, n in paare] == [("betrieb", "zeitplan")]
+
+
+def test_ferien_und_lastgang_finden_ihre_eigenen_eingaenge():
+    betrieb = karte(9, "anlagenbetrieb")
+    belegt = set()
+    for typ, erwartet in (("ferien", "ferien"), ("tageslastprofil", "tagesprofil")):
+        paare = graph.verdrahte(karte(1, typ), betrieb, belegt)
+        assert [n.basis for _, n in paare] == [erwartet], typ
+        belegt |= {n.id for _, n in paare}
+
+
+def test_anlagenbetrieb_erreicht_die_verbraucher():
+    betrieb, licht = karte(1, "anlagenbetrieb"), karte(2, "beleuchtung")
+    zuordnung = {v.schluessel: n.schluessel for v, n in graph.verdrahte(betrieb, licht, set())}
+    assert zuordnung.get("betrieb") == "betrieb"
+
+
+def test_messwerte_landen_im_datenlogger():
+    wrg, logger = karte(1, "wrg"), karte(2, "datenlogger")
+    paare = graph.verdrahte(wrg, logger, belegt=set())
+    assert [(v.schluessel, n.schluessel) for v, n in paare] == [("Q_WRG", "wert_1")]
+
+
+def test_raum_meldet_seinen_heizbedarf_an_die_statische_heizung():
+    raum, heizung = karte(1, "einfacher_raum"), karte(2, "statische_heizung")
+    zuordnung = {v.schluessel: n.schluessel for v, n in graph.verdrahte(raum, heizung, set())}
+    assert zuordnung.get("QH_stat") == "bedarf"
+
+
+def test_regler_greift_auf_die_traege_stufe():
+    """In der Excel traegt nur Regler 2 einen Sollwert; Regler 1 steht auf '???'.
+
+    Ein Pfeil vom Regler auf einen Erhitzer muss deshalb die traege Stufe nehmen,
+    sonst regelt die Anlage gegen einen Sollwert von null.
+    """
+    regler, erhitzer = karte(1, "p_regler"), karte(2, "erhitzer")
+    paare = graph.verdrahte(regler, erhitzer, belegt=set())
+    hin = [(v.schluessel, n.schluessel) for v, n in paare if v.karte_id == 1]
+    zurueck = [(v.schluessel, n.schluessel) for v, n in paare if v.karte_id == 2]
+    assert hin == [("ausgang_2", "stellgroesse")]
+    assert zurueck == [("T_aus", "istwert_2")]

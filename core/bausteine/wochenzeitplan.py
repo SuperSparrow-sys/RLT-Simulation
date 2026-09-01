@@ -5,7 +5,7 @@ Die Zeiten stehen als Tagesbruchteil, wie in der Excel: 0,20833 entspricht
 """
 
 from core.bausteine.basis import (
-    AUSGANG, MESSWERT, SIGNAL, Baustein, Param, Port, registriere,
+    AUSGANG, SIGNAL, ZEITPLAN, Baustein, Param, Port, registriere,
 )
 
 TAGE = ("montag", "dienstag", "mittwoch", "donnerstag", "freitag", "samstag", "sonntag")
@@ -25,7 +25,7 @@ class Wochenzeitplan(Baustein):
         for grenze in ("von", "bis")
     ]
 
-    PORTS = [Port("betrieb", SIGNAL, AUSGANG, MESSWERT)]
+    PORTS = [Port("betrieb", SIGNAL, AUSGANG, ZEITPLAN)]
 
     AUSGABEN = ["betrieb"]
 

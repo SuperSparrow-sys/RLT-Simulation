@@ -6,7 +6,8 @@ abgegebene Waerme entspricht der aufgenommenen elektrischen Leistung.
 """
 
 from core.bausteine.basis import (
-    AUSGANG, EINGANG, MESSWERT, SIGNAL, STROM, Baustein, Param, Port, registriere,
+    AUSGANG, BETRIEB, EINGANG, MESSWERT, SIGNAL, STROM,
+    Baustein, Param, Port, registriere,
 )
 
 
@@ -24,7 +25,7 @@ class Beleuchtung(Baustein):
     ]
 
     PORTS = [
-        Port("betrieb", SIGNAL, EINGANG, MESSWERT),
+        Port("betrieb", SIGNAL, EINGANG, BETRIEB),
         Port("Q_Bel", SIGNAL, AUSGANG, MESSWERT),
         Port("PE", SIGNAL, AUSGANG, STROM),
     ]

@@ -146,6 +146,26 @@ def _luftpunkte(von, nach):
     return 1
 
 
+def _signalpunkte(von, nach):
+    """Wie gut passen zwei Signalanschluesse zueinander?
+
+    Entscheidend ist, dass MESSWERT NICHT auf MESSWERT passt. Ein Messwert ist eine
+    benannte physikalische Groesse - Aussentemperatur, Strahlung, Austrittstemperatur.
+    Zwei davon gehoeren nur zusammen, wenn sie denselben Namen tragen. Ohne diese
+    Einschraenkung landete die Suedstrahlung auf dem Feuchteeingang eines Raums,
+    sobald der gleichnamige Anschluss schon belegt war.
+    """
+    if von.basis == nach.basis:
+        return 3
+    if von.rolle == nach.rolle and von.rolle in basis.PAARWEISE_ROLLEN:
+        return 2
+    if von.rolle == basis.MESSWERT and nach.rolle == basis.ISTWERT:
+        return 2
+    if von.rolle == basis.MESSWERT and nach.rolle == basis.PROTOKOLL:
+        return 1     # niedrig, damit ein Namenstreffer immer vorgeht
+    return 0
+
+
 def _punkte(von, nach):
     """Wie gut passen zwei Ports zueinander? Hoeher ist besser, 0 heisst gar nicht."""
     if von.art != nach.art:
@@ -155,13 +175,7 @@ def _punkte(von, nach):
     if von.art == basis.LUFT:
         punkte = _luftpunkte(von, nach)
         return 3 if (punkte and von.basis == nach.basis) else punkte
-    if von.basis == nach.basis:
-        return 3
-    if von.rolle == nach.rolle:
-        return 2
-    if von.rolle == basis.MESSWERT and nach.rolle == basis.ISTWERT:
-        return 2
-    return 0
+    return _signalpunkte(von, nach)
 
 
 def _paare(von_karte, nach_karte, belegt):

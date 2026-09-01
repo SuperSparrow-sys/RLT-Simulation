@@ -1,7 +1,7 @@
 """Heizungspumpen. Formel aus Anlage!AE145."""
 
 from core.bausteine.basis import (
-    AUSGANG, EINGANG, MESSWERT, SIGNAL, STROM, Baustein, Param, Port, registriere,
+    AUSGANG, BETRIEB, EINGANG, SIGNAL, STROM, Baustein, Param, Port, registriere,
 )
 
 
@@ -19,7 +19,7 @@ class Heizungspumpen(Baustein):
     ]
 
     PORTS = [
-        Port("betrieb", SIGNAL, EINGANG, MESSWERT),
+        Port("betrieb", SIGNAL, EINGANG, BETRIEB),
         Port("PE", SIGNAL, AUSGANG, STROM),
     ]
 

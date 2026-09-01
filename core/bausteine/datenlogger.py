@@ -4,7 +4,7 @@ Angeschlossene Groessen erscheinen als eigene Spalte im Stundenprotokoll.
 """
 
 from core.bausteine.basis import (
-    EINGANG, MESSWERT, SIGNAL, Baustein, Param, Port, registriere,
+    EINGANG, PROTOKOLL, SIGNAL, Baustein, Param, Port, registriere,
 )
 
 ANZAHL = 10
@@ -23,7 +23,7 @@ class Datenlogger(Baustein):
     ]
 
     PORTS = [
-        Port(f"wert_{i}", SIGNAL, EINGANG, MESSWERT) for i in range(1, ANZAHL + 1)
+        Port(f"wert_{i}", SIGNAL, EINGANG, PROTOKOLL) for i in range(1, ANZAHL + 1)
     ]
 
     AUSGABEN = [f"wert_{i}" for i in range(1, ANZAHL + 1)]

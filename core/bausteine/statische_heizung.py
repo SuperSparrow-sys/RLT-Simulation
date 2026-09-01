@@ -5,7 +5,7 @@ Nennleistung, entsprechend Anlage!AH128/AH129.
 """
 
 from core.bausteine.basis import (
-    AUSGANG, EINGANG, MESSWERT, SIGNAL, WAERME, Baustein, Param, Port, registriere,
+    AUSGANG, EINGANG, ISTWERT, SIGNAL, WAERME, Baustein, Param, Port, registriere,
 )
 
 
@@ -19,7 +19,7 @@ class StatischeHeizung(Baustein):
     PARAMETER = [Param("QH_nenn", "QH_nenn", "kW", 0.0)]
 
     PORTS = [
-        Port("bedarf", SIGNAL, EINGANG, MESSWERT),
+        Port("bedarf", SIGNAL, EINGANG, ISTWERT),
         Port("QH", SIGNAL, AUSGANG, WAERME),
     ]
 
