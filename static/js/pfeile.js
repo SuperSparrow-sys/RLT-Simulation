@@ -35,6 +35,12 @@ const Pfeile = {
     };
   },
 
+  // Dieselben vier Energierollen wie core/bausteine/basis.py ENERGIEROLLEN -
+  // sie fuehren an der Bilanzkarte zusammen und werden darum eigens
+  // gekennzeichnet, statt wie jedes andere Signal auszusehen (siehe
+  // static/css/style.css, .pfeil-energie).
+  ENERGIEROLLEN: ["strom", "waerme", "kaelte", "wasser"],
+
   artDesPfeils(pfeil, anlage) {
     /* Traegt der Pfeil mindestens eine Luftverbindung, wird er dick gezeichnet. */
     const ports = new Map();
@@ -44,7 +50,11 @@ const Pfeile = {
     const hatLuft = pfeil.verbindungen.some(
       (v) => (ports.get(v.von_port_id) || {}).art === "luft"
     );
-    return hatLuft ? "luft" : "signal";
+    if (hatLuft) return "luft";
+    const hatEnergie = pfeil.verbindungen.some((v) =>
+      this.ENERGIEROLLEN.includes((ports.get(v.von_port_id) || {}).rolle)
+    );
+    return hatEnergie ? "energie" : "signal";
   },
 
   zeichneAlle(anlage) {

@@ -181,7 +181,13 @@ const Simulation = {
   // greift den Lauf wieder auf statt eine (noch nicht vorhandene) Bilanz zu
   // laden.
   _fruehereLaeufeHtml(laeufe) {
-    if (!laeufe.length) return "";
+    if (!laeufe.length) {
+      return `
+        <div class="panel-zeile">
+          <span class="panel-label">Frühere Läufe</span>
+          <p class="leerhinweis">Für diese Anlage wurde noch nicht simuliert.</p>
+        </div>`;
+    }
     const zeilen = laeufe
       .slice(0, 5)
       .map((l) => {

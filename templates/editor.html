@@ -4,10 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RLT-Simulation</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-  <div id="fehlermeldung" class="fehlermeldung" hidden></div>
+  <div id="fehlermeldung" class="fehlermeldung" role="alert" aria-live="assertive" hidden></div>
 
   <div class="app">
     <aside class="palette" id="palette"></aside>
@@ -15,6 +16,38 @@
     <main class="buehne">
       <header class="leiste">
         <span class="titel" id="anlagenname">Anlage</span>
+
+        <details class="legende">
+          <summary>Verbindungen</summary>
+          <div class="legende-inhalt">
+            <p class="legende-titel">Pfeilarten</p>
+            <div class="legende-zeile">
+              <svg class="legende-muster" viewBox="0 0 32 8" aria-hidden="true">
+                <path class="pfeil pfeil-luft" d="M1 4 H31"/>
+              </svg>
+              <span>Luft</span>
+            </div>
+            <div class="legende-zeile">
+              <svg class="legende-muster" viewBox="0 0 32 8" aria-hidden="true">
+                <path class="pfeil pfeil-signal" d="M1 4 H31"/>
+              </svg>
+              <span>Signal</span>
+            </div>
+            <div class="legende-zeile">
+              <svg class="legende-muster" viewBox="0 0 32 8" aria-hidden="true">
+                <path class="pfeil pfeil-energie" d="M1 4 H31"/>
+              </svg>
+              <span>Energie</span>
+            </div>
+            <div class="legende-zeile">
+              <svg class="legende-muster" viewBox="0 0 32 8" aria-hidden="true">
+                <path class="pfeil pfeil-mehrdeutig" d="M1 4 H31"/>
+              </svg>
+              <span>Mehrdeutig &ndash; bitte prüfen</span>
+            </div>
+          </div>
+        </details>
+
         <button class="knopf-haupt" id="btn-simulieren">Simulieren</button>
       </header>
       <svg id="leinwand">
