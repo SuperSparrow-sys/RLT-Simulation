@@ -31,18 +31,20 @@ def _aus_blob(rohdaten):
     return list(feld)
 
 
-def _preise(anlage_id):
-    """Die Preise der ersten Bilanzkarte dieser Anlage."""
-    db = get_db()
-    zeile = db.execute(
-        "SELECT parameter FROM karte WHERE anlage_id = ? AND typ = 'bilanz' "
-        "ORDER BY id LIMIT 1",
-        (anlage_id,),
-    ).fetchone()
-    return json.loads(zeile["parameter"]) if zeile else {}
+def _preise(graph):
+    """Die Preise der ersten Bilanzkarte dieser Anlage.
+
+    Liest aus dem bereits geladenen Anlagengraph statt selbst die
+    'karte'-Tabelle abzufragen - core/anlagen.py bleibt so die einzige Stelle,
+    die das Schema der Karten kennt.
+    """
+    for karte in graph.karten.values():
+        if karte.typ == "bilanz":
+            return karte.parameter
+    return {}
 
 
-def speichere(anlage_id, wetterdatensatz_id, von, bis, lauf, dauer, status="fertig"):
+def speichere(anlage_id, wetterdatensatz_id, von, bis, lauf, graph, dauer, status="fertig"):
     db = get_db()
     cur = db.execute(
         "INSERT INTO simulation (anlage_id, wetterdatensatz_id, von_stunde, "
@@ -51,11 +53,6 @@ def speichere(anlage_id, wetterdatensatz_id, von, bis, lauf, dauer, status="fert
          json.dumps(lauf.warnungen, ensure_ascii=False)),
     )
     simulation_id = cur.lastrowid
-
-    namen = {
-        z["id"]: z["name"]
-        for z in db.execute("SELECT id, name FROM karte WHERE anlage_id = ?", (anlage_id,))
-    }
 
     # Alle vorkommenden Groessen einsammeln
     reihen = {}
@@ -67,16 +64,20 @@ def speichere(anlage_id, wetterdatensatz_id, von, bis, lauf, dauer, status="fert
                 reihen.setdefault((karte_id, groesse), [0.0] * len(lauf.stunden))
                 reihen[(karte_id, groesse)][nummer] = float(wert)
 
+    def _name(karte_id):
+        karte = graph.karten.get(karte_id)
+        return karte.name if karte is not None else ""
+
     db.executemany(
         "INSERT INTO zeitreihe (simulation_id, karte_id, karte_name, groesse, werte) "
         "VALUES (?, ?, ?, ?, ?)",
         [
-            (simulation_id, karte_id, namen.get(karte_id, ""), groesse, _als_blob(werte))
+            (simulation_id, karte_id, _name(karte_id), groesse, _als_blob(werte))
             for (karte_id, groesse), werte in sorted(reihen.items())
         ],
     )
 
-    preise = _preise(anlage_id)
+    preise = _preise(graph)
     zeilen = []
     for groesse, (einheit, preisschluessel, faktor) in BILANZ.items():
         menge = lauf.bilanz.get(groesse, 0.0) * faktor

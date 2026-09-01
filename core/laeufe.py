@@ -10,10 +10,31 @@ from core.wetter import speicher
 _AUFTRAEGE = {}
 _SPERRE = threading.Lock()
 
+# Abgeschlossene Auftraege bleiben nur begrenzt im Speicher - sonst waechst
+# _AUFTRAEGE ueber die Lebenszeit des Prozesses unbegrenzt. Kein Verfallsdatum,
+# keine eigene Aufraeum-Infrastruktur: einfach die aeltesten abgeschlossenen
+# Eintraege verwerfen, sobald es zu viele werden.
+_MAX_AUFTRAEGE = 200
+_ABGESCHLOSSEN = ("fertig", "abgebrochen", "fehler")
+
+
+def _aufraeumen():
+    """Verwirft die aeltesten abgeschlossenen Auftraege. Nur unter _SPERRE aufrufen."""
+    ueberschuss = len(_AUFTRAEGE) - _MAX_AUFTRAEGE
+    if ueberschuss <= 0:
+        return
+    for kennung, eintrag in list(_AUFTRAEGE.items()):
+        if ueberschuss <= 0:
+            break
+        if eintrag.get("status") in _ABGESCHLOSSEN:
+            del _AUFTRAEGE[kennung]
+            ueberschuss -= 1
+
 
 def _setze(kennung, **felder):
     with _SPERRE:
         _AUFTRAEGE.setdefault(kennung, {}).update(felder)
+        _aufraeumen()
 
 
 def stand(kennung):
@@ -41,15 +62,21 @@ def _laufen(app, kennung, anlage_id, wetterdatensatz_id, von, bis):
             lauf = solver.Solver(graph).starte(
                 stunden, fortschritt=fortschritt, abbruch=abbruch
             )
-            abgebrochen = bool(stand(kennung).get("abbruch"))
+            # Der Abbruch-Merker sagt nur, ob abbrechen() aufgerufen wurde - nicht,
+            # ob der Lauf dadurch wirklich vorzeitig endete. Ein Abbruch, der erst
+            # nach der letzten Stunde eintrifft, waere sonst faelschlich
+            # "abgebrochen", obwohl jede angeforderte Stunde gerechnet wurde.
+            # Massgeblich ist daher, ob weniger Stunden herauskamen als angefordert.
+            vollstaendig = len(lauf.stunden) >= len(stunden)
+            status = "fertig" if vollstaendig else "abgebrochen"
             simulation_id = ergebnisse.speichere(
-                anlage_id, wetterdatensatz_id, von, bis, lauf,
+                anlage_id, wetterdatensatz_id, von, bis, lauf, graph,
                 dauer=time.time() - begonnen,
-                status="abgebrochen" if abgebrochen else "fertig",
+                status=status,
             )
             _setze(
                 kennung,
-                status="abgebrochen" if abgebrochen else "fertig",
+                status=status,
                 simulation_id=simulation_id,
                 warnungen=len(lauf.warnungen),
                 dauer=time.time() - begonnen,

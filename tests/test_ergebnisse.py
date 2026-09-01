@@ -31,21 +31,30 @@ def wetter_anlegen(anzahl=24):
     )
 
 
-def test_zeitreihe_wird_verlustfrei_gespeichert(app):
+def test_zeitreihe_wird_als_32bit_werte_gespeichert(app):
+    """Ganzzahlige Werte passen verlustfrei; 1/3 nicht - das ist der bewusste
+    Kompromiss aus der 32-Bit-Packung (siehe Docstring von core/ergebnisse)."""
     with app.app_context():
         projekt = anlagen.projekt_anlegen("P")
         anlage = ax_sim_2_1.baue(projekt, "A")
-        wetter = wetter_anlegen(5)
+        wetter = wetter_anlegen(6)
+        graph = anlagen.lade_graph(anlage)
 
+        eingabe = [0.0, 1.0, 2.0, 3.0, 4.0, 1 / 3]
         lauf = solver.Lauf(
-            stunden=[{1: {"T_aus": float(i)}} for i in range(5)],
+            stunden=[{1: {"T_aus": wert}} for wert in eingabe],
             bilanz={"strom_ht": 0.0, "strom_nt": 1.0, "waerme": 2.0,
                     "kaelte": 3.0, "wasser": 4.0},
             warnungen=[],
         )
-        sim = ergebnisse.speichere(anlage, wetter, 0, 5, lauf, dauer=1.0)
+        sim = ergebnisse.speichere(anlage, wetter, 0, 6, lauf, graph, dauer=1.0)
         werte = ergebnisse.lade_zeitreihe(sim, 1, "T_aus")
-    assert werte == [0.0, 1.0, 2.0, 3.0, 4.0]
+
+    assert werte[:5] == [0.0, 1.0, 2.0, 3.0, 4.0]
+    # Einfache Genauigkeit haelt rund 7 Dezimalstellen, keine 16 - 1/3 kommt
+    # also veraendert zurueck, aber innerhalb der Toleranz des Formats.
+    assert werte[5] != 1 / 3
+    assert werte[5] == pytest.approx(1 / 3, abs=1e-6)
 
 
 def test_bilanz_wird_mit_preisen_gespeichert(app):
@@ -53,13 +62,14 @@ def test_bilanz_wird_mit_preisen_gespeichert(app):
         projekt = anlagen.projekt_anlegen("P")
         anlage = ax_sim_2_1.baue(projekt, "A")
         wetter = wetter_anlegen(5)
+        graph = anlagen.lade_graph(anlage)
         lauf = solver.Lauf(
             stunden=[{}],
             bilanz={"strom_ht": 0.0, "strom_nt": 1000.0, "waerme": 2000.0,
                     "kaelte": 0.0, "wasser": 100.0},
             warnungen=[],
         )
-        sim = ergebnisse.speichere(anlage, wetter, 0, 5, lauf, dauer=1.0)
+        sim = ergebnisse.speichere(anlage, wetter, 0, 5, lauf, graph, dauer=1.0)
         zeilen = {z["groesse"]: z for z in ergebnisse.lade_bilanz(sim)}
 
     assert zeilen["strom_nt"]["menge"] == pytest.approx(1.0)      # kWh -> MWh
@@ -124,3 +134,77 @@ def test_api_startet_und_liefert_den_stand(app):
             break
         time.sleep(0.05)
     assert stand["status"] == "fertig", stand.get("fehler")
+
+
+def test_api_abbrechen_stoppt_den_lauf(app):
+    klient = app.test_client()
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = ax_sim_2_1.baue(projekt, "A")
+        wetter = wetter_anlegen(2000)
+
+    antwort = klient.post(
+        "/api/simulation",
+        json={"anlage_id": anlage, "wetterdatensatz_id": wetter, "von": 0, "bis": 2000},
+    )
+    kennung = antwort.get_json()["kennung"]
+
+    abbruch_antwort = klient.post(f"/api/simulation/{kennung}/abbrechen")
+    assert abbruch_antwort.status_code == 200
+    assert abbruch_antwort.get_json() == {"ok": True}
+
+    for _ in range(200):
+        stand = klient.get(f"/api/simulation/{kennung}").get_json()
+        if stand["status"] in ("fertig", "abgebrochen", "fehler"):
+            break
+        time.sleep(0.05)
+    assert stand["status"] in ("abgebrochen", "fertig")
+
+
+def test_api_liefert_die_bilanz(app):
+    klient = app.test_client()
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = ax_sim_2_1.baue(projekt, "A")
+        wetter = wetter_anlegen(24)
+
+    antwort = klient.post(
+        "/api/simulation",
+        json={"anlage_id": anlage, "wetterdatensatz_id": wetter, "von": 0, "bis": 24},
+    )
+    kennung = antwort.get_json()["kennung"]
+
+    stand = {}
+    for _ in range(200):
+        stand = klient.get(f"/api/simulation/{kennung}").get_json()
+        if stand["status"] in ("fertig", "fehler"):
+            break
+        time.sleep(0.05)
+    assert stand["status"] == "fertig", stand.get("fehler")
+
+    bilanz_antwort = klient.get(f"/api/simulation/{stand['simulation_id']}/bilanz")
+    assert bilanz_antwort.status_code == 200
+    daten = bilanz_antwort.get_json()
+
+    groessen = {z["groesse"] for z in daten["bilanz"]}
+    assert groessen == {"strom_ht", "strom_nt", "waerme", "kaelte", "wasser"}
+    assert len(daten["reihen"]) > 0
+    assert {"karte_id", "karte_name", "groesse", "einheit"} <= daten["reihen"][0].keys()
+
+
+def test_lauf_meldet_fehler_statt_zu_haengen(app):
+    """Ein ungueltiger Wetterdatensatz verletzt den FOREIGN-KEY beim Speichern -
+    ein echter Fehlerpfad, kein simulierter."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = ax_sim_2_1.baue(projekt, "A")
+        kennung = laeufe.starte(app, anlage, 999999, 0, 1)
+
+        for _ in range(200):
+            stand = laeufe.stand(kennung)
+            if stand["status"] in ("fertig", "fehler", "abgebrochen"):
+                break
+            time.sleep(0.05)
+
+    assert stand["status"] == "fehler"
+    assert stand["fehler"]
