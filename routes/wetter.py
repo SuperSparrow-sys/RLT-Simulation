@@ -3,7 +3,7 @@ from pathlib import Path
 
 from flask import Blueprint, current_app, jsonify, request
 
-from core.wetter import speicher, try_import
+from core.wetter import openmeteo, speicher, try_import
 
 bp = Blueprint("wetter", __name__, url_prefix="/api/wetter")
 
@@ -11,6 +11,45 @@ bp = Blueprint("wetter", __name__, url_prefix="/api/wetter")
 @bp.get("")
 def liste():
     return jsonify(speicher.datensaetze())
+
+
+@bp.post("/abrufen")
+def abrufen():
+    """Ruft ein Jahr Wetterdaten fuer einen Ort ueber die Open-Meteo Archive-API
+    ab und legt sie genauso ab wie ein Datei-Upload. Dauert - bei fuenf parallel
+    geschickten Teilabfragen - in aller Regel nur wenige Sekunden; ein eigener
+    Hintergrundlauf mit Fortschrittsanzeige (wie core.laeufe fuer Simulationen)
+    waere hier ueberdimensioniert, siehe wetter-api-report.md.
+    """
+    daten = request.get_json(silent=True) or {}
+
+    try:
+        breite = float(daten["breite"])
+        laenge = float(daten["laenge"])
+        jahr = int(daten["jahr"])
+    except (KeyError, TypeError, ValueError):
+        return jsonify({
+            "fehler": "Breite, Länge und Jahr werden benötigt (Breite/Länge als "
+                      "Dezimalzahl, Jahr als Ganzzahl)"
+        }), 400
+
+    ort = (daten.get("ort") or "").strip()
+    name = (daten.get("name") or "").strip() or f"{ort or f'{breite}, {laenge}'} {jahr}"
+
+    try:
+        stunden = openmeteo.abrufen(breite, laenge, jahr, ort=ort)
+    except openmeteo.WetterEingabeFehler as fehler:
+        return jsonify({"fehler": str(fehler)}), 400
+    except openmeteo.WetterAbrufFehler as fehler:
+        current_app.logger.warning("Wetterabruf gescheitert: %s", fehler)
+        return jsonify({"fehler": str(fehler)}), 502
+
+    datensatz_id = speicher.datensatz_anlegen(
+        name, "open-meteo", stunden, ort=ort, breite=breite, laenge=laenge, jahr=jahr,
+        notiz=f"Abgerufen von Open-Meteo (Archive-API) für "
+              f"{ort or f'{breite}, {laenge}'}, Jahr {jahr}",
+    )
+    return jsonify({"id": datensatz_id, "stunden": len(stunden)}), 201
 
 
 @bp.post("/upload")
