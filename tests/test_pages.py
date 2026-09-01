@@ -39,6 +39,23 @@ def test_editor_seite_bindet_pfeile_js_vor_editor_js_ein(app):
     assert html.index("js/pfeile.js") < html.index("js/editor.js")
 
 
+def test_editor_seite_bindet_editor_js_fuer_palette_js_ein(app):
+    """palette.js ruft zeigeFehler() auf, das nicht in palette.js selbst,
+    sondern in editor.js definiert ist (siehe Kommentare in beiden Dateien) -
+    ohne editor.js auf derselben Seite waere das ein ReferenceError, sobald
+    das Laden der Palette fehlschlaegt. Das faellt in keinem Python-Test auf,
+    deshalb hier absichern."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("Referenz")
+        anlage = ax_sim_2_1.baue(projekt, "AX_SIM 2.1")
+
+    klient = app.test_client()
+    html = klient.get(f"/anlage/{anlage}").get_data(as_text=True)
+
+    assert "js/palette.js" in html
+    assert "js/editor.js" in html
+
+
 def test_startseite_antwortet_mit_200(app):
     klient = app.test_client()
     antwort = klient.get("/")

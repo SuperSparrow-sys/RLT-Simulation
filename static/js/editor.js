@@ -18,7 +18,23 @@ function panelLeeren() {
 /* Modester, einheitlicher Umgang mit fehlgeschlagenen Anfragen: kurze
    deutsche Meldung fuer die Anwenderin statt eines stillen Fehlschlags oder
    einer Konsolenmeldung, die niemand sieht. Kein eigenes
-   Benachrichtigungssystem - nur eine einzelne, wiederverwendete Leiste. */
+   Benachrichtigungssystem - nur eine einzelne, wiederverwendete Leiste.
+
+   Absichtlich hier statt in einer eigenen Datei definiert: als einzige
+   Funktion lohnt eine weitere <script>-Datei nicht, und templates/editor.html
+   bindet ohnehin nur klassische, nicht-modulare Skripte ein. palette.js,
+   pfeile.js, panel.js und simulation.js rufen diese Funktion auf, ohne sie
+   selbst zu definieren - eine ausdrueckliche, hier dokumentierte Abhaengigkeit
+   von editor.js, nicht die stillschweigende Annahme, dass es schon zufaellig
+   irgendwo definiert sein wird. Sie geht gut, weil editor.html editor.js
+   tatsaechlich einbindet (siehe tests/test_pages.py) und der Aufruf immer
+   erst innerhalb eines async-Callbacks erfolgt, also lange nachdem alle
+   Skripte der Seite geladen sind - nie beim Parsen der Datei selbst.
+   Verglichen mit start.js: die Startseite laedt keines dieser Skripte und
+   definiert sich zeigeFehler() deshalb bewusst selbst statt sich hierauf zu
+   verlassen (siehe dortiger Kommentar). Kaeme ein weiteres eigenstaendiges
+   Skript hinzu, das zeigeFehler() braucht, gehoert die Funktion in eine
+   gemeinsame Datei statt in noch mehr Kopien. */
 function zeigeFehler(nachricht) {
   const leiste = document.getElementById("fehlermeldung");
   if (!leiste) return;
@@ -163,6 +179,12 @@ const Editor = {
       gruppe.setAttribute("transform", `translate(${karte.pos_x} ${karte.pos_y})`);
       pfeileZeichnen(this.anlage);
     };
+    const zuruecksetzen = () => {
+      karte.pos_x = anfang.x;
+      karte.pos_y = anfang.y;
+      gruppe.setAttribute("transform", `translate(${karte.pos_x} ${karte.pos_y})`);
+      pfeileZeichnen(this.anlage);
+    };
     const loslassen = async () => {
       window.removeEventListener("pointermove", bewegen);
       window.removeEventListener("pointerup", loslassen);
@@ -175,9 +197,13 @@ const Editor = {
         });
       } catch {
         zeigeFehler("Position konnte nicht gespeichert werden.");
+        zuruecksetzen();
         return;
       }
-      if (!antwort.ok) zeigeFehler("Position konnte nicht gespeichert werden.");
+      if (!antwort.ok) {
+        zeigeFehler("Position konnte nicht gespeichert werden.");
+        zuruecksetzen();
+      }
     };
     window.addEventListener("pointermove", bewegen);
     window.addEventListener("pointerup", loslassen);

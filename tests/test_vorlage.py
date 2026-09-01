@@ -89,6 +89,19 @@ def test_api_legt_die_vorlage_an(app):
     assert antwort.get_json()["id"] > 0
 
 
+def test_api_vorlagen_liefert_einen_lesbaren_anzeigenamen(app):
+    """'name' ist ein Anzeigename fuer die Anwenderin, keine zweite Kopie der
+    technischen Kennung - die Startseite zeigt dieses Feld direkt an, eine
+    Kennung wie 'ax_sim_2_1' waere dort fehl am Platz. Die Kennung selbst
+    bleibt unveraendert der Schluessel des Objekts."""
+    klient = app.test_client()
+    daten = klient.get("/api/vorlagen").get_json()
+    assert "ax_sim_2_1" in daten
+    vorlage = daten["ax_sim_2_1"]
+    assert vorlage["name"] == "AX_SIM 2.1"
+    assert vorlage["name"] != "ax_sim_2_1"
+
+
 def test_waescherregler_misst_die_raumfeuchte(app):
     """Sonst laeuft der Waescher das ganze Jahr auf Vollast."""
     with app.app_context():

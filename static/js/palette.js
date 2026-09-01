@@ -1,4 +1,9 @@
-/* Symbolpalette links: Kartentypen nach Gruppen, per Ziehen auf die Leinwand. */
+/* Symbolpalette links: Kartentypen nach Gruppen, per Ziehen auf die Leinwand.
+
+   zeigeFehler() unten ist nicht hier, sondern in editor.js definiert - eine
+   ausdrueckliche Abhaengigkeit (siehe Kommentar dort), kein Zufall. Diese
+   Datei setzt voraus, dass die Seite, die sie einbindet, editor.js ebenfalls
+   einbindet (templates/editor.html tut das; siehe tests/test_pages.py). */
 
 const Palette = {
   async laden() {

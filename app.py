@@ -1,5 +1,6 @@
 import logging
 from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 from flask import Flask
 
@@ -7,19 +8,40 @@ from core import config
 from core.database import close_db, init_db
 
 
-def create_app():
-    app = Flask(__name__)
-    app.config["SECRET_KEY"] = config.SECRET_KEY
+def _protokoll_einrichten(app):
+    """Haengt den Datei-Handler fuer app.logger genau einmal an.
 
-    config.LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    Flasks app.logger ist ueber logging.getLogger(app.name) an einen nach
+    Namen global geteilten Logger gebunden - jeder weitere create_app()-
+    Aufruf traefe also auf denselben Logger wie der vorherige. Ohne diese
+    Absicherung haengt jeder Aufruf einen weiteren RotatingFileHandler an,
+    und jede spaetere Meldung erscheint entsprechend oft im Protokoll (die
+    Testreihe allein ruft create_app() dutzendfach auf).
+    """
+    ziel = Path(config.LOG_FILE).resolve()
+    bereits_eingerichtet = any(
+        isinstance(h, RotatingFileHandler) and Path(h.baseFilename) == ziel
+        for h in app.logger.handlers
+    )
+    if bereits_eingerichtet:
+        return
+
+    ziel.parent.mkdir(parents=True, exist_ok=True)
     handler = RotatingFileHandler(
-        str(config.LOG_FILE), maxBytes=1_000_000, backupCount=3, encoding="utf-8"
+        str(ziel), maxBytes=1_000_000, backupCount=3, encoding="utf-8"
     )
     handler.setFormatter(
         logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s")
     )
     app.logger.addHandler(handler)
     app.logger.setLevel(getattr(logging, config.LOG_LEVEL.upper(), logging.INFO))
+
+
+def create_app():
+    app = Flask(__name__)
+    app.config["SECRET_KEY"] = config.SECRET_KEY
+
+    _protokoll_einrichten(app)
 
     app.teardown_appcontext(close_db)
 

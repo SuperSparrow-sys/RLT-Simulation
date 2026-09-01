@@ -14,6 +14,7 @@ jeweils als Kommentar daneben.
 
 from core import anlagen
 
+NAME = "AX_SIM 2.1"
 BESCHREIBUNG = "Zwei Lüftungsgeräte an gemeinsamer WRG, ein Raum (aus der Excel)"
 
 

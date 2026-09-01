@@ -7,7 +7,7 @@ VORLAGEN = {"ax_sim_2_1": ax_sim_2_1}
 
 def alle():
     return {
-        kennung: {"name": kennung, "beschreibung": modul.BESCHREIBUNG}
+        kennung: {"name": modul.NAME, "beschreibung": modul.BESCHREIBUNG}
         for kennung, modul in VORLAGEN.items()
     }
 
