@@ -37,3 +37,31 @@ def test_editor_seite_bindet_pfeile_js_vor_editor_js_ein(app):
 
     assert "js/pfeile.js" in html
     assert html.index("js/pfeile.js") < html.index("js/editor.js")
+
+
+def test_startseite_antwortet_mit_200(app):
+    klient = app.test_client()
+    antwort = klient.get("/")
+    assert antwort.status_code == 200
+
+
+def test_startseite_bindet_ihr_eigenes_script_ein(app):
+    """Ohne dieses Script-Tag bleibt die Startseite ein leerer Rahmen ohne
+    Projekte, Anlagen oder Wetterdaten - das faellt in keinem Python-Test auf,
+    deshalb hier absichern."""
+    klient = app.test_client()
+    html = klient.get("/").get_data(as_text=True)
+    assert "js/start.js" in html
+
+
+def test_startseite_bindet_kein_editor_script_ein(app):
+    """start.js ist eigenstaendig (siehe dortiger Kommentar) - laedt die
+    Startseite trotzdem editor.js/panel.js/simulation.js mit, waere das ein
+    Zeichen, dass sich eine stille Abhaengigkeit eingeschlichen hat."""
+    klient = app.test_client()
+    html = klient.get("/").get_data(as_text=True)
+    assert "js/editor.js" not in html
+    assert "js/panel.js" not in html
+    assert "js/simulation.js" not in html
+    assert "js/pfeile.js" not in html
+    assert "js/palette.js" not in html

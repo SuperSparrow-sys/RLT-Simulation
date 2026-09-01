@@ -7,8 +7,36 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-  <div class="app">
-    <p>RLT-Simulation</p>
+  <div id="fehlermeldung" class="fehlermeldung" hidden></div>
+
+  <div class="start">
+    <header class="leiste">
+      <span class="titel">RLT-Simulation</span>
+      <button class="knopf-haupt" id="btn-projekt-anlegen">+ Projekt</button>
+    </header>
+
+    <main class="start-haupt">
+      <section class="start-abschnitt">
+        <h1 class="abschnitt-titel">Projekte</h1>
+        <div id="start-projekte"></div>
+      </section>
+
+      <section class="start-abschnitt">
+        <h1 class="abschnitt-titel">Wetterdaten</h1>
+        <p class="abschnitt-hinweis">
+          Für einen Simulationslauf wird ein Wetterdatensatz gebraucht. Gelesen werden
+          TRY-Dateien als .xls, .xlsx oder .csv.
+        </p>
+        <form id="form-wetter-upload" class="wetter-formular">
+          <input type="file" id="feld-wetter-datei" accept=".xls,.xlsx,.csv">
+          <input type="text" id="feld-wetter-name" placeholder="Bezeichnung (optional)">
+          <button type="submit" class="knopf-haupt" id="btn-wetter-hochladen">Hochladen</button>
+        </form>
+        <div id="start-wetter-liste"></div>
+      </section>
+    </main>
   </div>
+
+  <script src="{{ url_for('static', filename='js/start.js') }}"></script>
 </body>
 </html>

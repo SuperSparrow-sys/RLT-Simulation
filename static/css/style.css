@@ -155,3 +155,53 @@ html, body {
 .warn-beispiele { margin: 8px 0 0; padding-left: 18px; color: var(--text-secondary);
                   max-height: 120px; overflow-y: auto; }
 .warn-beispiele li { margin-bottom: 3px; }
+
+/* Startseite */
+
+.start { display: flex; flex-direction: column; height: 100vh; }
+.start-haupt { flex: 1; overflow-y: auto; padding: 24px 32px 48px; }
+.start-abschnitt { max-width: 960px; margin: 0 auto 40px; }
+.abschnitt-titel { font-size: 18px; font-weight: 500; margin: 0 0 12px; }
+.abschnitt-hinweis { font-size: 13px; color: var(--text-secondary); margin: -4px 0 14px; }
+
+.leerhinweis-gross { background: var(--surface); border: 1px dashed var(--border);
+                     border-radius: var(--radius); padding: 32px; text-align: center; }
+.leerhinweis-gross h2 { margin: 0 0 8px; font-size: 16px; font-weight: 500; }
+.leerhinweis-gross p { margin: 0 0 18px; color: var(--text-secondary);
+                       font-size: 13px; line-height: 1.5; }
+
+.projekt-karte { background: var(--surface); border: 1px solid var(--border-light);
+                border-radius: var(--radius); padding: 18px 20px; margin-bottom: 16px; }
+.projekt-kopf h2 { margin: 0; font-size: 15px; font-weight: 500; }
+.projekt-beschreibung { margin: 4px 0 0; font-size: 12px; color: var(--text-secondary); }
+
+.anlagen-liste { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 14px; }
+.anlage-karte { display: flex; flex-direction: column; gap: 6px; width: 180px;
+               border: 1px solid var(--border-light); border-radius: 8px;
+               padding: 10px 12px; text-decoration: none; color: var(--text);
+               background: var(--bg); }
+.anlage-karte:hover { border-color: var(--blue); background: var(--blue-tint); }
+.anlage-name { font-size: 13px; font-weight: 500; }
+.anlage-info { font-size: 11px; color: var(--text-secondary); }
+.anlage-status { font-size: 11px; }
+.anlage-status-laeuft { color: var(--blue); font-style: italic; }
+.anlage-status-fertig { color: var(--text-secondary); }
+.anlage-status-offen { color: var(--text-secondary); font-style: italic; }
+.anlage-status-warnung { color: var(--warning); }
+.anlage-status-unbekannt { color: var(--text-secondary); font-style: italic; }
+
+.projekt-aktionen { display: flex; gap: 8px; }
+.projekt-aktionen button { border: 1px solid var(--border); background: var(--surface);
+                          border-radius: 20px; padding: 6px 16px; cursor: pointer;
+                          font-family: inherit; font-size: 12px; }
+
+.vorlage-wahl { display: flex; align-items: flex-start; gap: 8px; font-size: 12px;
+               margin: 6px 0; cursor: pointer; }
+.vorlage-wahl input { margin-top: 3px; }
+
+.wetter-formular { display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+                   margin-bottom: 16px; }
+.wetter-formular input[type="text"] { border: 1px solid var(--border); border-radius: 6px;
+                                     padding: 7px 10px; font-size: 13px;
+                                     font-family: inherit; }
+.wetter-tabelle { max-width: 640px; }
