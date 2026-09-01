@@ -735,6 +735,35 @@ def test_hole_meldet_unbekannten_typ():
         basis.hole("kein_baustein")
 
 
+def test_vorgabeparameter_teilen_keine_veraenderlichen_werte():
+    """Listen und Tabellen muessen je Karte eigene Objekte sein."""
+
+    @basis.registriere
+    class MitListe(basis.Baustein):
+        KENNUNG = "test_liste"
+        NAME = "Mit Liste"
+        GRUPPE = "Test"
+        SYMBOL = "test.svg"
+        PARAMETER = [
+            basis.Param("plan", "Plan", "-", [1.0, 2.0]),
+            basis.Param("anteile", "Anteile", "%", {}),
+        ]
+        PORTS = []
+        AUSGABEN = []
+
+        def berechne(self, ein, p, zustand):
+            return {}, zustand
+
+    erste = MitListe.vorgabeparameter()
+    zweite = MitListe.vorgabeparameter()
+    erste["plan"].append(3.0)
+    erste["anteile"]["luft_aus_1"] = 70.0
+
+    assert zweite["plan"] == [1.0, 2.0]
+    assert zweite["anteile"] == {}
+    assert MitListe.PARAMETER[0].vorgabe == [1.0, 2.0]
+
+
 def test_vorgabeparameter_werden_aus_der_deklaration_gebildet():
     @basis.registriere
     class MitVorgabe(basis.Baustein):
@@ -843,6 +872,7 @@ Portanlage in der Datenbank und Ergebnisspalten werden aus dieser Deklaration
 erzeugt - ein neuer Kartentyp ist deshalb genau eine neue Datei.
 """
 
+import copy
 from dataclasses import dataclass
 
 # Portarten
@@ -885,7 +915,7 @@ class Param:
     schluessel: str
     label: str
     einheit: str
-    vorgabe: float | str
+    vorgabe: float | str | list | dict
     auswahl: tuple = ()
 
 
@@ -941,7 +971,15 @@ class Baustein:
 
     @classmethod
     def vorgabeparameter(cls) -> dict:
-        return {p.schluessel: p.vorgabe for p in cls.PARAMETER}
+        """Frische Vorgabewerte fuer eine neue Karte.
+
+        Es wird tief kopiert, weil Vorgaben auch Listen und Tabellen sein
+        koennen - Zeitplaene, Lastgaenge, Ferienzeitraeume, Anteile eines
+        Verteilers. Ohne Kopie teilten sich alle Karten desselben Typs dasselbe
+        Objekt, und die erste Aenderung an einer Karte schluege auf alle
+        anderen und auf die Klassenvorgabe durch.
+        """
+        return {p.schluessel: copy.deepcopy(p.vorgabe) for p in cls.PARAMETER}
 
     @classmethod
     def port(cls, schluessel: str) -> Port:
@@ -2461,6 +2499,23 @@ def test_wetterkarte_ohne_stunde_liefert_nullen():
     assert aus["QH_S"] == 0.0
 
 
+def test_fortluft_meldet_den_ankommenden_zustand():
+    from core.bausteine.basis import Luft
+    from core.bausteine.fortluft import Fortluft
+
+    aus, _ = Fortluft().berechne({"luft_ein": Luft(V=9000.0, T=3.61, x=4.2)}, {}, {})
+    assert aus["V"] == pytest.approx(9000.0)
+    assert aus["T_FO"] == pytest.approx(3.61)
+    assert aus["F_FO"] == pytest.approx(4.2)
+
+
+def test_fortluft_fordert_keinen_volumenstrom_an():
+    """Der Endpunkt eines Abluftwegs gibt nichts weiter nach vorn."""
+    from core.bausteine.fortluft import Fortluft
+
+    assert Fortluft().bedarf({}, {}) == {}
+
+
 def test_aussenluft_baut_den_luftzustand_aus_den_signalen():
     ein = {"T_AU": 2.5, "F_AU": 4.4}
     aus, _ = Aussenluft().berechne(ein, {}, {})
@@ -2517,6 +2572,14 @@ class Verteiler(Baustein):
     AUSGABEN = ["warnung"]
 
     def __init__(self):
+        # Vertrag mit dem Solver: Diese beiden Felder gehoeren NICHT zum
+        # Stundenzustand, sondern zur Topologie. Der Solver fuellt sie einmal je
+        # Lauf im Rueckwaertslauf (core/solver.py, _volumenstroeme) und laesst sie
+        # danach unveraendert - 'abgaenge' sind die Schluessel der angelegten
+        # Luftausgaenge, 'bedarf_je_abgang' der Volumenstrom, den jeder Gang
+        # stromabwaerts anfordert. Deshalb stehen sie hier und nicht im
+        # 'zustand'-Woerterbuch, das je Stunde neu gesetzt und fortgeschrieben
+        # wird. Ohne Solver - etwa im Test - sind beide von Hand zu setzen.
         self.abgaenge = []
         self.bedarf_je_abgang = {}
 
@@ -2539,7 +2602,7 @@ class Verteiler(Baustein):
             else:
                 verteilt = {a: luft.V / len(rest) for a in rest}
         elif summe > luft.V:
-            faktor = luft.V / summe if summe else 0.0
+            faktor = luft.V / summe   # summe > luft.V >= 0, also nie null
             verteilt = {a: v * faktor for a, v in gefordert.items()}
             warnung = "Volumenstrom reicht nicht fuer alle Gaenge"
         else:
