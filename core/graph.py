@@ -179,14 +179,39 @@ def _punkte(von, nach):
 
 
 def _paare(von_karte, nach_karte, belegt):
+    # Ein namenloser Istwert-Anschluss wird nur belegt, wenn die Quelle genau einen
+    # Messwert anbietet. Sonst waere die Wahl geraten: eine Wetterkarte mit sieben
+    # Messwerten wuerde irgendeinen davon in den Regler legen. Bei mehreren bleibt
+    # der Anschluss frei und wird von Hand verbunden.
+    messwerte = [
+        p for p in von_karte.ports
+        if p.art == basis.SIGNAL and p.richtung == basis.AUSGANG
+        and p.rolle == basis.MESSWERT
+    ]
+    eindeutig = len(messwerte) == 1
+
     kandidaten = []
     for v in von_karte.ports:
-        if v.id in belegt or v.richtung != basis.AUSGANG:
+        if v.richtung != basis.AUSGANG:
+            continue
+        # Ein Luftausgang ist ein Kanal - er fuehrt an genau eine Stelle, und
+        # Verzweigungen macht der Verteiler. Ein Signalausgang ist ein Messwert oder
+        # ein Stellsignal; den koennen beliebig viele lesen. Die Wetterkarte speist
+        # Aussenluft, Raeume und Regler zugleich, die Betriebskarte alle Ventilatoren.
+        if v.art == basis.LUFT and v.id in belegt:
             continue
         for n in nach_karte.ports:
             if n.id in belegt or n.richtung != basis.EINGANG:
                 continue
             punkte = _punkte(v, n)
+            if (
+                punkte == 2
+                and v.rolle == basis.MESSWERT
+                and n.rolle == basis.ISTWERT
+                and v.basis != n.basis
+                and not eindeutig
+            ):
+                punkte = 0
             if punkte:
                 kandidaten.append((punkte, v, n))
 

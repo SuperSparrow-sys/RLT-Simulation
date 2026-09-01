@@ -5,7 +5,7 @@ Nennleistung, entsprechend Anlage!AH128/AH129.
 """
 
 from core.bausteine.basis import (
-    AUSGANG, EINGANG, ISTWERT, SIGNAL, WAERME, Baustein, Param, Port, registriere,
+    AUSGANG, EINGANG, MESSWERT, SIGNAL, WAERME, Baustein, Param, Port, registriere,
 )
 
 
@@ -19,13 +19,16 @@ class StatischeHeizung(Baustein):
     PARAMETER = [Param("QH_nenn", "QH_nenn", "kW", 0.0)]
 
     PORTS = [
-        Port("bedarf", SIGNAL, EINGANG, ISTWERT),
+        # Der Anschluss heisst wie die Groesse, die er aufnimmt. Ein namenloser
+        # 'bedarf' wuerde vom Raum den erstbesten Messwert bekommen - T_Raum statt
+        # QH_stat -, weil der Raum drei davon anbietet.
+        Port("QH_stat", SIGNAL, EINGANG, MESSWERT),
         Port("QH", SIGNAL, AUSGANG, WAERME),
     ]
 
     AUSGABEN = ["QH"]
 
     def berechne(self, ein, p, zustand):
-        gefordert = float(ein.get("bedarf", 0.0))
+        gefordert = float(ein.get("QH_stat", 0.0))
         QH = max(min(gefordert, p["QH_nenn"]), 0.0)
         return {"QH": QH}, zustand

@@ -304,7 +304,7 @@ def test_messwerte_landen_im_datenlogger():
 def test_raum_meldet_seinen_heizbedarf_an_die_statische_heizung():
     raum, heizung = karte(1, "einfacher_raum"), karte(2, "statische_heizung")
     zuordnung = {v.schluessel: n.schluessel for v, n in graph.verdrahte(raum, heizung, set())}
-    assert zuordnung.get("QH_stat") == "bedarf"
+    assert zuordnung.get("QH_stat") == "QH_stat"
 
 
 def test_regler_greift_auf_die_traege_stufe():
@@ -319,3 +319,36 @@ def test_regler_greift_auf_die_traege_stufe():
     zurueck = [(v.schluessel, n.schluessel) for v, n in paare if v.karte_id == 2]
     assert hin == [("ausgang_2", "stellgroesse")]
     assert zurueck == [("T_aus", "istwert_2")]
+
+
+def test_signalausgang_speist_mehrere_verbraucher():
+    """Eine Wetterkarte versorgt Aussenluft, Raum und Regler zugleich."""
+    wetter = karte(1, "wetter")
+    belegt = set()
+    getroffen = []
+    for nummer, typ in enumerate(("aussenluft", "einfacher_raum", "kaskade"), start=2):
+        paare = graph.verdrahte(wetter, karte(nummer, typ), belegt)
+        belegt |= {n.id for _, n in paare}
+        getroffen.append([v.schluessel for v, _ in paare])
+    assert getroffen[0] == ["T_AU", "F_AU"]
+    assert getroffen[1] == ["T_AU", "F_AU"]
+    assert getroffen[2] == ["T_AU"]
+
+
+def test_luftausgang_bleibt_einem_strang_vorbehalten():
+    erhitzer = karte(1, "erhitzer")
+    erster = graph.verdrahte(erhitzer, karte(2, "kuehler"), set())
+    belegt = {v.id for v, _ in erster} | {n.id for _, n in erster}
+    assert graph.verdrahte(erhitzer, karte(3, "kuehler"), belegt) == []
+
+
+def test_namenloser_istwert_bleibt_bei_mehrdeutigkeit_frei():
+    """Der Raum bietet mehrere Messwerte an - welcher gemeint ist, ist offen."""
+    raum, feuchteregler = karte(1, "einfacher_raum"), karte(2, "hysterese_regler")
+    assert graph.verdrahte(raum, feuchteregler, belegt=set()) == []
+
+
+def test_namenloser_istwert_wird_bei_eindeutigkeit_belegt():
+    erhitzer, regler = karte(1, "erhitzer"), karte(2, "p_regler")
+    paare = graph.verdrahte(erhitzer, regler, belegt=set())
+    assert [(v.schluessel, n.schluessel) for v, n in paare] == [("T_aus", "istwert_2")]

@@ -225,6 +225,66 @@ def pfeil_loeschen(pfeil_id):
     db.commit()
 
 
+def verbindung_anlegen(anlage_id, von_port_id, nach_port_id):
+    """Verbindet zwei Anschluesse ausdruecklich, ohne zu raten.
+
+    Die automatische Verdrahtung laesst einen namenlosen Istwert-Anschluss frei,
+    wenn die Quelle mehrere Messwerte anbietet - welcher gemeint ist, kann sie nicht
+    wissen. Diese Funktion ist der Weg, ihn dann selbst zu setzen. Sie legt einen
+    Pfeil mit genau einer Verbindung an, damit er sich wie jeder andere loeschen
+    laesst.
+    """
+    db = get_db()
+    ports = {}
+    for port_id in (von_port_id, nach_port_id):
+        zeile = db.execute(
+            "SELECT p.*, k.anlage_id, k.name AS karte_name FROM port p "
+            "JOIN karte k ON k.id = p.karte_id WHERE p.id = ?",
+            (port_id,),
+        ).fetchone()
+        if zeile is None:
+            raise KeyError(f"Anschluss {port_id} gibt es nicht")
+        if zeile["anlage_id"] != anlage_id:
+            raise ValueError(
+                f"Der Anschluss '{zeile['schluessel']}' gehoert nicht zu dieser Anlage"
+            )
+        ports[port_id] = zeile
+
+    von, nach = ports[von_port_id], ports[nach_port_id]
+    if von["richtung"] != "aus" or nach["richtung"] != "ein":
+        raise ValueError("Ein Pfeil laeuft von einem Ausgang zu einem Eingang")
+    if von["art"] != nach["art"]:
+        raise ValueError("Luft laesst sich nicht mit einem Signal verbinden")
+    if nach_port_id in _belegte_ports(anlage_id):
+        raise ValueError(
+            f"Der Anschluss '{nach['schluessel']}' ist schon belegt"
+        )
+
+    try:
+        cur = db.execute(
+            "INSERT INTO pfeil (anlage_id, von_karte_id, nach_karte_id) "
+            "VALUES (?, ?, ?)",
+            (anlage_id, von["karte_id"], nach["karte_id"]),
+        )
+        db.execute(
+            "INSERT INTO verbindung (pfeil_id, von_port_id, nach_port_id) "
+            "VALUES (?, ?, ?)",
+            (cur.lastrowid, von_port_id, nach_port_id),
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    return {
+        "id": cur.lastrowid,
+        "verbindungen": [
+            {"von_karte_id": von["karte_id"], "von_schluessel": von["schluessel"],
+             "nach_karte_id": nach["karte_id"], "nach_schluessel": nach["schluessel"]}
+        ],
+    }
+
+
 # -- Lesen ----------------------------------------------------------------
 
 def lade_graph(anlage_id):

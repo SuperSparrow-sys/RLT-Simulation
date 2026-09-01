@@ -182,3 +182,28 @@ def test_api_legt_karte_an(app):
     )
     assert antwort.status_code == 201
     assert antwort.get_json()["typ"] == "kuehler"
+
+
+def test_einzelne_verbindung_von_hand(app):
+    """Wo die Zuordnung offen bleibt, muss sie sich ausdruecklich setzen lassen."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        raum = anlagen.karte_anlegen(anlage, "einfacher_raum", 0.0, 0.0)
+        regler = anlagen.karte_anlegen(anlage, "hysterese_regler", 300.0, 0.0)
+
+        with pytest.raises(ValueError, match="kein freier Anschluss"):
+            anlagen.pfeil_anlegen(anlage, raum, regler)
+
+        daten = anlagen.als_json(anlage)
+        ports = {k["id"]: {p["schluessel"]: p["id"] for p in k["ports"]}
+                 for k in daten["karten"]}
+        pfeil = anlagen.verbindung_anlegen(
+            anlage, ports[raum]["F_Raum"], ports[regler]["istwert"]
+        )
+        assert pfeil["verbindungen"][0]["von_schluessel"] == "F_Raum"
+
+        with pytest.raises(ValueError, match="schon belegt"):
+            anlagen.verbindung_anlegen(
+                anlage, ports[raum]["T_Raum"], ports[regler]["istwert"]
+            )

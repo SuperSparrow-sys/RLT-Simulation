@@ -87,3 +87,17 @@ def pfeil_anlegen():
 def pfeil_loeschen(pfeil_id):
     anlagen.pfeil_loeschen(pfeil_id)
     return jsonify({"ok": True})
+
+
+@bp.post("/verbindungen")
+def verbindung_anlegen():
+    daten = request.get_json(force=True)
+    try:
+        pfeil = anlagen.verbindung_anlegen(
+            daten["anlage_id"], daten["von_port_id"], daten["nach_port_id"]
+        )
+    except KeyError as fehler:
+        return jsonify({"fehler": str(fehler)}), 404
+    except ValueError as fehler:
+        return jsonify({"fehler": str(fehler)}), 400
+    return jsonify(pfeil), 201
