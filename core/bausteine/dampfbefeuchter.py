@@ -7,7 +7,8 @@ Wasserverbrauch auf.
 
 from core.bausteine import stoffdaten as st
 from core.bausteine.basis import (
-    AUSGANG, EINGANG, LUFT, MESSWERT, SIGNAL, STELLGROESSE, WAERME, WASSER, ZULUFT,
+    AUSGANG, AUSWAHL, EINGANG, LUFT, MESSWERT, PROZENT, SIGNAL, STELLGROESSE,
+    WAERME, WASSER, ZAHL, ZULUFT,
     Baustein, Luft, Param, Port, registriere,
 )
 
@@ -20,10 +21,10 @@ class Dampfbefeuchter(Baustein):
     SYMBOL = "dampfbefeuchter.svg"
 
     PARAMETER = [
-        Param("dampftemperatur", "Dampftemp.", "°C", 180.0),
-        Param("absalzverlust", "Absalzverlust", "%", 10.0),
-        Param("max_leistung", "max. Bef.Leist", "kg/h", 32.0),
-        Param("dampfart", "E-/Fremddampf", "-", "E", auswahl=("E", "F")),
+        Param("dampftemperatur", "Dampftemp.", "°C", 180.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("absalzverlust", "Absalzverlust", "%", 10.0, darstellung=PROZENT, dezimalstellen=1),
+        Param("max_leistung", "max. Bef.Leist", "kg/h", 32.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("dampfart", "E-/Fremddampf", "-", "E", auswahl=("E", "F"), darstellung=AUSWAHL),
     ]
 
     PORTS = [
@@ -36,6 +37,7 @@ class Dampfbefeuchter(Baustein):
     ]
 
     AUSGABEN = ["T_aus", "F_aus", "QH", "wasser", "warnung"]
+    AUSGABE_LABEL = {"T_aus": "Austrittstemperatur"}
 
     def dampfenthalpie(self, p):
         if str(p["dampfart"]).upper() == "E":

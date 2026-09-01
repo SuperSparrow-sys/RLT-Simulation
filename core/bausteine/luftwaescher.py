@@ -6,7 +6,8 @@ AE131 bis AE135. Der feste Faktor 0,9 ist der Saettigungswirkungsgrad der Excel.
 
 from core.bausteine import stoffdaten as st
 from core.bausteine.basis import (
-    AUSGANG, EINGANG, LUFT, MESSWERT, SIGNAL, STELLGROESSE, STROM, WASSER, ZULUFT,
+    AUSGANG, AUSWAHL, EINGANG, LUFT, MESSWERT, PROZENT, SIGNAL, STELLGROESSE,
+    STROM, WASSER, ZAHL, ZULUFT,
     Baustein, Luft, Param, Port, druckverlust, registriere,
 )
 
@@ -21,10 +22,10 @@ class Luftwaescher(Baustein):
     SYMBOL = "luftwaescher.svg"
 
     PARAMETER = [
-        Param("V_nenn", "V_nenn", "m³/h", 8200.0),
-        Param("dp_nenn", "dp_nenn", "Pa", 50.0),
-        Param("absalzverlust", "Absalzverlust", "%", 10.0),
-        Param("pumpenart", "Ventil/FU/HD", "-", "H", auswahl=("V", "F", "H")),
+        Param("V_nenn", "V_nenn", "m³/h", 8200.0, darstellung=ZAHL, dezimalstellen=0),
+        Param("dp_nenn", "dp_nenn", "Pa", 50.0, darstellung=ZAHL, dezimalstellen=0),
+        Param("absalzverlust", "Absalzverlust", "%", 10.0, darstellung=PROZENT, dezimalstellen=1),
+        Param("pumpenart", "Ventil/FU/HD", "-", "H", auswahl=("V", "F", "H"), darstellung=AUSWAHL),
     ]
 
     PORTS = [
@@ -37,6 +38,7 @@ class Luftwaescher(Baustein):
     ]
 
     AUSGABEN = ["T_aus", "F_aus", "PE_Pumpe", "wasser", "dp"]
+    AUSGABE_LABEL = {"T_aus": "Austrittstemperatur"}
 
     def berechne(self, ein, p, zustand):
         luft = ein.get("luft_ein", Luft())

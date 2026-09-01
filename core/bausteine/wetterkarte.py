@@ -33,6 +33,15 @@ class Wetterkarte(Baustein):
     ]
 
     AUSGABEN = list(FELDER)
+    AUSGABE_LABEL = {
+        "T_AU": "Außentemperatur",
+        "F_AU": "Außenfeuchte",
+        "QH_S": "Strahlung Süd",
+        "QH_O": "Strahlung Ost",
+        "QH_W": "Strahlung West",
+        "QH_N": "Strahlung Nord",
+        "QH_H": "Strahlung Horizontal",
+    }
 
     def berechne(self, ein, p, zustand):
         stunde = zustand.get("stunde") or {}

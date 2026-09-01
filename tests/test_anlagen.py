@@ -355,3 +355,121 @@ def test_handverdrahtung_speist_mehrere_verbraucher_mit_einem_signal(app):
 
         g = anlagen.lade_graph(anlage)
     assert len(g.verbindungen) == 2
+
+
+def test_felder_tragen_darstellung_und_dezimalstellen(app):
+    """Jedes Feld sagt, WIE es angezeigt/eingegeben wird - nicht nur Label und
+    Einheit. Am Wochenzeitplan haengt genau der Fall aus dem Bugreport:
+    05:00 Uhr als Tagesanteil mit siebzehn Nachkommastellen."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        plan = anlagen.karte_anlegen(anlage, "wochenzeitplan", 0.0, 0.0)
+        daten = anlagen.als_json(anlage)
+
+    karte = next(k for k in daten["karten"] if k["id"] == plan)
+    montag_von = next(f for f in karte["felder"] if f["schluessel"] == "von_montag")
+    assert montag_von["darstellung"] == "uhrzeit"
+    # Der gespeicherte Wert bleibt der exakte Tagesanteil - nur die Anzeige
+    # rundet, siehe test_basis.py fuer die Umrechnung selbst.
+    assert karte["parameter"]["von_montag"] == pytest.approx(5.0 / 24.0)
+
+
+def test_felder_ohne_gleichnamigen_eingang_sind_nicht_ueberschreibbar(app):
+    """Ein Parameter ohne gleichnamigen Eingangsport - etwa QH_max am Erhitzer -
+    kann nicht durch eine Verbindung ausser Kraft gesetzt werden."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        erhitzer = anlagen.karte_anlegen(anlage, "erhitzer", 0.0, 0.0)
+        daten = anlagen.als_json(anlage)
+
+    karte = next(k for k in daten["karten"] if k["id"] == erhitzer)
+    feld = next(f for f in karte["felder"] if f["schluessel"] == "QH_max")
+    assert feld["ueberschrieben_von"] is None
+
+
+def test_fester_wert_zeigt_ueberschreibung_durch_verbindung_an(app):
+    """Sobald ein Pfeil auf 'istwert' zeigt, muss das Fenster erkennen, dass
+    der feste Parameterwert wirkungslos ist - samt Herkunft der Verbindung."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        raum = anlagen.karte_anlegen(anlage, "raum", 0.0, 0.0)
+        regler = anlagen.karte_anlegen(anlage, "hysterese_regler", 200.0, 0.0)
+
+        daten = anlagen.als_json(anlage)
+        ports = {k["id"]: {p["schluessel"]: p["id"] for p in k["ports"]}
+                 for k in daten["karten"]}
+
+        vor = next(k for k in daten["karten"] if k["id"] == regler)
+        feld_vor = next(f for f in vor["felder"] if f["schluessel"] == "istwert")
+        assert feld_vor["ueberschrieben_von"] is None
+
+        verbindung = anlagen.verbindung_anlegen(
+            anlage, ports[raum]["T_Raum"], ports[regler]["istwert"]
+        )
+
+        nachher = anlagen.als_json(anlage)
+        regler_karte = next(k for k in nachher["karten"] if k["id"] == regler)
+        feld = next(f for f in regler_karte["felder"] if f["schluessel"] == "istwert")
+
+    assert feld["ueberschrieben_von"] == {
+        "von_karte_id": raum,
+        "von_karte_name": "Raum",
+        "von_schluessel": "T_Raum",
+        "von_label": "Raumtemperatur",
+        "pfeil_id": verbindung["id"],
+    }
+
+    # Und sie laesst sich ueber genau diese Pfeil-Id wieder loesen.
+    with app.app_context():
+        anlagen.pfeil_loeschen(verbindung["id"])
+        wieder_frei = anlagen.als_json(anlage)
+    regler_karte = next(k for k in wieder_frei["karten"] if k["id"] == regler)
+    feld = next(f for f in regler_karte["felder"] if f["schluessel"] == "istwert")
+    assert feld["ueberschrieben_von"] is None
+
+
+def test_messwerte_von_listet_alle_messwertausgaenge(app):
+    """Grundlage fuer die Regler-Verdrahtung: welche Groessen bietet die Anlage
+    ueberhaupt an, um sie gezielt an einen Istwert/Sollwert zu haengen?"""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        raum = anlagen.karte_anlegen(anlage, "raum", 0.0, 0.0)
+
+        messwerte = anlagen.messwerte_von(anlage)
+        ports = {p["schluessel"]: p["id"] for p in
+                 next(k for k in anlagen.als_json(anlage)["karten"]
+                      if k["id"] == raum)["ports"]}
+
+    schluessel = {m["schluessel"] for m in messwerte}
+    assert {"T_Raum", "F_Raum"} <= schluessel
+    treffer = next(m for m in messwerte if m["schluessel"] == "T_Raum")
+    assert treffer == {
+        "port_id": ports["T_Raum"],
+        "karte_id": raum,
+        "karte_name": "Raum",
+        "karte_typ": "raum",
+        "schluessel": "T_Raum",
+        "label": "Raumtemperatur",
+    }
+
+
+def test_messwerte_von_bleibt_verfuegbar_wenn_schon_verbunden(app):
+    """Ein Messwert darf mehrere Abnehmer speisen - er soll deshalb auch dann
+    noch in der Auswahl stehen, wenn er schon irgendwo angeschlossen ist."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        raum = anlagen.karte_anlegen(anlage, "raum", 0.0, 0.0)
+        regler = anlagen.karte_anlegen(anlage, "hysterese_regler", 200.0, 0.0)
+        ports = {k["id"]: {p["schluessel"]: p["id"] for p in k["ports"]}
+                 for k in anlagen.als_json(anlage)["karten"]}
+        anlagen.verbindung_anlegen(
+            anlage, ports[raum]["T_Raum"], ports[regler]["istwert"]
+        )
+        messwerte = anlagen.messwerte_von(anlage)
+
+    assert any(m["schluessel"] == "T_Raum" for m in messwerte)

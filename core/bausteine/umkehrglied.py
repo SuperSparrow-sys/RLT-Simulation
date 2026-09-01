@@ -11,7 +11,8 @@ automatische Verdrahtung am Ende vergibt.
 """
 
 from core.bausteine.basis import (
-    AUSGANG, EINGANG, SIGNAL, STELLGROESSE, Baustein, Param, Port, registriere,
+    AUSGANG, EINGANG, PROZENT, SIGNAL, STELLGROESSE,
+    Baustein, Param, Port, registriere,
 )
 
 
@@ -22,7 +23,11 @@ class Umkehrglied(Baustein):
     GRUPPE = "Regelung"
     SYMBOL = "umkehrglied.svg"
 
-    PARAMETER = [Param("bezug", "Bezugswert", "-", 100.0)]
+    # "bezug" war mit "-" beschriftet, obwohl gegen ein 0-100-Prozent-Signal
+    # gespiegelt wird (siehe Docstring oben und berechne() unten).
+    PARAMETER = [
+        Param("bezug", "Bezugswert", "%", 100.0, darstellung=PROZENT, dezimalstellen=1)
+    ]
 
     PORTS = [
         Port("ein", SIGNAL, EINGANG, STELLGROESSE),

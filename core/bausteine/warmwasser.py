@@ -5,7 +5,7 @@ der Speicherverlust, der nur von der Speichergroesse abhaengt.
 """
 
 from core.bausteine.basis import (
-    AUSGANG, SIGNAL, WAERME, Baustein, Param, Port, registriere,
+    AUSGANG, SIGNAL, WAERME, ZAHL, Baustein, Param, Port, registriere,
 )
 
 KALTWASSER = 10.0  # °C, Anlage!AE156
@@ -19,9 +19,9 @@ class Warmwasserbereitung(Baustein):
     SYMBOL = "warmwasser.svg"
 
     PARAMETER = [
-        Param("speichervolumen", "Speichervol.", "l", 1000.0),
-        Param("verbrauch", "Verbrauch", "m³/a", 462.0),
-        Param("sollwert", "Sollwert", "°C", 50.0),
+        Param("speichervolumen", "Speichervol.", "l", 1000.0, darstellung=ZAHL, dezimalstellen=0),
+        Param("verbrauch", "Verbrauch", "m³/a", 462.0, darstellung=ZAHL, dezimalstellen=0),
+        Param("sollwert", "Sollwert", "°C", 50.0, darstellung=ZAHL, dezimalstellen=1),
     ]
 
     PORTS = [Port("QH", SIGNAL, AUSGANG, WAERME)]

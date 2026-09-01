@@ -1,7 +1,7 @@
 """Tageslastprofil mit drei Lastgaengen. Formel aus Anlage!AT32 bis AV32."""
 
 from core.bausteine.basis import (
-    AUSGANG, LASTGANG, SIGNAL, Baustein, Param, Port, registriere,
+    AUSGANG, LASTGANG, SIGNAL, ZEITREIHE, Baustein, Param, Port, registriere,
 )
 
 
@@ -13,9 +13,9 @@ class Tageslastprofil(Baustein):
     SYMBOL = "tageslastprofil.svg"
 
     PARAMETER = [
-        Param("lastgang_1", "Lastgang 1", "-", [1.0] * 24),
-        Param("lastgang_2", "Lastgang 2", "-", [0.0] * 24),
-        Param("lastgang_3", "Lastgang 3", "-", [0.0] * 24),
+        Param("lastgang_1", "Lastgang 1", "-", [1.0] * 24, darstellung=ZEITREIHE),
+        Param("lastgang_2", "Lastgang 2", "-", [0.0] * 24, darstellung=ZEITREIHE),
+        Param("lastgang_3", "Lastgang 3", "-", [0.0] * 24, darstellung=ZEITREIHE),
     ]
 
     PORTS = [

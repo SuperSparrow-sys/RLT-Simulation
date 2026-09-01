@@ -5,7 +5,7 @@ Die Zeiten stehen als Tagesbruchteil, wie in der Excel: 0,20833 entspricht
 """
 
 from core.bausteine.basis import (
-    AUSGANG, SIGNAL, ZEITPLAN, Baustein, Param, Port, registriere,
+    AUSGANG, SIGNAL, UHRZEIT, ZEITPLAN, Baustein, Param, Port, registriere,
 )
 
 TAGE = ("montag", "dienstag", "mittwoch", "donnerstag", "freitag", "samstag", "sonntag")
@@ -19,8 +19,8 @@ class Wochenzeitplan(Baustein):
     SYMBOL = "wochenzeitplan.svg"
 
     PARAMETER = [
-        Param(f"{grenze}_{tag}", f"{tag.capitalize()} {grenze}", "Tagesanteil",
-              5.0 / 24.0 if grenze == "von" else 22.0 / 24.0)
+        Param(f"{grenze}_{tag}", f"{tag.capitalize()} {grenze}", "",
+              5.0 / 24.0 if grenze == "von" else 22.0 / 24.0, darstellung=UHRZEIT)
         for tag in TAGE
         for grenze in ("von", "bis")
     ]

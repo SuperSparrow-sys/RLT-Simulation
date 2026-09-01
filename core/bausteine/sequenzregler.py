@@ -5,7 +5,7 @@ Formeln aus Anlage!T138 bis S148. Die Regelabweichung laeuft zwischen -300 und
 """
 
 from core.bausteine.basis import (
-    AUSGANG, EINGANG, ISTWERT, SIGNAL, STELLGROESSE,
+    AUSGANG, EINGANG, ISTWERT, SIGNAL, STELLGROESSE, ZAHL,
     Baustein, Param, Port, registriere,
 )
 
@@ -37,9 +37,9 @@ class Sequenzregler(Baustein):
     SYMBOL = "sequenzregler.svg"
 
     PARAMETER = [
-        Param("oberer_sw", "oberer Sollwert", "°C", 24.0),
-        Param("unterer_sw", "unterer Sollwert", "°C", 20.0),
-        Param("xp", "Xp", "-", 5.0),
+        Param("oberer_sw", "oberer Sollwert", "°C", 24.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("unterer_sw", "unterer Sollwert", "°C", 20.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("xp", "Xp", "-", 5.0, darstellung=ZAHL, dezimalstellen=1),
     ]
 
     PORTS = [

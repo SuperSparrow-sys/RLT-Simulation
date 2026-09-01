@@ -41,6 +41,12 @@ class KarteInstanz:
 class VerbindungInstanz:
     von_port: PortInstanz
     nach_port: PortInstanz
+    # Id des Pfeils, der diese Verbindung traegt - 0, wenn nicht gesetzt (etwa
+    # in Tests, die eine VerbindungInstanz ohne Datenbank bauen). Damit laesst
+    # sich eine einzelne Verbindung ueber pfeil_loeschen() wieder aufheben, ohne
+    # dass core.anlagen fuer diese eine Auskunft ein zweites Mal die Datenbank
+    # abfragen muesste - siehe core.anlagen.als_json()/messwerte_von().
+    pfeil_id: int = 0
 
 
 def _deklarierte_ports(klasse, parameter):

@@ -13,7 +13,7 @@ Speicherfaehigkeit der Innenwaende fortgeschrieben (Anlage!AK127/AK128).
 import math
 
 from core.bausteine.basis import (
-    ABLUFT, AUSGANG, EINGANG, LUFT, MESSWERT, SIGNAL, ZULUFT,
+    ABLUFT, AUSGANG, EINGANG, LUFT, MESSWERT, SIGNAL, ZAHL, ZULUFT,
     Baustein, Luft, Param, Port, registriere,
 )
 
@@ -29,48 +29,50 @@ class Raum(Baustein):
     SYMBOL = "raum.svg"
 
     PARAMETER = [
-        Param("laenge_a", "Länge a", "m", 22.0),
-        Param("laenge_b", "Länge b", "m", 33.0),
-        Param("laenge_c", "Länge c", "m", 22.0),
-        Param("laenge_d", "Länge d", "m", 33.0),
-        Param("laenge_e", "Länge e", "m", 0.0),
-        Param("aw_anteil_a", "Außenwand a", "-", 1.0),
-        Param("aw_anteil_b", "Außenwand b", "-", 0.5),
-        Param("aw_anteil_c", "Außenwand c", "-", 0.35),
-        Param("aw_anteil_d", "Außenwand d", "-", 1.0),
-        Param("aw_anteil_e", "Außenwand e", "-", 0.0),
-        Param("u_wand_a", "U Wand a", "W/m²K", 1.62),
-        Param("u_wand_b", "U Wand b", "W/m²K", 1.9),
-        Param("u_wand_c", "U Wand c", "W/m²K", 1.9),
-        Param("u_wand_d", "U Wand d", "W/m²K", 1.9),
-        Param("fenster_a", "Fenster a", "m²", 0.0),
-        Param("fenster_b", "Fenster b", "m²", 72.6),
-        Param("fenster_c", "Fenster c", "m²", 0.0),
-        Param("fenster_d", "Fenster d", "m²", 123.8),
-        Param("u_fenster_a", "U Fenster a", "W/m²K", 2.5),
-        Param("u_fenster_b", "U Fenster b", "W/m²K", 2.5),
-        Param("u_fenster_c", "U Fenster c", "W/m²K", 2.5),
-        Param("u_fenster_d", "U Fenster d", "W/m²K", 2.5),
-        Param("dach_laenge", "Dachanteil", "m", 0.0),
-        Param("dach_anteil", "Dach Anteil", "-", 1.0),
-        Param("u_dach", "U Dach", "W/m²K", 0.91),
-        Param("fenster_dach", "Dachfenster", "m²", 0.0),
-        Param("u_fenster_dach", "U Dachfenster", "W/m²K", 2.5),
-        Param("boden_anteil", "Bodenplatte Anteil", "-", 1.0),
-        Param("u_boden", "U Bodenplatte", "W/m²K", 0.16),
-        Param("geschosse", "Geschosse", "-", 1.0),
-        Param("hoehe", "Höhe", "m", 6.15),
-        Param("bauart", "Bauart", "Wh/(m²K)", 90.0),
-        Param("ausrichtung", "Ausrichtung", "Grad", 65.0),
-        Param("waermebruecke", "Wärmebrücke", "W/(m²K)", 0.1),
-        Param("waermeuebergang", "Wärmeüberg.", "W/m²K", 7.7),
-        Param("g_faktor", "g-Faktor", "-", 0.8),
-        Param("verschattung_1", "Verschattung 1", "-", 0.7),
-        Param("verschattung_2", "Verschattung 2", "-", 0.9),
-        Param("verschattung_3", "Verschattung 3", "-", 0.9),
-        Param("verschattung_4", "Verschattung 4", "-", 1.0),
-        Param("spez_beleuchtung", "spez. Leistung Beleuchtung", "W/m²", 2.0),
-        Param("start_temperatur", "Starttemperatur", "°C", 20.0),
+        Param("laenge_a", "Länge a", "m", 22.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("laenge_b", "Länge b", "m", 33.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("laenge_c", "Länge c", "m", 22.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("laenge_d", "Länge d", "m", 33.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("laenge_e", "Länge e", "m", 0.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("aw_anteil_a", "Außenwand a", "-", 1.0, darstellung=ZAHL, dezimalstellen=2),
+        Param("aw_anteil_b", "Außenwand b", "-", 0.5, darstellung=ZAHL, dezimalstellen=2),
+        Param("aw_anteil_c", "Außenwand c", "-", 0.35, darstellung=ZAHL, dezimalstellen=2),
+        Param("aw_anteil_d", "Außenwand d", "-", 1.0, darstellung=ZAHL, dezimalstellen=2),
+        Param("aw_anteil_e", "Außenwand e", "-", 0.0, darstellung=ZAHL, dezimalstellen=2),
+        Param("u_wand_a", "U Wand a", "W/m²K", 1.62, darstellung=ZAHL, dezimalstellen=2),
+        Param("u_wand_b", "U Wand b", "W/m²K", 1.9, darstellung=ZAHL, dezimalstellen=2),
+        Param("u_wand_c", "U Wand c", "W/m²K", 1.9, darstellung=ZAHL, dezimalstellen=2),
+        Param("u_wand_d", "U Wand d", "W/m²K", 1.9, darstellung=ZAHL, dezimalstellen=2),
+        Param("fenster_a", "Fenster a", "m²", 0.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("fenster_b", "Fenster b", "m²", 72.6, darstellung=ZAHL, dezimalstellen=1),
+        Param("fenster_c", "Fenster c", "m²", 0.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("fenster_d", "Fenster d", "m²", 123.8, darstellung=ZAHL, dezimalstellen=1),
+        Param("u_fenster_a", "U Fenster a", "W/m²K", 2.5, darstellung=ZAHL, dezimalstellen=2),
+        Param("u_fenster_b", "U Fenster b", "W/m²K", 2.5, darstellung=ZAHL, dezimalstellen=2),
+        Param("u_fenster_c", "U Fenster c", "W/m²K", 2.5, darstellung=ZAHL, dezimalstellen=2),
+        Param("u_fenster_d", "U Fenster d", "W/m²K", 2.5, darstellung=ZAHL, dezimalstellen=2),
+        # War als "Dachanteil"/"m" beschriftet, wird aber als Winkel gerechnet
+        # (math.radians() in geometrie() unten) - das war eine falsche Einheit.
+        Param("dach_laenge", "Dachneigung", "Grad", 0.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("dach_anteil", "Dach Anteil", "-", 1.0, darstellung=ZAHL, dezimalstellen=2),
+        Param("u_dach", "U Dach", "W/m²K", 0.91, darstellung=ZAHL, dezimalstellen=2),
+        Param("fenster_dach", "Dachfenster", "m²", 0.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("u_fenster_dach", "U Dachfenster", "W/m²K", 2.5, darstellung=ZAHL, dezimalstellen=2),
+        Param("boden_anteil", "Bodenplatte Anteil", "-", 1.0, darstellung=ZAHL, dezimalstellen=2),
+        Param("u_boden", "U Bodenplatte", "W/m²K", 0.16, darstellung=ZAHL, dezimalstellen=2),
+        Param("geschosse", "Geschosse", "-", 1.0, darstellung=ZAHL, dezimalstellen=0),
+        Param("hoehe", "Höhe", "m", 6.15, darstellung=ZAHL, dezimalstellen=2),
+        Param("bauart", "Bauart", "Wh/(m²K)", 90.0, darstellung=ZAHL, dezimalstellen=0),
+        Param("ausrichtung", "Ausrichtung", "Grad", 65.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("waermebruecke", "Wärmebrücke", "W/(m²K)", 0.1, darstellung=ZAHL, dezimalstellen=2),
+        Param("waermeuebergang", "Wärmeüberg.", "W/m²K", 7.7, darstellung=ZAHL, dezimalstellen=1),
+        Param("g_faktor", "g-Faktor", "-", 0.8, darstellung=ZAHL, dezimalstellen=2),
+        Param("verschattung_1", "Verschattung 1", "-", 0.7, darstellung=ZAHL, dezimalstellen=2),
+        Param("verschattung_2", "Verschattung 2", "-", 0.9, darstellung=ZAHL, dezimalstellen=2),
+        Param("verschattung_3", "Verschattung 3", "-", 0.9, darstellung=ZAHL, dezimalstellen=2),
+        Param("verschattung_4", "Verschattung 4", "-", 1.0, darstellung=ZAHL, dezimalstellen=2),
+        Param("spez_beleuchtung", "spez. Leistung Beleuchtung", "W/m²", 2.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("start_temperatur", "Starttemperatur", "°C", 20.0, darstellung=ZAHL, dezimalstellen=1),
     ]
 
     PORTS = [
@@ -91,6 +93,7 @@ class Raum(Baustein):
     ]
 
     AUSGABEN = ["T_Raum", "F_Raum", "T_Wand", "QH_Solar", "Q_Bel", "Q_Raum"]
+    AUSGABE_LABEL = {"T_Raum": "Raumtemperatur", "F_Raum": "Raumfeuchte"}
 
     # -- Geometrie -------------------------------------------------------
 

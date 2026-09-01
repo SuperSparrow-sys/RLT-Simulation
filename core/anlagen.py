@@ -349,15 +349,63 @@ def lade_graph(anlage_id):
         von = nach_id.get(zeile["von_port_id"])
         nach = nach_id.get(zeile["nach_port_id"])
         if von and nach:
-            verbindungen.append(graph.VerbindungInstanz(von_port=von, nach_port=nach))
+            verbindungen.append(
+                graph.VerbindungInstanz(
+                    von_port=von, nach_port=nach, pfeil_id=zeile["pfeil_id"],
+                )
+            )
 
     return graph.Anlagengraph(karten=karten, verbindungen=verbindungen)
+
+
+def _messwert_label(karte, schluessel):
+    """Menschenlesere Beschriftung eines Ausgangswerts einer Karte.
+
+    Faellt auf den rohen Schluessel zurueck, wenn die Kartenklasse dafuer keine
+    eigene Beschriftung in AUSGABE_LABEL hinterlegt hat.
+    """
+    klasse = basis.hole(karte.typ)
+    return getattr(klasse, "AUSGABE_LABEL", {}).get(schluessel, schluessel)
+
+
+def _ueberschreibung(karte, feld, nach_verbindung, g):
+    """Ist `feld` ein 'fest, aber durch eine Verbindung ersetzbarer' Parameter?
+
+    Das erkennt sich rein strukturell: die Karte deklariert einen EINGANGs-Port
+    mit demselben Schluessel wie der Parameter (siehe hysterese_regler.istwert,
+    p_regler.sollwert_1/istwert_1 usw.) - kein Sonderfall je Kartentyp noetig.
+    Ist dieser Port aktuell verbunden, gilt statt des Parameterwerts die
+    Verbindung; die Rueckgabe nennt dann, woher der Wert stattdessen kommt.
+
+    Rueckgabe: None, wenn der Parameter keinen gleichnamigen Eingang hat oder
+    dieser frei ist. Sonst ein dict mit der Herkunft und der Pfeil-Id, mit der
+    sich die Verbindung wieder loesen laesst (DELETE /api/pfeile/<id>).
+    """
+    passender_port = next(
+        (p for p in karte.ports if p.schluessel == feld.schluessel), None
+    )
+    if passender_port is None or passender_port.richtung != basis.EINGANG:
+        return None
+
+    verbindung = nach_verbindung.get(passender_port.id)
+    if verbindung is None:
+        return None
+
+    quelle = g.karten.get(verbindung.von_port.karte_id)
+    return {
+        "von_karte_id": verbindung.von_port.karte_id,
+        "von_karte_name": quelle.name if quelle else "",
+        "von_schluessel": verbindung.von_port.schluessel,
+        "von_label": _messwert_label(quelle, verbindung.von_port.basis) if quelle else verbindung.von_port.schluessel,
+        "pfeil_id": verbindung.pfeil_id,
+    }
 
 
 def als_json(anlage_id):
     db = get_db()
     anlage = db.execute("SELECT * FROM anlage WHERE id = ?", (anlage_id,)).fetchone()
     g = lade_graph(anlage_id)
+    nach_verbindung = {v.nach_port.id: v for v in g.verbindungen}
 
     karten = []
     for zeile in db.execute(
@@ -379,6 +427,11 @@ def als_json(anlage_id):
                     {
                         "schluessel": f.schluessel, "label": f.label,
                         "einheit": f.einheit, "auswahl": list(f.auswahl),
+                        "darstellung": f.darstellung,
+                        "dezimalstellen": f.dezimalstellen,
+                        "ueberschrieben_von": _ueberschreibung(
+                            karte, f, nach_verbindung, g
+                        ),
                     }
                     for f in klasse.PARAMETER
                 ],
@@ -428,6 +481,46 @@ def als_json(anlage_id):
         "karten": karten,
         "pfeile": pfeile,
     }
+
+
+def messwerte_von(anlage_id):
+    """Alle Messwerte, die die Karten dieser Anlage anbieten.
+
+    Das sind die Kandidaten, um einen Istwert oder Sollwert eines Reglers
+    gezielt zu verdrahten - jeder Signalausgang mit Rolle MESSWERT, egal ob er
+    schon irgendwo angeschlossen ist oder nicht (ein Messwert darf mehrere
+    Abnehmer speisen, siehe core.graph._paare). Antwortet auf die Frage 'Wie
+    kann ich einen Regler intern auf verschiedene Groessen regeln?':
+
+    Die Oberflaeche bietet je Istwert-/Sollwert-Anschluss einer Reglerkarte
+    (Port mit rolle=ISTWERT bzw. SOLLWERT) eine Auswahl aus dieser Liste an -
+    'kommt von: <karte_name> -> <label>' - und verbindet die Wahl mit
+    POST /api/verbindungen (von_port_id=messwert['port_id'], nach_port_id=der
+    Istwert-/Sollwert-Port). Eine bestehende Wahl wird durch DELETE
+    /api/pfeile/<pfeil_id> wieder geloest, wobei die Pfeil-Id aus dem
+    'ueberschrieben_von' der jeweiligen Karte in als_json() kommt.
+    """
+    g = lade_graph(anlage_id)
+    messwerte = []
+    for karte in g.karten.values():
+        for port in karte.ports:
+            if (
+                port.art == basis.SIGNAL
+                and port.richtung == basis.AUSGANG
+                and port.rolle == basis.MESSWERT
+            ):
+                messwerte.append(
+                    {
+                        "port_id": port.id,
+                        "karte_id": karte.id,
+                        "karte_name": karte.name,
+                        "karte_typ": karte.typ,
+                        "schluessel": port.schluessel,
+                        "label": _messwert_label(karte, port.basis),
+                    }
+                )
+    messwerte.sort(key=lambda m: (m["karte_name"], m["label"]))
+    return messwerte
 
 
 def projekte():

@@ -5,7 +5,7 @@ Vorrang der Zuluftbegrenzung) und Q138/P153 bis P157 (Sequenzausgaenge).
 """
 
 from core.bausteine.basis import (
-    AUSGANG, EINGANG, ISTWERT, MESSWERT, SIGNAL, STELLGROESSE,
+    AUSGANG, EINGANG, ISTWERT, MESSWERT, SIGNAL, STELLGROESSE, ZAHL,
     Baustein, Param, Port, registriere,
 )
 from core.bausteine.sequenzregler import STUFEN
@@ -23,13 +23,13 @@ class RaumZuluftKaskade(Baustein):
     SYMBOL = "kaskade.svg"
 
     PARAMETER = [
-        Param("T_Raum_min", "min. T_Raum", "°C", 22.0),
-        Param("T_AU_min", "bei T_AU", "°C", 20.0),
-        Param("T_Raum_max", "max. T_Raum", "°C", 28.0),
-        Param("T_AU_max", "bei T_AU", "°C", 32.0),
-        Param("T_ZU_min", "min. T_ZU", "°C", 16.0),
-        Param("T_ZU_max", "max. T_ZU", "°C", 25.0),
-        Param("xp", "Xp", "-", 5.0),
+        Param("T_Raum_min", "min. T_Raum", "°C", 22.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("T_AU_min", "bei T_AU", "°C", 20.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("T_Raum_max", "max. T_Raum", "°C", 28.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("T_AU_max", "bei T_AU", "°C", 32.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("T_ZU_min", "min. T_ZU", "°C", 16.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("T_ZU_max", "max. T_ZU", "°C", 25.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("xp", "Xp", "-", 5.0, darstellung=ZAHL, dezimalstellen=1),
     ]
 
     PORTS = [
@@ -48,6 +48,7 @@ class RaumZuluftKaskade(Baustein):
         "sollwert", "waermer_3", "waermer_2", "waermer_1",
         "kaelter_1", "kaelter_2", "e",
     ]
+    AUSGABE_LABEL = {"sollwert": "gleitender Raumsollwert"}
 
     def gleitender_sollwert(self, T_AU, p):
         if T_AU < p["T_AU_min"]:

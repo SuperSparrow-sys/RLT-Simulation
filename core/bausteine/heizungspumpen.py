@@ -1,7 +1,8 @@
 """Heizungspumpen. Formel aus Anlage!AE145."""
 
 from core.bausteine.basis import (
-    AUSGANG, BETRIEB, EINGANG, SIGNAL, STROM, Baustein, Param, Port, registriere,
+    AUSGANG, BETRIEB, EINGANG, SIGNAL, STROM, ZAHL,
+    Baustein, Param, Port, registriere,
 )
 
 
@@ -13,9 +14,9 @@ class Heizungspumpen(Baustein):
     SYMBOL = "heizungspumpen.svg"
 
     PARAMETER = [
-        Param("P_allgemein", "Allgemein", "kW", 0.0),
-        Param("P_wwb", "WWB", "kW", 0.0),
-        Param("P_kessel", "Kessel", "kW", 0.0),
+        Param("P_allgemein", "Allgemein", "kW", 0.0, darstellung=ZAHL, dezimalstellen=2),
+        Param("P_wwb", "WWB", "kW", 0.0, darstellung=ZAHL, dezimalstellen=2),
+        Param("P_kessel", "Kessel", "kW", 0.0, darstellung=ZAHL, dezimalstellen=2),
     ]
 
     PORTS = [

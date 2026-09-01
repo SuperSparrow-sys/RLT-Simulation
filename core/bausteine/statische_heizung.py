@@ -5,7 +5,8 @@ Nennleistung, entsprechend Anlage!AH128/AH129.
 """
 
 from core.bausteine.basis import (
-    AUSGANG, EINGANG, MESSWERT, SIGNAL, WAERME, Baustein, Param, Port, registriere,
+    AUSGANG, EINGANG, MESSWERT, SIGNAL, WAERME, ZAHL,
+    Baustein, Param, Port, registriere,
 )
 
 
@@ -16,7 +17,7 @@ class StatischeHeizung(Baustein):
     GRUPPE = "Räume"
     SYMBOL = "statische_heizung.svg"
 
-    PARAMETER = [Param("QH_nenn", "QH_nenn", "kW", 0.0)]
+    PARAMETER = [Param("QH_nenn", "QH_nenn", "kW", 0.0, darstellung=ZAHL, dezimalstellen=1)]
 
     PORTS = [
         # Der Anschluss heisst wie die Groesse, die er aufnimmt. Ein namenloser

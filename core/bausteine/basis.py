@@ -57,15 +57,48 @@ PAARWEISE_ROLLEN = (
 )
 
 
+# Darstellungsarten: WIE ein Parameterwert angezeigt und eingegeben wird. Das
+# Parameterfenster liest allein diese Angabe (plus Einheit, Beschriftung und
+# Nachkommastellen) und richtet sich danach - kein Sonderfall je Kartentyp.
+#
+# ZAHL        - Zahl mit Einheit; die Anzeige rundet auf `dezimalstellen`, der
+#               gespeicherte Wert bleibt exakt (siehe tests/bausteine/test_basis.py).
+# PROZENT     - Zahl 0-100, mit Prozentzeichen statt einer Einheit.
+# UHRZEIT     - Tagesanteil (0..1, wie in der Excel gerechnet wird), angezeigt
+#               und eingegeben als HH:MM. Siehe uhrzeit_anzeigen()/uhrzeit_einlesen().
+# AUSWAHL     - einer von Param.auswahl.
+# TEXTLISTE   - mehrere freie Textfelder (z.B. Spaltennamen eines Datenloggers).
+# ZEITREIHE   - 24 Zahlen, ein Wert je Stunde des Tages.
+# MONATSWERTE - 12 Werte, ein Wert je Kalendermonat.
+# ZEITRAEUME  - Liste von Zeitraeumen, je als Tag.Monat von/bis.
+# ANTEILE     - Aufteilung (in Prozent) auf die dynamischen Anschluesse einer Karte.
+ZAHL = "zahl"
+PROZENT = "prozent"
+UHRZEIT = "uhrzeit"
+AUSWAHL = "auswahl"
+TEXTLISTE = "textliste"
+ZEITREIHE = "zeitreihe"
+MONATSWERTE = "monatswerte"
+ZEITRAEUME = "zeitraeume"
+ANTEILE = "anteile"
+
+
 @dataclass(frozen=True)
 class Param:
-    """Ein einstellbarer Parameter einer Karte."""
+    """Ein einstellbarer Parameter einer Karte.
+
+    `darstellung` und `dezimalstellen` steuern ausschliesslich die Anzeige im
+    Parameterfenster (siehe die Konstanten oben) - der Wert selbst, der in der
+    Datenbank steht und in berechne() ankommt, ist davon unberuehrt.
+    """
 
     schluessel: str
     label: str
     einheit: str
     vorgabe: float | str | list | dict
     auswahl: tuple = ()
+    darstellung: str = ZAHL
+    dezimalstellen: int = 1
 
 
 @dataclass(frozen=True)
@@ -117,6 +150,12 @@ class Baustein:
     PARAMETER: list = []
     PORTS: list = []
     AUSGABEN: list = []
+    # Menschenlesere Beschriftung fuer AUSGABEN-Schluessel, die als Messwert
+    # (rolle=MESSWERT) an einem Ausgangsport haengen. Nur dort gebraucht, wo ein
+    # anderer Baustein diesen Wert als Istwert/Sollwert anzapfen koennte - siehe
+    # core.anlagen.messwerte_von(). Fehlt ein Eintrag, dient der Schluessel
+    # selbst als Beschriftung.
+    AUSGABE_LABEL: dict = {}
 
     @classmethod
     def vorgabeparameter(cls) -> dict:
@@ -195,6 +234,25 @@ def hole(kennung: str):
 
 def alle() -> list:
     return list(_REGISTER.values())
+
+
+def uhrzeit_anzeigen(tagesanteil: float) -> str:
+    """Ein Tagesanteil (0..1, wie ihn die Excel und die Bausteine rechnen) als
+    'HH:MM'.
+
+    Rundet auf die Minute - NUR fuer die Anzeige im Parameterfenster. Der
+    gespeicherte Tagesanteil bleibt exakt; ein Aufruf hier veraendert nichts an
+    dem Wert, aus dem er gebildet wurde (siehe test_basis.py).
+    """
+    minuten = round((tagesanteil % 1.0) * 24 * 60) % (24 * 60)
+    stunden, minute = divmod(int(minuten), 60)
+    return f"{stunden:02d}:{minute:02d}"
+
+
+def uhrzeit_einlesen(text: str) -> float:
+    """Kehrfunktion zu uhrzeit_anzeigen(): 'HH:MM' als Tagesanteil (0..1)."""
+    stunden, minute = text.strip().split(":")
+    return (int(stunden) * 60 + int(minute)) / (24 * 60)
 
 
 def druckverlust(V: float, V_nenn: float, dp_nenn: float) -> float:

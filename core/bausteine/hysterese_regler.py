@@ -1,7 +1,7 @@
 """Zweipunktregler mit Schaltdifferenz. Formel aus Anlage!V155/AB57."""
 
 from core.bausteine.basis import (
-    AUSGANG, EINGANG, ISTWERT, SIGNAL, SOLLWERT, STELLGROESSE,
+    AUSGANG, EINGANG, ISTWERT, SIGNAL, SOLLWERT, STELLGROESSE, ZAHL,
     Baustein, Param, Port, registriere,
 )
 
@@ -18,12 +18,14 @@ class HystereseRegler(Baustein):
     SYMBOL = "hysterese_regler.svg"
 
     PARAMETER = [
-        Param("hysterese", "Hysterese", "-", 0.1),
-        Param("sollwert", "Sollwert", "-", 0.0),
+        Param("hysterese", "Hysterese", "-", 0.1, darstellung=ZAHL, dezimalstellen=2),
+        Param("sollwert", "Sollwert", "-", 0.0, darstellung=ZAHL, dezimalstellen=2),
         # Anlage!AB56: Beim Waescherregler steht hier eine feste Zahl, und der
         # Sollwert kommt als Raumfeuchte von aussen. Befeuchtet wird, wenn der Raum
-        # trockener ist als diese Zahl.
-        Param("istwert", "Istwert (fest)", "-", 0.0),
+        # trockener ist als diese Zahl. Der Baustein ist dimensionsneutral - je
+        # nachdem, was hier angeschlossen wird, ist es eine Temperatur oder eine
+        # Feuchte; die Einheit bleibt deshalb bewusst "-".
+        Param("istwert", "Istwert (fest)", "-", 0.0, darstellung=ZAHL, dezimalstellen=2),
     ]
 
     PORTS = [

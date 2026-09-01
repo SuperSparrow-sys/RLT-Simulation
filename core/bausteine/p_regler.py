@@ -7,7 +7,7 @@ gewollt und wird bewusst uebernommen.
 """
 
 from core.bausteine.basis import (
-    AUSGANG, EINGANG, ISTWERT, SIGNAL, SOLLWERT, STELLGROESSE,
+    AUSGANG, EINGANG, ISTWERT, SIGNAL, SOLLWERT, STELLGROESSE, ZAHL,
     Baustein, Param, Port, registriere,
 )
 
@@ -31,14 +31,20 @@ class PRegler(Baustein):
         # Anlage!K52 speist Ausgang 1, K54 speist Ausgang 2 - der "schnelle"
         # Regler hat die kleinere Bandbreite, weil die einen kraeftigeren
         # Eingriff je Durchgang bedeutet.
-        Param("xp_1", "Xp Regler 1 (schnell)", "-", 5.0),
-        Param("xp_2", "Xp Regler 2 (träge)", "-", 10.0),
-        Param("sollwert_1", "Sollwert 1", "-", 0.0),
-        Param("sollwert_2", "Sollwert 2", "°C", 20.0),
+        # Der Regler wird fuer ganz verschiedene Groessen eingesetzt - Temperatur
+        # beim Vor-/Nacherhitzer, Feuchte beim Entfeuchtungsregler (siehe
+        # core/vorlagen/ax_sim_2_1.py: sollwert_2=9.0 fuer den Entfeuchtungsregler
+        # ist ein Feuchtewert, keine Temperatur). Die Einheit bleibt deshalb
+        # durchgehend "-"; welche Groesse gemeint ist, sagt der Anschluss, der
+        # hier tatsaechlich haengt.
+        Param("xp_1", "Xp Regler 1 (schnell)", "-", 5.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("xp_2", "Xp Regler 2 (träge)", "-", 10.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("sollwert_1", "Sollwert 1", "-", 0.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("sollwert_2", "Sollwert 2", "-", 20.0, darstellung=ZAHL, dezimalstellen=1),
         # Anlage!S71 usw.: Bei manchen Reglern steht der Istwert als feste Zahl
         # daneben, waehrend der Sollwert von aussen kommt (umgekehrte Zuordnung).
-        Param("istwert_1", "Istwert 1 (fest)", "-", 0.0),
-        Param("istwert_2", "Istwert 2 (fest)", "-", 0.0),
+        Param("istwert_1", "Istwert 1 (fest)", "-", 0.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("istwert_2", "Istwert 2 (fest)", "-", 0.0, darstellung=ZAHL, dezimalstellen=1),
     ]
 
     PORTS = [

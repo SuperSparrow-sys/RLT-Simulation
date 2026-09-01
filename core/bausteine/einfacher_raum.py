@@ -5,7 +5,7 @@ auf 0,001 - das verhindert eine Division durch null und wird hier uebernommen.
 """
 
 from core.bausteine.basis import (
-    ABLUFT, AUSGANG, EINGANG, LUFT, MESSWERT, SIGNAL, ZULUFT,
+    ABLUFT, AUSGANG, EINGANG, LUFT, MESSWERT, SIGNAL, ZAHL, ZULUFT,
     Baustein, Luft, Param, Port, registriere,
 )
 
@@ -21,8 +21,8 @@ class EinfacherRaum(Baustein):
     SYMBOL = "einfacher_raum.svg"
 
     PARAMETER = [
-        Param("spez_transmission", "spez. Transmission", "kW/K", 0.5),
-        Param("sollwert_stat", "Sollwert für stat. Hzg", "°C", 15.0),
+        Param("spez_transmission", "spez. Transmission", "kW/K", 0.5, darstellung=ZAHL, dezimalstellen=2),
+        Param("sollwert_stat", "Sollwert für stat. Hzg", "°C", 15.0, darstellung=ZAHL, dezimalstellen=1),
     ]
 
     PORTS = [
@@ -38,6 +38,10 @@ class EinfacherRaum(Baustein):
     ]
 
     AUSGABEN = ["T_Raum", "F_Raum", "T_frei", "QH_stat"]
+    AUSGABE_LABEL = {
+        "T_Raum": "Raumtemperatur", "F_Raum": "Raumfeuchte",
+        "QH_stat": "stat. Heizleistung",
+    }
 
     def berechne(self, ein, p, zustand):
         zuluft = [

@@ -4,7 +4,7 @@ Angeschlossene Groessen erscheinen als eigene Spalte im Stundenprotokoll.
 """
 
 from core.bausteine.basis import (
-    EINGANG, PROTOKOLL, SIGNAL, Baustein, Param, Port, registriere,
+    EINGANG, PROTOKOLL, SIGNAL, TEXTLISTE, Baustein, Param, Port, registriere,
 )
 
 ANZAHL = 10
@@ -18,8 +18,8 @@ class Datenlogger(Baustein):
     SYMBOL = "datenlogger.svg"
 
     PARAMETER = [
-        Param("namen", "Spaltennamen", "-", [""] * ANZAHL),
-        Param("einheiten", "Einheiten", "-", [""] * ANZAHL),
+        Param("namen", "Spaltennamen", "", [""] * ANZAHL, darstellung=TEXTLISTE),
+        Param("einheiten", "Einheiten", "", [""] * ANZAHL, darstellung=TEXTLISTE),
     ]
 
     PORTS = [

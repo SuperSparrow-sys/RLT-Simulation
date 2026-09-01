@@ -7,7 +7,7 @@ Die Oberflaechentemperatur wird wie in der Excel als Kaltwassertemperatur plus
 
 from core.bausteine import stoffdaten as st
 from core.bausteine.basis import (
-    AUSGANG, EINGANG, KAELTE, LUFT, MESSWERT, SIGNAL, STELLGROESSE, ZULUFT,
+    AUSGANG, EINGANG, KAELTE, LUFT, MESSWERT, SIGNAL, STELLGROESSE, ZAHL, ZULUFT,
     Baustein, Luft, Param, Port, druckverlust, registriere,
 )
 
@@ -20,10 +20,10 @@ class Kuehler(Baustein):
     SYMBOL = "kuehler.svg"
 
     PARAMETER = [
-        Param("V_nenn", "V_nenn", "m³/h", 8200.0),
-        Param("dp_nenn", "dp_nenn", "Pa", 240.0),
-        Param("QK_nenn", "QK_nenn", "kW", 63.0),
-        Param("T_KW_mittel", "T_KW_mittel", "°C", 6.0),
+        Param("V_nenn", "V_nenn", "m³/h", 8200.0, darstellung=ZAHL, dezimalstellen=0),
+        Param("dp_nenn", "dp_nenn", "Pa", 240.0, darstellung=ZAHL, dezimalstellen=0),
+        Param("QK_nenn", "QK_nenn", "kW", 63.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("T_KW_mittel", "T_KW_mittel", "°C", 6.0, darstellung=ZAHL, dezimalstellen=1),
     ]
 
     PORTS = [
@@ -35,6 +35,7 @@ class Kuehler(Baustein):
     ]
 
     AUSGABEN = ["T_aus", "F_aus", "QK", "dp"]
+    AUSGABE_LABEL = {"T_aus": "Austrittstemperatur"}
 
     def oberflaechentemperatur(self, T_ein, p):
         return p["T_KW_mittel"] + 0.15 * (T_ein - p["T_KW_mittel"])

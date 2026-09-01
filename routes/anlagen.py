@@ -57,6 +57,14 @@ def anlage_lesen(anlage_id):
     return jsonify(anlagen.als_json(anlage_id))
 
 
+@bp.get("/anlagen/<int:anlage_id>/messwerte")
+def messwerte(anlage_id):
+    """Alle Messwerte dieser Anlage - fuer die Auswahl 'Istwert/Sollwert kommt
+    von: <Karte> -> <Messwert>' beim gezielten Verdrahten eines Reglers (siehe
+    core.anlagen.messwerte_von)."""
+    return jsonify(anlagen.messwerte_von(anlage_id))
+
+
 @bp.get("/anlagen/<int:anlage_id>/simulationen")
 def simulationen(anlage_id):
     return jsonify(ergebnisse.simulationen_von(anlage_id))

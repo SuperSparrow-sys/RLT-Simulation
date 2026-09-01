@@ -1,8 +1,8 @@
 """Mischkammer aus Aussenluft und Umluft. Formeln aus Anlage!M132 bis M134."""
 
 from core.bausteine.basis import (
-    AUSGANG, AUSSENLUFT, EINGANG, LUFT, SIGNAL, STELLGROESSE, UMLUFT, ZULUFT,
-    Baustein, Luft, Param, Port, registriere,
+    AUSGANG, AUSSENLUFT, EINGANG, LUFT, PROZENT, SIGNAL, STELLGROESSE, UMLUFT,
+    ZULUFT, Baustein, Luft, Param, Port, registriere,
 )
 
 
@@ -13,7 +13,9 @@ class Mischkammer(Baustein):
     GRUPPE = "Luftbehandlung"
     SYMBOL = "mischkammer.svg"
 
-    PARAMETER = [Param("max_umluft", "max. Umluft", "%", 80.0)]
+    PARAMETER = [
+        Param("max_umluft", "max. Umluft", "%", 80.0, darstellung=PROZENT, dezimalstellen=1)
+    ]
 
     PORTS = [
         Port("aussenluft_ein", LUFT, EINGANG, AUSSENLUFT),

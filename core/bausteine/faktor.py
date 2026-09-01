@@ -7,7 +7,7 @@ Luftwaescher laeuft, und waermt die adiabatisch gekuehlte Luft nach.
 """
 
 from core.bausteine.basis import (
-    AUSGANG, EINGANG, SIGNAL, STELLGROESSE, Baustein, Param, Port, registriere,
+    AUSGANG, EINGANG, SIGNAL, STELLGROESSE, ZAHL, Baustein, Param, Port, registriere,
 )
 
 
@@ -18,7 +18,7 @@ class Faktor(Baustein):
     GRUPPE = "Regelung"
     SYMBOL = "faktor.svg"
 
-    PARAMETER = [Param("faktor", "Faktor", "-", 1.0)]
+    PARAMETER = [Param("faktor", "Faktor", "-", 1.0, darstellung=ZAHL, dezimalstellen=2)]
 
     PORTS = [
         Port("ein", SIGNAL, EINGANG, STELLGROESSE),

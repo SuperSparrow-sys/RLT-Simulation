@@ -1,7 +1,7 @@
 """Lufterhitzer. Formeln aus Anlage!M19, M17, M21 und dem Block R116:T136."""
 
 from core.bausteine.basis import (
-    AUSGANG, EINGANG, LUFT, MESSWERT, SIGNAL, STELLGROESSE, WAERME, ZULUFT,
+    AUSGANG, EINGANG, LUFT, MESSWERT, SIGNAL, STELLGROESSE, WAERME, ZAHL, ZULUFT,
     Baustein, Luft, Param, Port, druckverlust, registriere,
 )
 
@@ -14,9 +14,9 @@ class Erhitzer(Baustein):
     SYMBOL = "erhitzer.svg"
 
     PARAMETER = [
-        Param("V_nenn", "V_nenn", "m³/h", 8200.0),
-        Param("dp_nenn", "dp_nenn", "Pa", 240.0),
-        Param("QH_max", "QH_max", "kW", 101.0),
+        Param("V_nenn", "V_nenn", "m³/h", 8200.0, darstellung=ZAHL, dezimalstellen=0),
+        Param("dp_nenn", "dp_nenn", "Pa", 240.0, darstellung=ZAHL, dezimalstellen=0),
+        Param("QH_max", "QH_max", "kW", 101.0, darstellung=ZAHL, dezimalstellen=1),
     ]
 
     PORTS = [
@@ -28,6 +28,7 @@ class Erhitzer(Baustein):
     ]
 
     AUSGABEN = ["T_aus", "F_aus", "QH", "dp"]
+    AUSGABE_LABEL = {"T_aus": "Austrittstemperatur"}
 
     def berechne(self, ein, p, zustand):
         luft = ein.get("luft_ein", Luft())

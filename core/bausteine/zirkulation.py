@@ -1,7 +1,7 @@
 """Zirkulationsleitung. Formeln aus Anlage!AE157 und AE158."""
 
 from core.bausteine.basis import (
-    AUSGANG, BETRIEB, EINGANG, SIGNAL, STROM, WAERME,
+    AUSGANG, BETRIEB, EINGANG, SIGNAL, STROM, WAERME, ZAHL,
     Baustein, Param, Port, registriere,
 )
 
@@ -14,9 +14,9 @@ class Zirkulation(Baustein):
     SYMBOL = "zirkulation.svg"
 
     PARAMETER = [
-        Param("volumenstrom", "Zirkulation", "m³/h", 1.5),
-        Param("spreizung", "Zirk. VL-RL", "K", 5.0),
-        Param("P_pumpe", "Zirk_PU", "kW", 0.04),
+        Param("volumenstrom", "Zirkulation", "m³/h", 1.5, darstellung=ZAHL, dezimalstellen=1),
+        Param("spreizung", "Zirk. VL-RL", "K", 5.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("P_pumpe", "Zirk_PU", "kW", 0.04, darstellung=ZAHL, dezimalstellen=2),
     ]
 
     PORTS = [

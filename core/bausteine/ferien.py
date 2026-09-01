@@ -5,7 +5,7 @@ Wetterjahr gelten. Zeitraeume ueber den Jahreswechsel sind erlaubt.
 """
 
 from core.bausteine.basis import (
-    AUSGANG, FERIEN, SIGNAL, Baustein, Param, Port, registriere,
+    AUSGANG, FERIEN, SIGNAL, ZEITRAEUME, Baustein, Param, Port, registriere,
 )
 
 
@@ -21,7 +21,7 @@ class Ferien(Baustein):
     GRUPPE = "Zeit und Betrieb"
     SYMBOL = "ferien.svg"
 
-    PARAMETER = [Param("zeitraeume", "Zeiträume", "-", [])]
+    PARAMETER = [Param("zeitraeume", "Zeiträume", "", [], darstellung=ZEITRAEUME)]
 
     PORTS = [Port("ferien", SIGNAL, AUSGANG, FERIEN)]
 

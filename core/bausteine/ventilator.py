@@ -6,7 +6,8 @@ der Ausgangspunkt.
 """
 
 from core.bausteine.basis import (
-    ABLUFT, AUSGANG, EINGANG, LUFT, MESSWERT, SIGNAL, STELLGROESSE, STROM, ZULUFT,
+    ABLUFT, AUSGANG, AUSWAHL, EINGANG, LUFT, MESSWERT, PROZENT, SIGNAL,
+    STELLGROESSE, STROM, ZAHL, ZULUFT,
     Baustein, Luft, Param, Port, registriere,
 )
 
@@ -19,13 +20,16 @@ class Ventilator(Baustein):
     SYMBOL = "ventilator.svg"
 
     PARAMETER = [
-        Param("rolle", "Zuluft/Abluft", "-", "zuluft", auswahl=("zuluft", "abluft")),
-        Param("V_max", "V_max", "m³/h", 8200.0),
-        Param("dp_max", "dp_max", "Pa", 1400.0),
-        Param("dp_konst", "dp_konst", "Pa", 1400.0),
-        Param("PE_max", "PE_max", "kW", 4.9),
-        Param("regelart", "FU/DD/-", "-", "F", auswahl=("F", "D", "-")),
-        Param("stellgroesse", "Stellgröße (fest)", "%", 100.0),
+        Param("rolle", "Zuluft/Abluft", "-", "zuluft", auswahl=("zuluft", "abluft"), darstellung=AUSWAHL),
+        Param("V_max", "V_max", "m³/h", 8200.0, darstellung=ZAHL, dezimalstellen=0),
+        Param("dp_max", "dp_max", "Pa", 1400.0, darstellung=ZAHL, dezimalstellen=0),
+        Param("dp_konst", "dp_konst", "Pa", 1400.0, darstellung=ZAHL, dezimalstellen=0),
+        Param("PE_max", "PE_max", "kW", 4.9, darstellung=ZAHL, dezimalstellen=1),
+        Param("regelart", "FU/DD/-", "-", "F", auswahl=("F", "D", "-"), darstellung=AUSWAHL),
+        # Wirkt nur, solange der Anschluss 'stellgroesse' unverbunden ist - das
+        # Parameterfenster zeigt das anhand der Verbindungsauskunft aus
+        # core.anlagen.als_json() an (siehe dortiges 'ueberschrieben_von').
+        Param("stellgroesse", "Stellgröße (fest)", "%", 100.0, darstellung=PROZENT, dezimalstellen=1),
     ]
 
     PORTS = [
@@ -37,6 +41,7 @@ class Ventilator(Baustein):
     ]
 
     AUSGABEN = ["T_aus", "F_aus", "PE", "dp", "V"]
+    AUSGABE_LABEL = {"T_aus": "Austrittstemperatur"}
 
     @classmethod
     def ports_fuer(cls, p):

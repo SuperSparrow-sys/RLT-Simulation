@@ -11,8 +11,8 @@ core/ergebnisse.py liest sie beim Speichern eines Laufs aus.
 """
 
 from core.bausteine.basis import (
-    AUSGANG, EINGANG, KAELTE, MESSWERT, SIGNAL, STROM, WAERME, WASSER,
-    Baustein, Param, Port, registriere,
+    AUSGANG, EINGANG, KAELTE, MESSWERT, SIGNAL, STROM, UHRZEIT, WAERME, WASSER,
+    ZAHL, Baustein, Param, Port, registriere,
 )
 
 
@@ -24,14 +24,14 @@ class Bilanz(Baustein):
     SYMBOL = "bilanz.svg"
 
     PARAMETER = [
-        Param("preis_strom_ht", "Strom HT", "EUR/MWh", 150.0),
-        Param("preis_strom_nt", "Strom NT", "EUR/MWh", 150.0),
-        Param("preis_strom_leistung", "Strom Leist.", "EUR/kW/a", 0.0),
-        Param("preis_waerme", "Wärme", "EUR/MWh", 50.0),
-        Param("preis_kaelte", "Kälte", "EUR/MWh", 50.0),
-        Param("preis_wasser", "Wasser", "EUR/m³", 4.0),
-        Param("ht_von", "HT von", "Tagesanteil", 7.0 / 24.0),
-        Param("ht_bis", "HT bis", "Tagesanteil", 20.0 / 24.0),
+        Param("preis_strom_ht", "Strom HT", "EUR/MWh", 150.0, darstellung=ZAHL, dezimalstellen=2),
+        Param("preis_strom_nt", "Strom NT", "EUR/MWh", 150.0, darstellung=ZAHL, dezimalstellen=2),
+        Param("preis_strom_leistung", "Strom Leist.", "EUR/kW/a", 0.0, darstellung=ZAHL, dezimalstellen=2),
+        Param("preis_waerme", "Wärme", "EUR/MWh", 50.0, darstellung=ZAHL, dezimalstellen=2),
+        Param("preis_kaelte", "Kälte", "EUR/MWh", 50.0, darstellung=ZAHL, dezimalstellen=2),
+        Param("preis_wasser", "Wasser", "EUR/m³", 4.0, darstellung=ZAHL, dezimalstellen=2),
+        Param("ht_von", "HT von", "", 7.0 / 24.0, darstellung=UHRZEIT),
+        Param("ht_bis", "HT bis", "", 20.0 / 24.0, darstellung=UHRZEIT),
     ]
 
     PORTS = [
@@ -43,6 +43,7 @@ class Bilanz(Baustein):
     ]
 
     AUSGABEN = ["strom_ht", "strom_nt", "waerme", "kaelte", "wasser", "hochtarif"]
+    AUSGABE_LABEL = {"hochtarif": "Hochtarif aktiv"}
 
     def _summe(self, ein, praefix):
         return sum(

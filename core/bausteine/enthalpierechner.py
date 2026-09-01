@@ -23,6 +23,7 @@ class Enthalpierechner(Baustein):
     ]
 
     AUSGABEN = ["h", "rF"]
+    AUSGABE_LABEL = {"h": "Enthalpie", "rF": "rel. Feuchte"}
 
     def berechne(self, ein, p, zustand):
         t = float(ein.get("t", 0.0))

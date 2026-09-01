@@ -6,7 +6,8 @@ Volumenstrom gewichtet, genau wie in der Excel.
 """
 
 from core.bausteine.basis import (
-    ABLUFT, AUSGANG, EINGANG, LUFT, MESSWERT, SIGNAL, STELLGROESSE, ZULUFT,
+    ABLUFT, AUSGANG, EINGANG, LUFT, MESSWERT, PROZENT, SIGNAL, STELLGROESSE,
+    ZAHL, ZULUFT,
     Baustein, Luft, Param, Port, registriere,
 )
 
@@ -19,11 +20,11 @@ class Waermerueckgewinnung(Baustein):
     SYMBOL = "wrg.svg"
 
     PARAMETER = [
-        Param("V_nenn", "V_nenn", "m³/h", 12200.0),
-        Param("dp_WRG_nenn", "dp_WRG_nenn", "Pa", 170.0),
-        Param("dp_Bypass_nenn", "dp_Byp_nenn", "Pa", 50.0),
-        Param("rueckwaermzahl", "Rückwärmzahl", "%", 81.0),
-        Param("rueckfeuchtzahl", "Rückfeuchtzahl", "%", 0.0),
+        Param("V_nenn", "V_nenn", "m³/h", 12200.0, darstellung=ZAHL, dezimalstellen=0),
+        Param("dp_WRG_nenn", "dp_WRG_nenn", "Pa", 170.0, darstellung=ZAHL, dezimalstellen=0),
+        Param("dp_Bypass_nenn", "dp_Byp_nenn", "Pa", 50.0, darstellung=ZAHL, dezimalstellen=0),
+        Param("rueckwaermzahl", "Rückwärmzahl", "%", 81.0, darstellung=PROZENT, dezimalstellen=1),
+        Param("rueckfeuchtzahl", "Rückfeuchtzahl", "%", 0.0, darstellung=PROZENT, dezimalstellen=1),
     ]
 
     PORTS = [
@@ -37,6 +38,7 @@ class Waermerueckgewinnung(Baustein):
     ]
 
     AUSGABEN = ["T_ZU", "F_ZU", "T_FO", "F_FO", "Q_WRG", "dp_ZU", "dp_AB"]
+    AUSGABE_LABEL = {"Q_WRG": "rückgewonnene Leistung"}
 
     def berechne(self, ein, p, zustand):
         zu = ein.get("zuluft_ein", Luft())

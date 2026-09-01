@@ -6,7 +6,7 @@ abgegebene Waerme entspricht der aufgenommenen elektrischen Leistung.
 """
 
 from core.bausteine.basis import (
-    AUSGANG, BETRIEB, EINGANG, MESSWERT, SIGNAL, STROM,
+    AUSGANG, BETRIEB, EINGANG, MESSWERT, SIGNAL, STROM, ZAHL,
     Baustein, Param, Port, registriere,
 )
 
@@ -19,9 +19,9 @@ class Beleuchtung(Baustein):
     SYMBOL = "beleuchtung.svg"
 
     PARAMETER = [
-        Param("spez_leistung", "sp. Leistung", "W/m²", 2.0),
-        Param("grundflaeche", "Grundfläche", "m²", 726.0),
-        Param("nennbeleuchtung", "Nennbel.", "lx", 300.0),
+        Param("spez_leistung", "sp. Leistung", "W/m²", 2.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("grundflaeche", "Grundfläche", "m²", 726.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("nennbeleuchtung", "Nennbel.", "lx", 300.0, darstellung=ZAHL, dezimalstellen=0),
     ]
 
     PORTS = [
@@ -31,6 +31,7 @@ class Beleuchtung(Baustein):
     ]
 
     AUSGABEN = ["Q_Bel", "PE"]
+    AUSGABE_LABEL = {"Q_Bel": "Beleuchtungswärme"}
 
     def berechne(self, ein, p, zustand):
         betrieb = float(ein.get("betrieb", 1.0))

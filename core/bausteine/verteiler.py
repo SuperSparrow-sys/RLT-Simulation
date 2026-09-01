@@ -9,7 +9,8 @@ Meldet ein Gang keinen Bedarf, greift der Parameter 'anteile'.
 """
 
 from core.bausteine.basis import (
-    AUSGANG, EINGANG, LUFT, LUFTWEG, Baustein, Luft, Param, Port, registriere,
+    ANTEILE, AUSGANG, EINGANG, LUFT, LUFTWEG,
+    Baustein, Luft, Param, Port, registriere,
 )
 
 
@@ -20,7 +21,9 @@ class Verteiler(Baustein):
     GRUPPE = "Verteilung"
     SYMBOL = "verteiler.svg"
 
-    PARAMETER = [Param("anteile", "Anteile je Gang", "%", {})]
+    PARAMETER = [
+        Param("anteile", "Anteile je Gang", "%", {}, darstellung=ANTEILE)
+    ]
 
     PORTS = [
         Port("luft_ein", LUFT, EINGANG, LUFTWEG),
