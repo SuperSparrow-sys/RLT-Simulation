@@ -10748,6 +10748,244 @@ git commit -m "Signalrollen geschaerft: Messwerte passen nur noch namensgleich"
 
 ---
 
+### Nachtrag: drei Lücken, die der Durchstich danach zeigte
+
+Der erste Durchlauf dieser Aufgabe deckte drei Dinge auf, die der Plan nicht bedacht
+hatte. Sie gehören zur selben Sache und werden hier miterledigt.
+
+- [ ] **Step 11: Signalausgänge dürfen mehrere Verbraucher speisen**
+
+Bisher galt ein Ausgang als verbraucht, sobald ein Pfeil ihn belegt hatte. Für einen
+**Luft**ausgang ist das richtig — ein Kanal führt an eine Stelle, Verzweigungen macht
+der Verteiler. Für einen **Signal**ausgang ist es falsch: Eine Wetterkarte muss die
+Außentemperatur gleichzeitig an die Außenluft, an jeden Raum und an den
+Kaskadenregler geben, und die Betriebskarte muss drei Ventilatoren und die
+Beleuchtung ansteuern. In `core/graph.py`, in `_paare`:
+
+```python
+    for v in von_karte.ports:
+        if v.richtung != basis.AUSGANG:
+            continue
+        # Ein Luftausgang ist ein Kanal - er fuehrt an genau eine Stelle, und
+        # Verzweigungen macht der Verteiler. Ein Signalausgang ist ein Messwert oder
+        # ein Stellsignal; den koennen beliebig viele lesen. Die Wetterkarte speist
+        # Aussenluft, Raeume und Regler zugleich, die Betriebskarte alle Ventilatoren.
+        if v.art == basis.LUFT and v.id in belegt:
+            continue
+```
+
+- [ ] **Step 12: Der namenlose Istwert-Anschluss wird nur bei Eindeutigkeit belegt**
+
+Ein Regler hat einen Anschluss `istwert`, der keine bestimmte Größe nennt. Eine Karte
+mit sieben Messwerten findet dort immer irgendetwas — im Durchlauf legte die
+Wetterkarte `F_AU` auf `T_Raum` und `QH_S` auf `T_ZU` des Kaskadenreglers. Diese
+Zuordnung ist nur dann verlässlich, wenn die Quelle **genau einen** Messwert anbietet.
+Ebenfalls in `_paare`, vor der Schleife und in der Bewertung:
+
+```python
+    # Ein namenloser Istwert-Anschluss wird nur belegt, wenn die Quelle genau einen
+    # Messwert anbietet. Sonst waere die Wahl geraten: eine Wetterkarte mit sieben
+    # Messwerten wuerde irgendeinen davon in den Regler legen. Bei mehreren bleibt
+    # der Anschluss frei und wird von Hand verbunden.
+    messwerte = [
+        p for p in von_karte.ports
+        if p.art == basis.SIGNAL and p.richtung == basis.AUSGANG
+        and p.rolle == basis.MESSWERT
+    ]
+    eindeutig = len(messwerte) == 1
+```
+
+und in der inneren Schleife, direkt nach `punkte = _punkte(v, n)`:
+
+```python
+            if (
+                punkte == 2
+                and v.rolle == basis.MESSWERT
+                and n.rolle == basis.ISTWERT
+                and v.basis != n.basis
+                and not eindeutig
+            ):
+                punkte = 0
+```
+
+- [ ] **Step 13: Die statische Heizung heißt ihren Anschluss nach der Größe**
+
+`statische_heizung` hatte einen Eingang `bedarf` mit der Rolle `ISTWERT`. Weil der
+einfache Raum drei Messwerte anbietet, griff die Zuordnung die erste — `T_Raum` statt
+`QH_stat`. Der Anschluss wird nach der Größe benannt, die er aufnimmt, dann trifft ihn
+der Namensvergleich sicher. In `core/bausteine/statische_heizung.py`:
+
+```python
+    PORTS = [
+        # Der Anschluss heisst wie die Groesse, die er aufnimmt. Ein namenloser
+        # 'bedarf' wuerde vom Raum den erstbesten Messwert bekommen - T_Raum statt
+        # QH_stat -, weil der Raum drei davon anbietet.
+        Port("QH_stat", SIGNAL, EINGANG, MESSWERT),
+        Port("QH", SIGNAL, AUSGANG, WAERME),
+    ]
+```
+
+und in `berechne` entsprechend `float(ein.get("QH_stat", 0.0))`. Der Test in
+`tests/test_graph.py` erwartet dann `zuordnung.get("QH_stat") == "QH_stat"`.
+
+- [ ] **Step 14: Einzelne Anschlüsse bewusst verbinden**
+
+Wo die Zuordnung mehrdeutig bleibt — der Feuchteregler an einem Raum mit mehreren
+Messwerten —, muss sie von Hand möglich sein. In `core/anlagen.py`:
+
+```python
+def verbindung_anlegen(anlage_id, von_port_id, nach_port_id):
+    """Verbindet zwei Anschluesse ausdruecklich, ohne zu raten.
+
+    Die automatische Verdrahtung laesst einen namenlosen Istwert-Anschluss frei,
+    wenn die Quelle mehrere Messwerte anbietet - welcher gemeint ist, kann sie nicht
+    wissen. Diese Funktion ist der Weg, ihn dann selbst zu setzen. Sie legt einen
+    Pfeil mit genau einer Verbindung an, damit er sich wie jeder andere loeschen
+    laesst.
+    """
+    db = get_db()
+    ports = {}
+    for port_id in (von_port_id, nach_port_id):
+        zeile = db.execute(
+            "SELECT p.*, k.anlage_id, k.name AS karte_name FROM port p "
+            "JOIN karte k ON k.id = p.karte_id WHERE p.id = ?",
+            (port_id,),
+        ).fetchone()
+        if zeile is None:
+            raise KeyError(f"Anschluss {port_id} gibt es nicht")
+        if zeile["anlage_id"] != anlage_id:
+            raise ValueError(
+                f"Der Anschluss '{zeile['schluessel']}' gehoert nicht zu dieser Anlage"
+            )
+        ports[port_id] = zeile
+
+    von, nach = ports[von_port_id], ports[nach_port_id]
+    if von["richtung"] != "aus" or nach["richtung"] != "ein":
+        raise ValueError("Ein Pfeil laeuft von einem Ausgang zu einem Eingang")
+    if von["art"] != nach["art"]:
+        raise ValueError("Luft laesst sich nicht mit einem Signal verbinden")
+    if nach_port_id in _belegte_ports(anlage_id):
+        raise ValueError(
+            f"Der Anschluss '{nach['schluessel']}' ist schon belegt"
+        )
+
+    try:
+        cur = db.execute(
+            "INSERT INTO pfeil (anlage_id, von_karte_id, nach_karte_id) "
+            "VALUES (?, ?, ?)",
+            (anlage_id, von["karte_id"], nach["karte_id"]),
+        )
+        db.execute(
+            "INSERT INTO verbindung (pfeil_id, von_port_id, nach_port_id) "
+            "VALUES (?, ?, ?)",
+            (cur.lastrowid, von_port_id, nach_port_id),
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    return {
+        "id": cur.lastrowid,
+        "verbindungen": [
+            {"von_karte_id": von["karte_id"], "von_schluessel": von["schluessel"],
+             "nach_karte_id": nach["karte_id"], "nach_schluessel": nach["schluessel"]}
+        ],
+    }
+```
+
+und in `routes/anlagen.py`:
+
+```python
+@bp.post("/verbindungen")
+def verbindung_anlegen():
+    daten = request.get_json(force=True)
+    try:
+        pfeil = anlagen.verbindung_anlegen(
+            daten["anlage_id"], daten["von_port_id"], daten["nach_port_id"]
+        )
+    except KeyError as fehler:
+        return jsonify({"fehler": str(fehler)}), 404
+    except ValueError as fehler:
+        return jsonify({"fehler": str(fehler)}), 400
+    return jsonify(pfeil), 201
+```
+
+- [ ] **Step 15: Tests für den Nachtrag**
+
+An `tests/test_graph.py`:
+
+```python
+def test_signalausgang_speist_mehrere_verbraucher():
+    """Eine Wetterkarte versorgt Aussenluft, Raum und Regler zugleich."""
+    wetter = karte(1, "wetter")
+    belegt = set()
+    getroffen = []
+    for nummer, typ in enumerate(("aussenluft", "einfacher_raum", "kaskade"), start=2):
+        paare = graph.verdrahte(wetter, karte(nummer, typ), belegt)
+        belegt |= {n.id for _, n in paare}
+        getroffen.append([v.schluessel for v, _ in paare])
+    assert getroffen[0] == ["T_AU", "F_AU"]
+    assert getroffen[1] == ["T_AU", "F_AU"]
+    assert getroffen[2] == ["T_AU"]
+
+
+def test_luftausgang_bleibt_einem_strang_vorbehalten():
+    erhitzer = karte(1, "erhitzer")
+    erster = graph.verdrahte(erhitzer, karte(2, "kuehler"), set())
+    belegt = {v.id for v, _ in erster} | {n.id for _, n in erster}
+    assert graph.verdrahte(erhitzer, karte(3, "kuehler"), belegt) == []
+
+
+def test_namenloser_istwert_bleibt_bei_mehrdeutigkeit_frei():
+    """Der Raum bietet mehrere Messwerte an - welcher gemeint ist, ist offen."""
+    raum, feuchteregler = karte(1, "einfacher_raum"), karte(2, "hysterese_regler")
+    assert graph.verdrahte(raum, feuchteregler, belegt=set()) == []
+
+
+def test_namenloser_istwert_wird_bei_eindeutigkeit_belegt():
+    erhitzer, regler = karte(1, "erhitzer"), karte(2, "p_regler")
+    paare = graph.verdrahte(erhitzer, regler, belegt=set())
+    assert [(v.schluessel, n.schluessel) for v, n in paare] == [("T_aus", "istwert_2")]
+```
+
+An `tests/test_anlagen.py`:
+
+```python
+def test_einzelne_verbindung_von_hand(app):
+    """Wo die Zuordnung offen bleibt, muss sie sich ausdruecklich setzen lassen."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        raum = anlagen.karte_anlegen(anlage, "einfacher_raum", 0.0, 0.0)
+        regler = anlagen.karte_anlegen(anlage, "hysterese_regler", 300.0, 0.0)
+
+        with pytest.raises(ValueError, match="kein freier Anschluss"):
+            anlagen.pfeil_anlegen(anlage, raum, regler)
+
+        daten = anlagen.als_json(anlage)
+        ports = {k["id"]: {p["schluessel"]: p["id"] for p in k["ports"]}
+                 for k in daten["karten"]}
+        pfeil = anlagen.verbindung_anlegen(
+            anlage, ports[raum]["F_Raum"], ports[regler]["istwert"]
+        )
+        assert pfeil["verbindungen"][0]["von_schluessel"] == "F_Raum"
+
+        with pytest.raises(ValueError, match="schon belegt"):
+            anlagen.verbindung_anlegen(
+                anlage, ports[raum]["T_Raum"], ports[regler]["istwert"]
+            )
+```
+
+- [ ] **Step 16: Durchstich erneut laufen lassen**
+
+Run: `./venv/bin/python werkzeuge/durchstich.py`
+Expected: läuft ohne Abbruch durch, der Pfeil vom Ventilator zum Raum verbindet nur
+den Luftweg, die Wetterkarte trifft Außentemperatur und Feuchte, und die Temperatur
+nach dem Erhitzer liegt nahe 20 °C.
+
+---
+
 ## Abschluss von Stufe 1
 
 - [ ] **Alle Tests laufen lassen**
