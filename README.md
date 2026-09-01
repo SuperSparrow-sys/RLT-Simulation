@@ -21,6 +21,27 @@ Danach im Browser `http://127.0.0.1:5055` öffnen. Im lokalen Netz ist die Anwen
 über `http://<IP-Adresse>:5055` erreichbar. Beim ersten Start wird die
 SQLite-Datenbank `rlt.db` angelegt.
 
+Host, Port und Debugmodus lassen sich über Umgebungsvariablen anpassen:
+
+| Variable      | Vorgabe   | Bedeutung                          |
+|---------------|-----------|-------------------------------------|
+| `RLT_HOST`    | `0.0.0.0` | Bind-Adresse                        |
+| `RLT_PORT`    | `5055`    | Port                                 |
+| `RLT_DEBUG`   | `1`       | Flask-Debugmodus (`1`/`true`/`yes` = an) |
+
+## Dauerbetrieb
+
+Auf dem Homeserver läuft die Anwendung als systemd-Dienst `rlt-simulation.service`
+(Unit-Datei unter `/etc/systemd/system/rlt-simulation.service`) auf Port `20006`,
+gebunden an `127.0.0.1` mit ausgeschaltetem Debugmodus. Erreichbar über
+`https://homeserver.taila8377a.ts.net:20006`.
+
+```bash
+sudo systemctl status rlt-simulation.service
+sudo systemctl restart rlt-simulation.service
+journalctl -u rlt-simulation.service -f
+```
+
 ## Tests
 
 ```bash
