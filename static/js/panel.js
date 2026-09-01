@@ -58,7 +58,11 @@ const Panel = {
     zeile.className = "panel-zeile";
     const text = document.createElement("span");
     text.className = "panel-label";
-    text.textContent = einheit ? `${beschriftung} [${einheit}]` : beschriftung;
+    // "-" ist der Platzhalter fuer Auswahlfelder ohne echte Einheit
+    // (etwa dampfart, pumpenart) - ihn anzuzeigen ergaebe Beschriftungen
+    // wie "E-/Fremddampf [-]".
+    const zeigeEinheit = einheit && einheit !== "-";
+    text.textContent = zeigeEinheit ? `${beschriftung} [${einheit}]` : beschriftung;
     zeile.appendChild(text);
     zeile.appendChild(eingabe);
     return zeile;

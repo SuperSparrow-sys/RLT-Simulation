@@ -226,6 +226,53 @@ def test_api_legt_karte_an(app):
     assert antwort.get_json()["typ"] == "kuehler"
 
 
+def test_api_patch_erhaelt_parametertypen(app):
+    """PATCH /api/karten/<id> - der Weg, auf dem das Parameterfenster jede
+    Aenderung sofort speichert - darf keinen Werttyp verbiegen: ein dict
+    (Verteiler.anteile) muss ein dict bleiben, eine Liste (Ferien.zeitraeume)
+    eine Liste, und eine Zahl (Erhitzer.QH_max) eine Zahl statt eines Texts.
+    Ein Statuscode 200 allein sagt darueber nichts aus - deshalb wird nach
+    dem Schreiben ueber GET zurueckgelesen und die Struktur geprueft."""
+    klient = app.test_client()
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        verteiler = anlagen.karte_anlegen(anlage, "verteiler", 0.0, 0.0)
+        ferien = anlagen.karte_anlegen(anlage, "ferien", 0.0, 0.0)
+        erhitzer = anlagen.karte_anlegen(anlage, "erhitzer", 0.0, 0.0)
+
+    assert klient.patch(
+        f"/api/karten/{verteiler}",
+        json={"parameter": {"anteile": {"zuluft": 60, "abluft": 40}}},
+    ).status_code == 200
+    assert klient.patch(
+        f"/api/karten/{ferien}",
+        json={"parameter": {"zeitraeume": [{"von": "23.12.", "bis": "05.01."}]}},
+    ).status_code == 200
+    assert klient.patch(
+        f"/api/karten/{erhitzer}", json={"parameter": {"QH_max": 55.5}}
+    ).status_code == 200
+
+    daten = klient.get(f"/api/anlagen/{anlage}").get_json()
+    karten = {k["id"]: k for k in daten["karten"]}
+
+    anteile = karten[verteiler]["parameter"]["anteile"]
+    assert anteile == {"zuluft": 60, "abluft": 40}
+    assert isinstance(anteile, dict)
+
+    zeitraeume = karten[ferien]["parameter"]["zeitraeume"]
+    assert zeitraeume == [{"von": "23.12.", "bis": "05.01."}]
+    assert isinstance(zeitraeume, list)
+
+    qh_max = karten[erhitzer]["parameter"]["QH_max"]
+    assert qh_max == 55.5
+    assert isinstance(qh_max, float)
+    # dp_nenn wurde nicht mitgeschickt und muss bei der Vorgabe bleiben -
+    # die PATCH-Route ersetzt nur die genannten Schluessel, nicht die ganze
+    # Parametermenge.
+    assert karten[erhitzer]["parameter"]["dp_nenn"] == 240.0
+
+
 def test_einzelne_verbindung_von_hand(app):
     """Wo die Zuordnung offen bleibt, muss sie sich ausdruecklich setzen lassen."""
     with app.app_context():

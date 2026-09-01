@@ -268,6 +268,7 @@ const Editor = {
         return;
       }
       this.auswahl = null;
+      panelLeeren();
       await this.laden(this.anlage.id);
     });
   },
@@ -275,6 +276,7 @@ const Editor = {
 
 window.addEventListener("DOMContentLoaded", async () => {
   Editor.bindeLeinwand();
+  panelLeeren();
   await Palette.laden();
   await Editor.laden(window.ANLAGE_ID);
   pfeileBinden(Editor);
