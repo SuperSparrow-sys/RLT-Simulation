@@ -116,8 +116,8 @@ def test_init_db_legt_tabellen_an(tmp_path, monkeypatch):
             r["name"]
             for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")
         }
+        spalten = {r[1] for r in db.execute("PRAGMA table_info(port)")}
     assert {"projekt", "anlage", "karte", "port", "pfeil", "verbindung"} <= namen
-    spalten = {r[1] for r in db.execute("PRAGMA table_info(port)")}
     assert "basis" in spalten, "Der Basisname eines Ports gehoert in die Datenbank"
 
 
