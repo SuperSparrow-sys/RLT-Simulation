@@ -35,10 +35,20 @@ class Waermerueckgewinnung(Baustein):
         Port("stellgroesse", SIGNAL, EINGANG, STELLGROESSE),
         Port("stellgroesse_bypass", SIGNAL, EINGANG, STELLGROESSE),
         Port("Q_WRG", SIGNAL, AUSGANG, MESSWERT),
+        # Anlage!J38 = T_ZU. Der Wert wird ohnehin gerechnet; er braucht einen
+        # Anschluss, weil die Mappe genau daran regelt: J60 = J38 ist der Istwert
+        # des WRG-Reglers, dessen Ausgang J61 wiederum die Stellgroesse J20
+        # setzt. Steht bewusst NACH Q_WRG - bei gleicher Bewertung entscheidet
+        # die Reihenfolge der Ports, und die vorhandene Verdrahtung soll
+        # unveraendert bleiben (Q_WRG behaelt die erste Protokollspalte).
+        Port("T_ZU", SIGNAL, AUSGANG, MESSWERT),
     ]
 
     AUSGABEN = ["T_ZU", "F_ZU", "T_FO", "F_FO", "Q_WRG", "dp_ZU", "dp_AB"]
-    AUSGABE_LABEL = {"Q_WRG": "rückgewonnene Leistung"}
+    AUSGABE_LABEL = {
+        "Q_WRG": "rückgewonnene Leistung",
+        "T_ZU": "Zulufttemperatur",
+    }
 
     def berechne(self, ein, p, zustand):
         zu = ein.get("zuluft_ein", Luft())

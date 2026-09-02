@@ -18,12 +18,12 @@ def app(tmp_path, monkeypatch):
         yield anwendung
 
 
-def wetter_anlegen(anzahl=24):
+def wetter_anlegen(anzahl=24, t_au=0.0):
     return speicher.datensatz_anlegen(
         "Test", "upload",
         [
             {
-                "zeitpunkt": datetime(2024, 1, 1, i % 24), "t_au": 0.0, "x_au": 4.0,
+                "zeitpunkt": datetime(2024, 1, 1, i % 24), "t_au": t_au, "x_au": 4.0,
                 "str_s": 0.0, "str_o": 0.0, "str_w": 0.0, "str_n": 0.0, "str_h": 0.0,
             }
             for i in range(anzahl)
@@ -266,7 +266,13 @@ def test_api_liefert_die_bilanz(app):
     with app.app_context():
         projekt = anlagen.projekt_anlegen("P")
         anlage = ax_sim_2_1.baue(projekt, "A")
-        wetter = wetter_anlegen(24)
+        # -20 °C, nicht 0 °C: Seit die Waermerueckgewinnung geregelt wird
+        # (Anlage!J20 = J61), waermt sie die Zuluft bei 0 °C aussen auf rund
+        # 12 °C vor - der Kuehler sieht dann keine Luft mehr, die kaelter ist
+        # als sein Kaltwasser, und warnt zu Recht nicht. Vorher tat er es, weil
+        # die WRG wirkungslos war. Fuer diese Pruefung braucht es deshalb
+        # Wetter, bei dem die Bedingung wirklich zutrifft.
+        wetter = wetter_anlegen(24, t_au=-20.0)
 
     antwort = klient.post(
         "/api/simulation",
@@ -288,8 +294,8 @@ def test_api_liefert_die_bilanz(app):
 
     groessen = {z["groesse"] for z in daten["bilanz"]}
     assert groessen == {"strom_ht", "strom_nt", "waerme", "kaelte", "wasser"}
-    # Diese Vorlage steuert im Januar tatsaechlich einen Kuehler an, der dabei
-    # ausserhalb seines Einsatzbereichs liegt (siehe kuehler.py) - die API
+    # Bei dieser Kaelte steuert die Vorlage tatsaechlich einen Kuehler an, der
+    # dabei ausserhalb seines Einsatzbereichs liegt (siehe kuehler.py) - die API
     # liefert das als gruppierte Warnung mit, statt es zu verschweigen.
     assert daten["baustein_warnungen"]
     eintrag = daten["baustein_warnungen"][0]

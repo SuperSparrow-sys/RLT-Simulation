@@ -8,6 +8,9 @@ Aufbau (Anlage!I2:AC43):
     beide Gaenge -> Raum -> Sammler -> Abluftventilator -> Waermerueckgewinnung
                                                         -> Fortluft
 
+Die Waermerueckgewinnung regelt ihre eigene Zulufttemperatur (Anlage!J59: 18 °C)
+ueber einen P-Regler; der Bypass ist die Umkehrung seiner Stellgroesse.
+
 Alle Nennwerte sind aus dem Blatt 'Anlage' uebernommen; die Zellbezuege stehen
 jeweils als Kommentar daneben.
 """
@@ -125,6 +128,25 @@ def baue(projekt_id, name="AX_SIM 2.1"):
         xp_1=5.0, xp_2=10.0, sollwert_2=19.0,          # Anlage!N52, N54, M59
     )
 
+    # WRG-Regler (Anlage!K53, Kette K53=J61-((J60-J59)/K54)): J60=J38, der
+    # Istwert ist also die Zulufttemperatur der WRG SELBST - sie regelt ihre
+    # eigene Austrittstemperatur auf 18 °C. Der Ausgang J61 setzt die
+    # Stellgroesse J20; der Bypass ist dessen Umkehrung (J21 = 100 - J20) und
+    # steht deshalb, wie beim Entfeuchter, als eigenes Umkehrglied davor.
+    #
+    # J38 haengt selbst von J20 ab und J20 vom Regler, dessen Istwert J38 ist -
+    # ein Zirkelbezug, den die Mappe ueber Application.Iteration aufloest. Hier
+    # loest ihn ZUSTAND_UEBER_ITERATION des P-Reglers (siehe
+    # core/bausteine/p_regler.py): der Ausgang baut sich ueber die Durchgaenge
+    # des Vorwaertslaufs auf, statt in einem Durchgang zu springen.
+    regler_wrg = karte(
+        "p_regler", 250, 320, "Regler Wärmerückgewinnung",
+        xp_1=5.0, xp_2=10.0, sollwert_2=18.0,          # Anlage!K52, K54, J59
+    )
+    wrg_umkehr = karte(
+        "umkehrglied", 250, 180, "Umkehrung WRG-Bypass",   # Anlage!J21: 100-J20
+    )
+
     # Entfeuchtungsregler (Anlage!S61, Kette T53=S61-((S60-S59)/T54)): S60=AH46,
     # der Istwert ist also die Raumfeuchte; S59 ist ein fester Sollwert. EIN
     # Regler fuer beide Geraete. Sein Ausgang geht umgekehrt in beide
@@ -213,10 +235,14 @@ def baue(projekt_id, name="AX_SIM 2.1"):
         preis_waerme=50.0, preis_kaelte=50.0, preis_wasser=4.0,
         ht_von=7.0 / 24.0, ht_bis=20.0 / 24.0,
     )
+    # Die WRG gibt seit dem T_ZU-Anschluss zwei Messwerte ab; der Pfeil zum
+    # Datenlogger verdrahtet beide, T_ZU landet in der zweiten Spalte. Sie ist
+    # hier ausdruecklich benannt, damit die Spalten des Protokolls weiter zu
+    # dem passen, was tatsaechlich an ihnen haengt (Anlage!I38 heisst "T_ZU").
     logger = karte(
         "datenlogger", 1930, 460, "Datenlogger",
-        namen=["WRG", "T Raum", "F Raum"] + [""] * 7,
-        einheiten=["kW", "°C", "g/kg"] + [""] * 7,
+        namen=["WRG", "T_ZU WRG", "T Raum", "F Raum"] + [""] * 6,
+        einheiten=["kW", "°C", "°C", "g/kg"] + [""] * 6,
     )
 
     # -- Verdrahtung --------------------------------------------------
@@ -294,6 +320,17 @@ def baue(projekt_id, name="AX_SIM 2.1"):
     # namenloser Sollwert- oder Istwert-Anschluss bleibt nach der Regel aus
     # Task 26 deshalb frei. Diese vier Verbindungen werden darum ausdruecklich
     # gesetzt statt automatisch geraten.
+    # Auch die WRG bietet inzwischen mehrere Messwerte an (Q_WRG und T_ZU) -
+    # derselbe Fall wie beim Raum, also wieder von Hand. Und in der
+    # Gegenrichtung braucht der Regler beide Stellsignale an der richtigen
+    # Stelle: ein gewoehnlicher Pfeil legte den ungenutzten schnellen Ausgang
+    # (Anlage!J57) auf den Bypass, weil beide Anschluesse dieselbe Rolle tragen
+    # und dann die Portreihenfolge entscheidet.
+    verbinde(wrg, "T_ZU", regler_wrg, "istwert_2")             # Anlage!J60 = J38
+    verbinde(regler_wrg, "ausgang_2", wrg, "stellgroesse")     # Anlage!J20 = J61
+    verbinde(regler_wrg, "ausgang_2", wrg_umkehr, "ein")
+    verbinde(wrg_umkehr, "ausgang", wrg, "stellgroesse_bypass")  # Anlage!J21
+
     verbinde(raum, "F_Raum", entfeuchtungsregler, "istwert_2")  # Anlage!S60
     verbinde(raum, "T_Raum", kuehlregler, "sollwert_2")         # Anlage!S70
     verbinde(raum, "F_Raum", waescherregler_1, "sollwert")      # Anlage!AB55

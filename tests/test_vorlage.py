@@ -138,6 +138,53 @@ def test_kuehler_wird_von_zwei_reglern_gestellt(app):
     assert typen.count("faktor") >= 2, "je Erhitzer ein Faktorglied fuer die Verriegelung"
 
 
+def test_waermerueckgewinnung_wird_geregelt(app):
+    """Anlage!J20 = J61, J21 = 100 - J20, J60 = J38.
+
+    Befund vor dieser Pruefung: An den beiden Stellgroessen-Anschluessen der WRG
+    hing kein Pfeil. Der Baustein liest 'stellgroesse' mit 0 als Vorgabe, und
+    anders als der Ventilator hat er keinen Ersatzparameter - die
+    Rueckgewinnung war damit das ganze Jahr ueber abgeschaltet, Q_WRG blieb
+    null, und die Fortluft ging ungenutzt ins Freie.
+    """
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("Referenz")
+        anlage = ax_sim_2_1.baue(projekt, "AX_SIM 2.1")
+        daten = anlagen.als_json(anlage)
+
+    nach_id = {k["id"]: k for k in daten["karten"]}
+    ports = {p["id"]: (nach_id[k["id"]]["name"], p["schluessel"])
+             for k in daten["karten"] for p in k["ports"]}
+    verbindungen = [
+        (ports[v["von_port_id"]], ports[v["nach_port_id"]])
+        for pfeil in daten["pfeile"] for v in pfeil["verbindungen"]
+    ]
+
+    an_die_wrg = {
+        (von, nach[1]) for von, nach in verbindungen
+        if nach[0] == "Wärmerückgewinnung" and nach[1].startswith("stellgroesse")
+    }
+    gestellt = {schluessel for _, schluessel in an_die_wrg}
+    assert gestellt == {"stellgroesse", "stellgroesse_bypass"}, an_die_wrg
+
+    # Anlage!J20 = J61: der TRAEGE Ausgang des Reglers, nicht der schnelle.
+    quellen = dict(an_die_wrg)
+    assert quellen[("Regler Wärmerückgewinnung", "ausgang_2")] == "stellgroesse"
+    # Anlage!J21 = 100 - J20: der Bypass ueber ein Umkehrglied.
+    assert quellen[("Umkehrung WRG-Bypass", "ausgang")] == "stellgroesse_bypass"
+
+    # Anlage!J60 = J38: der Regler misst die Zulufttemperatur der WRG selbst.
+    istwert = [
+        (von, nach) for von, nach in verbindungen
+        if nach == ("Regler Wärmerückgewinnung", "istwert_2")
+    ]
+    assert istwert == [(("Wärmerückgewinnung", "T_ZU"),
+                        ("Regler Wärmerückgewinnung", "istwert_2"))], istwert
+
+    regler = next(k for k in daten["karten"] if k["name"] == "Regler Wärmerückgewinnung")
+    assert regler["parameter"]["sollwert_2"] == 18.0   # Anlage!J59
+
+
 def test_reglerverstaerkungen_entsprechen_der_excel(app):
     """Anlage!K52 speist Ausgang 1, K54 speist Ausgang 2 - der traege hat die 10."""
     with app.app_context():

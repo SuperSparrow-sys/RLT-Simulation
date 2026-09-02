@@ -296,9 +296,17 @@ def test_anlagenbetrieb_erreicht_die_verbraucher():
 
 
 def test_messwerte_landen_im_datenlogger():
+    """Jeder abgegebene Messwert bekommt eine eigene Spalte, in Portreihenfolge.
+
+    Die Waermerueckgewinnung gibt zwei Messwerte ab (Anlage!J37 = Q_WRG und
+    Anlage!J38 = T_ZU); beide landen im Protokoll, Q_WRG zuerst, weil sein Port
+    zuerst deklariert ist.
+    """
     wrg, logger = karte(1, "wrg"), karte(2, "datenlogger")
     paare = graph.verdrahte(wrg, logger, belegt=set())
-    assert [(v.schluessel, n.schluessel) for v, n in paare] == [("Q_WRG", "wert_1")]
+    assert [(v.schluessel, n.schluessel) for v, n in paare] == [
+        ("Q_WRG", "wert_1"), ("T_ZU", "wert_2"),
+    ]
 
 
 def test_raum_meldet_seinen_heizbedarf_an_die_statische_heizung():
