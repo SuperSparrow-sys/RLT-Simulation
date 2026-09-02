@@ -935,3 +935,19 @@ def test_keine_zahl_im_angezeigten_text_traegt_einen_punkt():
             if re.search(r":,?\.[1-9]f\}", zeile) and "replace" not in zeile:
                 verstoesse.append(f"{rel}:{nummer}: {zeile.strip()}")
     assert not verstoesse, "\n".join(verstoesse)
+
+
+def test_die_kopfleiste_des_berichts_passt_auf_ein_telefon():
+    """Mit dem ganzen Satz „Zurück zur Anlage" braucht die Leiste 442 Punkte,
+    ein iPhone hat 390 - die Seite ließ sich dann quer schieben. Derselbe
+    Ausweg wie im Editor: der Weg zurück verliert sein Wort und behält sein
+    Zeichen. Dazu muss das Wort in .knopf-wort stecken, sonst greift die
+    Regel nicht."""
+    wurzel = Path(__file__).resolve().parent.parent
+    vorlage = (wurzel / "templates" / "bericht.html").read_text(encoding="utf-8")
+    kopf = vorlage[vorlage.index("<header"):vorlage.index("</header>")]
+    assert 'class="knopf-wort"' in kopf
+
+    css = (wurzel / "static" / "css" / "bericht.css").read_text(encoding="utf-8")
+    assert ".seite-bericht .knopf-wort" in css
+    assert "@media (max-width: 480px)" in css

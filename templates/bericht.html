@@ -10,7 +10,7 @@
 </head>
 <body class="seite-bericht">
   <header class="bericht-kopfleiste">
-    <a class="zurueck-knopf" href="{{ url_for('pages.editor', anlage_id=daten.anlage.id) }}">{% include "bedienzeichen/pfeil-links.svg" %}Zurück zur Anlage</a>
+    <a class="zurueck-knopf" href="{{ url_for('pages.editor', anlage_id=daten.anlage.id) }}">{% include "bedienzeichen/pfeil-links.svg" %}<span class="knopf-wort">Zurück zur Anlage</span></a>
     <!-- Dieselben drei Stufen wie ueberall (style.css, "Kopfleiste des
          Editors"): eine Pille mit einem Wort fuer den benannten Weg, genau
          EINE gefuellte Pille fuer den Zweck der Seite. "Drucken" trug

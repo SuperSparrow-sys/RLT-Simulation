@@ -28,6 +28,17 @@ body.seite-bericht {
 
 .bericht-kopfleiste-knoepfe { display: flex; gap: 8px; }
 
+/* Auf einem Telefon passen die drei Knoepfe nicht nebeneinander: mit dem
+   ganzen Satz "Zurueck zur Anlage" braucht die Leiste 442 Punkte
+   (nachgemessen), ein iPhone hat 390 - die Seite liess sich dann quer
+   schieben. Derselbe Ausweg wie in der Kopfleiste des Editors (style.css,
+   @media (max-width: 1400px)): der Weg zurueck verliert sein Wort und
+   behaelt sein Zeichen, der Platz gehoert den Wegen zum Ergebnis. */
+@media (max-width: 480px) {
+  .seite-bericht .knopf-wort { display: none; }
+  .seite-bericht .zurueck-knopf { width: 36px; padding: 0; }
+}
+
 .bericht {
   max-width: 900px;
   margin: 0 auto;
