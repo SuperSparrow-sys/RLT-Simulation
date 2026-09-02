@@ -51,7 +51,8 @@ def _preise(graph):
 STATUS_LAEUFT = "laeuft"
 
 
-def beginne(anlage_id, wetterdatensatz_id, von, bis, kennung):
+def beginne(anlage_id, wetterdatensatz_id, von, bis, kennung,
+            reihen_kennung=None, reihen_index=None, reihen_gesamt=None):
     """Legt die Zeile eines neu gestarteten Laufs sofort an, Status 'laeuft'.
 
     Vorher entstand die Zeile erst am Ende (in speichere()) - ein Neuladen
@@ -60,13 +61,20 @@ def beginne(anlage_id, wetterdatensatz_id, von, bis, kennung):
     kann core.laeufe.laufender_auftrag() sie wiederfinden, und
     core.database._aufraeume_verwaiste_laeufe() erkennt sie nach einem
     Neustart als verwaist.
+
+    'reihen_kennung'/'reihen_index'/'reihen_gesamt' markieren einen Lauf, der
+    zu einem Jahr innerhalb einer core.laeufe.starte_reihe()-Reihe gehoert
+    (Vergleich mehrerer Wetterjahre) - None (Vorgabe) fuer einen einzeln
+    gestarteten Lauf. Siehe core/database.py fuer die Begruendung der drei
+    Spalten.
     """
     db = get_db()
     cur = db.execute(
         "INSERT INTO simulation (anlage_id, wetterdatensatz_id, von_stunde, "
-        "bis_stunde, status, kennung, fortschritt) "
-        "VALUES (?, ?, ?, ?, ?, ?, 0)",
-        (anlage_id, wetterdatensatz_id, von, bis, STATUS_LAEUFT, kennung),
+        "bis_stunde, status, kennung, fortschritt, reihen_kennung, "
+        "reihen_index, reihen_gesamt) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)",
+        (anlage_id, wetterdatensatz_id, von, bis, STATUS_LAEUFT, kennung,
+         reihen_kennung, reihen_index, reihen_gesamt),
     )
     db.commit()
     return cur.lastrowid
@@ -219,11 +227,36 @@ def simulation_loeschen(simulation_id):
 def laufende_simulation(anlage_id):
     """Die Zeile des aktuell laufenden Simulationslaufs dieser Anlage, falls
     es einen gibt - sonst None. Juengste zuerst, falls durch einen Randfall
-    (z.B. ein umgangener Client) doch mehr als eine Zeile 'laeuft'."""
+    (z.B. ein umgangener Client) doch mehr als eine Zeile 'laeuft'.
+
+    Schliesst Zeilen aus, die zu einer Reihe gehoeren (reihen_kennung IS NOT
+    NULL, siehe beginne()) - fuer die zustaendig ist laufende_reihe(); sonst
+    zeigte ein Neuladen waehrend einer laufenden Reihe zusaetzlich zur
+    Reihen-Fortschrittsanzeige noch die (verwirrende, weil unvollstaendige)
+    Anzeige eines vermeintlich einzelnen Laufs fuer dasselbe Jahr."""
     db = get_db()
     zeile = db.execute(
         "SELECT id, kennung, von_stunde, bis_stunde, fortschritt FROM simulation "
-        "WHERE anlage_id = ? AND status = ? ORDER BY id DESC LIMIT 1",
+        "WHERE anlage_id = ? AND status = ? AND reihen_kennung IS NULL "
+        "ORDER BY id DESC LIMIT 1",
+        (anlage_id, STATUS_LAEUFT),
+    ).fetchone()
+    return dict(zeile) if zeile else None
+
+
+def laufende_reihe(anlage_id):
+    """Der aktuell laufende Jahreslauf einer Reihe (core.laeufe.starte_reihe)
+    dieser Anlage, falls es eine gibt - sonst None. Liefert nur die Kennung
+    der Reihe und ihre Position (reihen_index/reihen_gesamt); der
+    ausfuehrlichere Stand (bereits vorliegende Ergebnisse je Jahr, Fortschritt
+    der laufenden Stunde) kommt aus dem Arbeitsspeicher des Prozesses -
+    core.laeufe.laufende_reihe_auftrag() fuehrt beides zusammen, analog zu
+    laufender_auftrag() fuer einen einzelnen Lauf."""
+    db = get_db()
+    zeile = db.execute(
+        "SELECT reihen_kennung, reihen_index, reihen_gesamt FROM simulation "
+        "WHERE anlage_id = ? AND status = ? AND reihen_kennung IS NOT NULL "
+        "ORDER BY id DESC LIMIT 1",
         (anlage_id, STATUS_LAEUFT),
     ).fetchone()
     return dict(zeile) if zeile else None
@@ -339,7 +372,15 @@ def letzte_werte(simulation_id):
 
 def _stichprobe(elemente, anzahl):
     """Bis zu 'anzahl' ueber die Liste verteilte Eintraege - kein Ausschnitt vom
-    Anfang, der bei einer taktenden Regelschleife immer dieselbe Ursache zeigt."""
+    Anfang, der bei einer taktenden Regelschleife immer dieselbe Ursache zeigt.
+
+    anzahl=0 (core.vergleich braucht nur die Zahl der Warnungen, keine
+    Beispiele) lieferte hier vorher eine ZeroDivisionError statt einer leeren
+    Liste - 'anzahl <= 0' faengt das ausdruecklich ab, statt sich auf die
+    Laengenpruefung darunter zu verlassen (die greift bei anzahl=0 und
+    nicht-leeren 'elemente' nicht: len(elemente) <= 0 ist dann falsch)."""
+    if anzahl <= 0:
+        return []
     if len(elemente) <= anzahl:
         return list(elemente)
     schritt = len(elemente) / anzahl

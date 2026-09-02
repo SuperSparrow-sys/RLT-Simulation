@@ -60,6 +60,10 @@ const Simulation = {
       zeigeFehler("Es läuft bereits eine Simulation. Bitte warten oder abbrechen.");
       return;
     }
+    if (typeof Vergleich !== "undefined" && Vergleich.aktiv) {
+      zeigeFehler("Es läuft bereits eine Reihe für diese Anlage. Bitte warten oder abbrechen.");
+      return;
+    }
 
     let wetter;
     let bereiche;
@@ -651,8 +655,435 @@ const Simulation = {
   },
 };
 
+/* Vergleich mehrerer Wetterjahre derselben Anlage (Vorhaben B): ein Lauf je
+   ausgewaehltem Wetterdatensatz, nacheinander im Hintergrund
+   (core/laeufe.py, starte_reihe()) - dieselbe Idee wie Simulation oben, nur
+   ueber eine ganze Reihe von Laeufen statt einem einzelnen. Bewusst ein
+   eigenes Objekt statt Teil von Simulation: eigene Fortschrittsanzeige
+   (Jahr X von Y ZUSAETZLICH zu Stunde A von B), eigener Abbruch (der auch
+   die noch nicht begonnenen Jahre verhindert, core.laeufe.reihe_abbrechen),
+   eigene Wiederaufnahme nach einem Neuladen. */
+const Vergleich = {
+  reihenKennung: null,
+  aktiv: false,
+
+  async dialogOeffnen() {
+    if (this.aktiv) {
+      zeigeFehler("Es läuft bereits eine Reihe für diese Anlage. Bitte warten oder abbrechen.");
+      return;
+    }
+    if (typeof Simulation !== "undefined" && Simulation.aktiv) {
+      zeigeFehler("Es läuft bereits eine Simulation. Bitte warten oder abbrechen.");
+      return;
+    }
+
+    let wetter;
+    let bereiche;
+    try {
+      const [wetterAntwort, bereichAntwort] = await Promise.all([
+        fetch("/api/wetter"),
+        fetch("/api/simulation/schnellwahl"),
+      ]);
+      if (!wetterAntwort.ok || !bereichAntwort.ok) {
+        zeigeFehler("Vergleichsdialog konnte nicht geöffnet werden.");
+        return;
+      }
+      wetter = await wetterAntwort.json();
+      bereiche = await bereichAntwort.json();
+    } catch {
+      zeigeFehler("Vergleichsdialog konnte nicht geöffnet werden.");
+      return;
+    }
+
+    if (wetter.length < 2) {
+      zeigeFehler(
+        "Für einen Vergleich werden mindestens zwei Wetterdatensätze gebraucht " +
+          "– aktuell steht höchstens einer zur Verfügung."
+      );
+      return;
+    }
+
+    const dialog = document.createElement("div");
+    dialog.className = "dialog-huelle";
+    dialog.innerHTML = `
+      <div class="dialog">
+        <h2>Wetterjahre vergleichen</h2>
+        <p class="vergleich-hinweis">Dieselbe Anlage wird nacheinander mit jedem
+          ausgewählten Wetterdatensatz gerechnet – ein Jahreslauf dauert rund
+          acht Minuten je Datensatz.</p>
+        <label class="panel-zeile">
+          <span class="panel-label">Wetterdatensätze – Strg/Cmd-Klick für mehrere</span>
+          <select id="wahl-wetter-reihe" multiple size="6">
+            ${wetter
+              .map((w) => `<option value="${w.id}">${htmlSicher(w.name)} (${w.stunden} h)</option>`)
+              .join("")}
+          </select>
+        </label>
+        <label class="panel-zeile">
+          <span class="panel-label">Zeitraum (für jedes Jahr gleich)</span>
+          <select id="wahl-bereich-reihe">
+            ${Object.keys(bereiche)
+              .map((n) => `<option value="${n}">${BESCHRIFTUNG[n] || n}</option>`)
+              .join("")}
+            <option value="eigen">${BESCHRIFTUNG.eigen}</option>
+          </select>
+        </label>
+        <div class="panel-zeile panel-zeile-nebeneinander" id="wahl-eigen-reihe" hidden>
+          <label class="panel-zeile">
+            <span class="panel-label">von Stunde</span>
+            <input type="number" id="wahl-von-reihe" min="0" max="8759" value="0">
+          </label>
+          <label class="panel-zeile">
+            <span class="panel-label">bis Stunde</span>
+            <input type="number" id="wahl-bis-reihe" min="1" max="8760" value="8760">
+          </label>
+        </div>
+        <div class="dialog-knoepfe">
+          <button id="btn-vergleich-abbrechen">Abbrechen</button>
+          <button class="knopf-haupt" id="btn-vergleich-los">Los</button>
+        </div>
+      </div>`;
+    document.body.appendChild(dialog);
+
+    const eigenBereich = dialog.querySelector("#wahl-eigen-reihe");
+    dialog.querySelector("#wahl-bereich-reihe").addEventListener("change", (e) => {
+      eigenBereich.hidden = e.target.value !== "eigen";
+    });
+
+    dialog.querySelector("#btn-vergleich-abbrechen").onclick = () => dialog.remove();
+    dialog.querySelector("#btn-vergleich-los").onclick = () => {
+      const auswahl = Array.from(
+        dialog.querySelector("#wahl-wetter-reihe").selectedOptions
+      ).map((o) => Number(o.value));
+      if (auswahl.length < 1) {
+        zeigeFehler("Bitte mindestens einen Wetterdatensatz auswählen.");
+        return;
+      }
+      const bereichName = dialog.querySelector("#wahl-bereich-reihe").value;
+      let von;
+      let bis;
+      if (bereichName === "eigen") {
+        von = Number(dialog.querySelector("#wahl-von-reihe").value);
+        bis = Number(dialog.querySelector("#wahl-bis-reihe").value);
+        if (!Number.isFinite(von) || !Number.isFinite(bis) || von < 0 || bis <= von) {
+          zeigeFehler("Der eigene Zeitraum ist ungültig.");
+          return;
+        }
+      } else {
+        von = bereiche[bereichName].von;
+        bis = bereiche[bereichName].bis;
+      }
+      dialog.remove();
+      this.starten(auswahl, von, bis);
+    };
+  },
+
+  async starten(wetterdatensatzIds, von, bis) {
+    let antwort;
+    try {
+      antwort = await fetch("/api/simulation/reihe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          anlage_id: Editor.anlage.id,
+          wetterdatensatz_ids: wetterdatensatzIds,
+          von, bis,
+        }),
+      });
+    } catch {
+      zeigeFehler("Reihe konnte nicht gestartet werden.");
+      return;
+    }
+    if (!antwort.ok) {
+      zeigeFehler("Reihe konnte nicht gestartet werden.");
+      return;
+    }
+    const { reihen_kennung } = await antwort.json();
+    this._wiederAufnehmen(reihen_kennung);
+  },
+
+  _wiederAufnehmen(reihenKennung) {
+    this.reihenKennung = reihenKennung;
+    this.aktiv = true;
+    this._vergleichKnopfAktivieren(false);
+    this.zeigeFortschritt(reihenKennung);
+    this.beobachte(reihenKennung);
+  },
+
+  // Beim Laden der Editorseite fragen, ob fuer diese Anlage bereits eine
+  // Reihe laeuft (z.B. weil die Seite mitten in einem Drei-Jahres-Vergleich
+  // neu geladen wurde) - analog zu Simulation.pruefeLaufendenLauf().
+  async pruefeLaufendeReihe() {
+    if (this.aktiv || typeof window.ANLAGE_ID === "undefined") return;
+    let antwort;
+    try {
+      antwort = await fetch(`/api/simulation/reihe/laufend/${window.ANLAGE_ID}`);
+    } catch {
+      return;
+    }
+    if (!antwort.ok) return;
+    const stand = await antwort.json();
+    if (!stand || !stand.reihen_kennung || stand.status !== "laeuft") return;
+    this._wiederAufnehmen(stand.reihen_kennung);
+  },
+
+  _vergleichKnopfAktivieren(aktiviert) {
+    const knopf = document.getElementById("btn-vergleich");
+    if (knopf) knopf.disabled = !aktiviert;
+  },
+
+  _beendet() {
+    this.aktiv = false;
+    this._vergleichKnopfAktivieren(true);
+  },
+
+  zeigeFortschritt(reihenKennung) {
+    const alte = document.querySelector(".reihen-fortschritt-huelle");
+    if (alte) alte.remove();
+
+    const huelle = document.createElement("div");
+    huelle.className = "fortschritt-huelle reihen-fortschritt-huelle";
+    huelle.innerHTML = `
+      <div class="fortschritt">
+        <div class="fortschritt-text" id="reihe-fortschritt-jahr">Reihe läuft …</div>
+        <div class="fortschritt-schiene"><div id="reihe-fortschritt-jahr-balken"></div></div>
+        <div class="fortschritt-text" id="reihe-fortschritt-stunde"></div>
+        <div class="fortschritt-schiene"><div id="reihe-fortschritt-stunde-balken"></div></div>
+        <button id="btn-reihe-abbrechen">Abbrechen</button>
+      </div>`;
+    document.body.appendChild(huelle);
+    huelle.querySelector("#btn-reihe-abbrechen").onclick = async (e) => {
+      const knopf = e.target;
+      knopf.disabled = true;
+      knopf.textContent = "Wird abgebrochen …";
+      try {
+        const antwort = await fetch(`/api/simulation/reihe/${reihenKennung}/abbrechen`, {
+          method: "POST",
+        });
+        if (!antwort.ok) throw new Error("nicht ok");
+      } catch {
+        zeigeFehler("Abbruch konnte nicht übermittelt werden.");
+        knopf.disabled = false;
+        knopf.textContent = "Abbrechen";
+      }
+      // Der eigentliche Abbruch (aktuelles Jahr UND alle noch nicht
+      // begonnenen) zeigt sich im naechsten Abfrageschritt von beobachte()
+      // als Status "abgebrochen" - hier ist nichts weiter zu tun.
+    };
+  },
+
+  _aktualisiereFortschrittsanzeige(reihenStand) {
+    const jahrGesamt = reihenStand.jahr_gesamt || 0;
+    const jahrIndex = reihenStand.jahr_index || 0;
+    const jahrAnteil = jahrGesamt ? Math.max(0, jahrIndex - 1) / jahrGesamt : 0;
+    const jahrBalken = document.getElementById("reihe-fortschritt-jahr-balken");
+    if (jahrBalken) jahrBalken.style.width = `${(jahrAnteil * 100).toFixed(1)}%`;
+    const jahrText = document.getElementById("reihe-fortschritt-jahr");
+    if (jahrText) {
+      jahrText.textContent = jahrGesamt
+        ? `Jahr ${jahrIndex} von ${jahrGesamt}`
+        : "Reihe läuft …";
+    }
+
+    const aktuellerLaufStand = reihenStand._aktuellerLaufStand || {};
+    const fertig = aktuellerLaufStand.fertig || 0;
+    const gesamtStunden = aktuellerLaufStand.gesamt || 0;
+    const stundenAnteil = gesamtStunden ? fertig / gesamtStunden : 0;
+    const stundenBalken = document.getElementById("reihe-fortschritt-stunde-balken");
+    if (stundenBalken) stundenBalken.style.width = `${(stundenAnteil * 100).toFixed(1)}%`;
+    const stundenText = document.getElementById("reihe-fortschritt-stunde");
+    if (stundenText) {
+      stundenText.textContent = gesamtStunden ? `Stunde ${fertig} von ${gesamtStunden}` : "";
+    }
+  },
+
+  // 'reihenKennung' als Parameter uebernommen statt bei jedem Schleifendurchlauf
+  // erneut aus this.reihenKennung gelesen - dieselbe Begruendung wie bei
+  // Simulation.beobachte().
+  async beobachte(reihenKennung) {
+    const start = Date.now();
+    let fehlversuche = 0;
+    while (true) {
+      let reihenStand;
+      try {
+        const antwort = await fetch(`/api/simulation/reihe/${reihenKennung}`);
+        if (!antwort.ok) throw new Error("Antwort nicht ok");
+        reihenStand = await antwort.json();
+        fehlversuche = 0;
+      } catch {
+        fehlversuche += 1;
+        if (fehlversuche >= FORTSCHRITT_MAX_FEHLVERSUCHE) {
+          const huelle = document.querySelector(".reihen-fortschritt-huelle");
+          if (huelle) huelle.remove();
+          this._beendet();
+          zeigeFehler("Verbindung zum Server verloren. Die Reihe läuft im Hintergrund weiter.");
+          return;
+        }
+        await new Promise((r) => setTimeout(r, FORTSCHRITT_INTERVALL_KURZ_MS));
+        continue;
+      }
+
+      // Der Fortschritt des laufenden Jahres selbst (Stunde X von Y) kommt
+      // aus dem bestehenden Einzellauf-Endpunkt - der Reihen-Stand traegt
+      // nur dessen Kennung, nicht seinen Stundenfortschritt.
+      if (reihenStand.aktuelle_kennung) {
+        try {
+          const laufAntwort = await fetch(`/api/simulation/${reihenStand.aktuelle_kennung}`);
+          if (laufAntwort.ok) reihenStand._aktuellerLaufStand = await laufAntwort.json();
+        } catch {
+          /* Der Reihen-Fortschritt (Jahr X von Y) bleibt trotzdem lesbar. */
+        }
+      }
+      this._aktualisiereFortschrittsanzeige(reihenStand);
+
+      if (["fertig", "abgebrochen"].includes(reihenStand.status)) {
+        const huelle = document.querySelector(".reihen-fortschritt-huelle");
+        if (huelle) huelle.remove();
+        this._beendet();
+        await this.zeigeErgebnis(reihenStand);
+        return;
+      }
+      await new Promise((r) => setTimeout(r, naechstesIntervall(start)));
+    }
+  },
+
+  /** Nach dem Ende der Reihe (fertig oder abgebrochen): die Ergebnisse der
+   * gelungenen Jahre in eine Gegenueberstellung (core/vergleich.py) laden,
+   * fehlgeschlagene Jahre als Hinweis benennen statt sie zu verschweigen -
+   * "der Vergleich zeigt, was da ist, und benennt, was fehlt". */
+  async zeigeErgebnis(reihenStand) {
+    const ergebnisListe = reihenStand.ergebnisse || [];
+    const ids = ergebnisListe.filter((e) => e.simulation_id).map((e) => e.simulation_id);
+
+    let wetterListe = [];
+    try {
+      const wetterAntwort = await fetch("/api/wetter");
+      if (wetterAntwort.ok) wetterListe = await wetterAntwort.json();
+    } catch {
+      /* Nur fuer die Namen der fehlenden Jahre unten - kein Abbruchgrund. */
+    }
+    const wetterName = (id) => {
+      const treffer = wetterListe.find((w) => w.id === id);
+      return treffer ? treffer.name : `Wetterdatensatz ${id}`;
+    };
+    const fehlendeHtml = ergebnisListe
+      .filter((e) => !e.simulation_id || e.status === "fehler")
+      .map(
+        (e) =>
+          `<li>${htmlSicher(wetterName(e.wetterdatensatz_id))}: ${htmlSicher(e.fehler || "kein Ergebnis")}</li>`
+      )
+      .join("");
+    const nichtGerechnetHtml = fehlendeHtml
+      ? `<div class="warnhinweis"><p>Nicht gerechnet:</p><ul class="warn-beispiele">${fehlendeHtml}</ul></div>`
+      : "";
+
+    if (!ids.length) {
+      const fenster = document.createElement("div");
+      fenster.className = "dialog-huelle";
+      fenster.innerHTML = `
+        <div class="dialog">
+          <h2>Vergleich der Wetterjahre</h2>
+          <p class="warnhinweis">Kein Lauf der Reihe hat ein Ergebnis geliefert.</p>
+          ${nichtGerechnetHtml}
+          <div class="dialog-knoepfe">
+            <button class="knopf-haupt" id="btn-schliessen">Schließen</button>
+          </div>
+        </div>`;
+      document.body.appendChild(fenster);
+      fenster.querySelector("#btn-schliessen").onclick = () => fenster.remove();
+      return;
+    }
+
+    let antwort;
+    try {
+      antwort = await fetch(`/api/simulation/vergleich?ids=${ids.join(",")}`);
+    } catch {
+      zeigeFehler("Vergleich konnte nicht geladen werden.");
+      return;
+    }
+    if (!antwort.ok) {
+      zeigeFehler("Vergleich konnte nicht geladen werden.");
+      return;
+    }
+    const daten = await antwort.json();
+    this._zeigeVergleichsfenster(daten, nichtGerechnetHtml, ids);
+  },
+
+  _zeigeVergleichsfenster(daten, nichtGerechnetHtml, ids) {
+    const kopfzellen = daten.laeufe
+      .map(
+        (l) =>
+          `<th>${htmlSicher(l.wetter_name)}${
+            l.hat_ergebnis ? "" : ' <span class="vergleich-kein-ergebnis">(kein Ergebnis)</span>'
+          }</th>`
+      )
+      .join("");
+    const zeilen = daten.zeilen
+      .map((zeile) => {
+        const zellen = zeile.werte
+          .map((w) => {
+            if (w.menge === null || w.menge === undefined) {
+              return `<td class="zahl">–</td>`;
+            }
+            let abweichungHtml = "";
+            if (w.abweichung !== null && w.abweichung !== undefined) {
+              const klasse =
+                w.abweichung >= 0 ? "vergleich-abweichung-plus" : "vergleich-abweichung-minus";
+              const vorzeichen = w.abweichung >= 0 ? "+" : "";
+              abweichungHtml = ` <span class="vergleich-abweichung ${klasse}">${vorzeichen}${(
+                w.abweichung * 100
+              ).toFixed(1)} %</span>`;
+            }
+            return `<td class="zahl">${w.menge.toFixed(3)}${abweichungHtml}</td>`;
+          })
+          .join("");
+        const label = `${GROESSEN[zeile.groesse] || zeile.groesse} [${zeile.einheit}]`;
+        return `<tr><td>${label}</td>${zellen}</tr>`;
+      })
+      .join("");
+    const kostenZeile = daten.laeufe
+      .map(
+        (l) =>
+          `<td class="zahl">${l.hat_ergebnis ? `${l.kosten_gesamt.toFixed(2)} EUR` : "–"}</td>`
+      )
+      .join("");
+    const warnZeile = daten.laeufe
+      .map((l) => `<td class="zahl">${l.hat_ergebnis ? l.anzahl_warnungen : "–"}</td>`)
+      .join("");
+
+    const fenster = document.createElement("div");
+    fenster.className = "dialog-huelle";
+    fenster.innerHTML = `
+      <div class="dialog dialog-breit">
+        <h2>Vergleich der Wetterjahre</h2>
+        ${nichtGerechnetHtml}
+        <div class="vergleich-tabelle-huelle">
+          <table class="bilanz vergleich-tabelle">
+            <thead><tr><th>Größe</th>${kopfzellen}</tr></thead>
+            <tbody>
+              ${zeilen}
+              <tr class="vergleich-zeile-kosten"><td>Kosten gesamt</td>${kostenZeile}</tr>
+              <tr class="vergleich-zeile-warnungen"><td>Warnungen</td>${warnZeile}</tr>
+            </tbody>
+          </table>
+        </div>
+        <img class="vergleich-diagramm" alt="Jahresbilanz im Vergleich"
+             src="/api/simulation/vergleich/diagramm.svg?ids=${ids.join(",")}">
+        <div class="dialog-knoepfe">
+          <button class="knopf-haupt" id="btn-schliessen">Schließen</button>
+        </div>
+      </div>`;
+    document.body.appendChild(fenster);
+    fenster.querySelector("#btn-schliessen").onclick = () => fenster.remove();
+  },
+};
+
 window.addEventListener("DOMContentLoaded", () => {
   const knopf = document.getElementById("btn-simulieren");
   if (knopf) knopf.onclick = () => Simulation.dialogOeffnen();
   Simulation.pruefeLaufendenLauf();
+
+  const vergleichKnopf = document.getElementById("btn-vergleich");
+  if (vergleichKnopf) vergleichKnopf.onclick = () => Vergleich.dialogOeffnen();
+  Vergleich.pruefeLaufendeReihe();
 });

@@ -103,6 +103,13 @@
         <a class="knopf-mini" id="link-bericht" aria-disabled="true"
            title="Bericht des letzten Laufs">Bericht</a>
 
+        <!-- Vorhaben B: dieselbe Anlage ueber mehrere Wetterjahre vergleichen
+             (core/vergleich.py, core/laeufe.py starte_reihe()) - ein eigener
+             Knopf statt eine Option im Simulationsdialog, weil eine Reihe
+             ihre eigene Fortschritts-/Abbruchanzeige braucht (static/js/
+             simulation.js, Vergleich). -->
+        <button class="knopf-mini" id="btn-vergleich" title="Diese Anlage über mehrere Wetterjahre vergleichen">Vergleich</button>
+
         <button class="knopf-haupt" id="btn-simulieren">Simulieren</button>
       </header>
       <!-- .leinwand-flaeche traegt die Kanten (top/right/bottom/left,

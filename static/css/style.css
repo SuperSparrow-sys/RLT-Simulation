@@ -1123,6 +1123,21 @@ a.knopf-mini { display: inline-block; text-decoration: none; }
 }
 .warn-beispiele li { margin-bottom: 3px; }
 
+/* ---------- Vergleich mehrerer Wetterjahre (Vorhaben B) ----------
+   .vergleich-tabelle erweitert die vorhandene .bilanz-Tabelle nur um eine
+   waagerechte Schiene (mehrere Jahresspalten sind auf einem Tablet breiter
+   als der Dialog) statt eigene Zell-/Kopfregeln nachzubauen. */
+.vergleich-hinweis { font-size: 12.5px; color: var(--text-secondary); margin: -4px 0 14px; }
+.vergleich-tabelle-huelle { overflow-x: auto; overscroll-behavior: contain; margin-top: 4px; }
+.vergleich-tabelle { min-width: 100%; }
+.vergleich-tabelle th:first-child,
+.vergleich-tabelle td:first-child { white-space: nowrap; }
+.vergleich-kein-ergebnis { font-weight: 400; color: var(--text-tertiary); text-transform: none; }
+.vergleich-abweichung { font-size: 11px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.vergleich-zeile-kosten td,
+.vergleich-zeile-warnungen td { border-top: 2px solid var(--border); font-weight: 500; }
+.vergleich-diagramm { width: 100%; height: auto; margin-top: 18px; }
+
 /* ---------- Startseite ---------- */
 /* dvh/safe-area: dieselbe Begruendung wie bei .app weiter oben. */
 .start {

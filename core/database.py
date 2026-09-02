@@ -94,6 +94,17 @@ CREATE TABLE IF NOT EXISTS wetterstunde (
 """
 
 SCHEMA += """
+-- reihen_kennung/reihen_index/reihen_gesamt: fuer den Vergleich mehrerer
+-- Wetterjahre derselben Anlage (core/vergleich.py, core/laeufe.py -
+-- starte_reihe()). Jedes Jahr einer solchen Reihe bleibt eine ganz normale
+-- Zeile dieser Tabelle (ein eigener Lauf mit eigener 'kennung', wie ein
+-- einzeln gestarteter); die drei Spalten markieren nur zusaetzlich, zu
+-- welcher Reihe die Zeile gehoert und an welcher Stelle. NULL fuer jeden
+-- Lauf, der nicht Teil einer Reihe ist. Damit gilt fuer eine Reihe
+-- automatisch dieselbe Loeschsperre wie fuer jeden anderen Lauf (ein
+-- Wetterdatensatz, auf den eine dieser Zeilen zeigt, laesst sich nicht
+-- loeschen - core.wetter.speicher.datensatz_loeschen()), ohne dass diese
+-- Regel eigens fuer Reihen nachgebaut werden muesste.
 CREATE TABLE IF NOT EXISTS simulation (
     id                 INTEGER PRIMARY KEY AUTOINCREMENT,
     anlage_id          INTEGER NOT NULL REFERENCES anlage(id) ON DELETE CASCADE,
@@ -106,7 +117,10 @@ CREATE TABLE IF NOT EXISTS simulation (
     gestartet_am       TEXT NOT NULL DEFAULT (datetime('now')),
     dauer_s            REAL NOT NULL DEFAULT 0,
     warnungen          TEXT NOT NULL DEFAULT '[]',
-    baustein_warnungen TEXT NOT NULL DEFAULT '[]'
+    baustein_warnungen TEXT NOT NULL DEFAULT '[]',
+    reihen_kennung     TEXT,
+    reihen_index       INTEGER,
+    reihen_gesamt      INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS zeitreihe (
@@ -146,6 +160,7 @@ CREATE INDEX IF NOT EXISTS idx_zeitreihe_sim ON zeitreihe(simulation_id);
 CREATE INDEX IF NOT EXISTS idx_bilanz_sim    ON bilanz(simulation_id);
 CREATE INDEX IF NOT EXISTS idx_simulation_kennung ON simulation(kennung);
 CREATE INDEX IF NOT EXISTS idx_simulation_anlage_status ON simulation(anlage_id, status);
+CREATE INDEX IF NOT EXISTS idx_simulation_reihen ON simulation(reihen_kennung);
 """
 
 
@@ -223,6 +238,12 @@ def _migriere(db):
             "ALTER TABLE simulation ADD COLUMN baustein_warnungen TEXT NOT NULL "
             "DEFAULT '[]'"
         )
+    if "reihen_kennung" not in spalten:
+        db.execute("ALTER TABLE simulation ADD COLUMN reihen_kennung TEXT")
+    if "reihen_index" not in spalten:
+        db.execute("ALTER TABLE simulation ADD COLUMN reihen_index INTEGER")
+    if "reihen_gesamt" not in spalten:
+        db.execute("ALTER TABLE simulation ADD COLUMN reihen_gesamt INTEGER")
 
 
 def _aufraeume_verwaiste_laeufe(db):

@@ -1,6 +1,6 @@
 from flask import Blueprint, Response, current_app, jsonify, request
 
-from core import anlagen, ausgabe, ergebnisse, laeufe
+from core import anlagen, ausgabe, ergebnisse, laeufe, vergleich
 
 bp = Blueprint("simulation", __name__, url_prefix="/api/simulation")
 
@@ -58,6 +58,115 @@ def stand(kennung):
 def abbrechen(kennung):
     laeufe.abbrechen(kennung)
     return jsonify({"ok": True})
+
+
+# ---------------------------------------------------------------------------
+# Reihen: derselbe Anlagenlauf ueber mehrere Wetterjahre, nacheinander
+# (Vergleich mehrerer Wetterjahre - siehe core/laeufe.py und core/vergleich.py).
+# Eigene, statische Pfadsegmente ("reihe") vor den Laufkennungen oben - eine
+# Reihen-Kennung ist wie eine Laufkennung ein 32-stelliger Hex-String und
+# koennte sonst mit /<kennung> kollidieren; Werkzeug bevorzugt zwar ohnehin
+# statische Segmente vor dynamischen, die eigenen Pfade unten machen das aber
+# unabhaengig davon eindeutig.
+# ---------------------------------------------------------------------------
+
+@bp.post("/reihe")
+def reihe_starten():
+    daten = request.get_json(force=True) or {}
+    if "anlage_id" not in daten:
+        return jsonify({"fehler": "Feld 'anlage_id' fehlt"}), 400
+    wetterdatensatz_ids = daten.get("wetterdatensatz_ids")
+    if not isinstance(wetterdatensatz_ids, list) or not wetterdatensatz_ids:
+        return jsonify(
+            {"fehler": "Feld 'wetterdatensatz_ids' muss eine nicht leere Liste sein"}
+        ), 400
+    try:
+        wetterdatensatz_ids = [int(x) for x in wetterdatensatz_ids]
+        von = int(daten.get("von", 0))
+        bis = int(daten.get("bis", 8760))
+    except (TypeError, ValueError):
+        return jsonify(
+            {"fehler": "'wetterdatensatz_ids', 'von' und 'bis' müssen ganze Zahlen sein"}
+        ), 400
+
+    # Unbekannte anlage_id/wetterdatensatz_id fuehren hier bewusst nicht zu
+    # einem Fehler-Status - dieselbe Begruendung wie starten() oben: jedes
+    # Jahr faengt einen solchen Fehlschlag selbst ab (core.laeufe._reihe_laufen)
+    # und macht mit dem naechsten weiter, statt die ganze Reihe abzulehnen.
+    reihen_kennung = laeufe.starte_reihe(
+        current_app._get_current_object(),
+        daten["anlage_id"], wetterdatensatz_ids, von, bis,
+    )
+    return jsonify({"reihen_kennung": reihen_kennung}), 202
+
+
+@bp.get("/reihe/laufend/<int:anlage_id>")
+def reihe_laufend(anlage_id):
+    """Fuer die Editorseite nach einem Neuladen: laeuft fuer diese Anlage
+    gerade eine Reihe? 'null', wenn nicht - sonst Kennung und Stand, analog
+    zu /api/anlagen/<id>/laufende_simulation fuer einen einzelnen Lauf."""
+    return jsonify(laeufe.laufende_reihe_auftrag(anlage_id))
+
+
+@bp.get("/reihe/<reihen_kennung>")
+def reihe_stand(reihen_kennung):
+    return jsonify(laeufe.reihen_stand(reihen_kennung))
+
+
+@bp.post("/reihe/<reihen_kennung>/abbrechen")
+def reihe_abbrechen(reihen_kennung):
+    laeufe.reihe_abbrechen(reihen_kennung)
+    return jsonify({"ok": True})
+
+
+# ---------------------------------------------------------------------------
+# Vergleich: Gegenueberstellung bereits vorliegender Laeufe (core/vergleich.py)
+# - unabhaengig davon, ob sie einzeln oder als Reihe entstanden sind.
+# ---------------------------------------------------------------------------
+
+def _simulation_ids_aus_anfrage():
+    """Liest 'ids' aus der Query ("12,13,14") - (Liste, Fehlerantwort). Genau
+    eines der beiden ist None."""
+    roh = request.args.get("ids", "")
+    try:
+        ids = [int(teil) for teil in roh.split(",") if teil.strip()]
+    except ValueError:
+        return None, (
+            jsonify({"fehler": "'ids' muss eine kommagetrennte Liste von Zahlen sein"}),
+            400,
+        )
+    return ids, None
+
+
+@bp.get("/vergleich")
+def vergleich_route():
+    ids, fehlerantwort = _simulation_ids_aus_anfrage()
+    if fehlerantwort:
+        return fehlerantwort
+    try:
+        daten = vergleich.vergleichsdaten(ids)
+    except vergleich.VergleichNichtMoeglich as fehler:
+        return jsonify({"fehler": str(fehler)}), 400
+    except KeyError as fehler:
+        return jsonify({"fehler": str(fehler)}), 404
+    return jsonify(daten)
+
+
+@bp.get("/vergleich/diagramm.svg")
+def vergleich_diagramm_svg():
+    ids, fehlerantwort = _simulation_ids_aus_anfrage()
+    if fehlerantwort:
+        return fehlerantwort
+    try:
+        daten = vergleich.vergleichsdaten(ids)
+    except vergleich.VergleichNichtMoeglich as fehler:
+        return jsonify({"fehler": str(fehler)}), 400
+    except KeyError as fehler:
+        return jsonify({"fehler": str(fehler)}), 404
+    leinwand = vergleich.diagramm(daten)
+    if leinwand is None:
+        return jsonify({"fehler": "Kein Lauf der Auswahl hat ein Ergebnis."}), 404
+    return Response(leinwand.als_svg(), mimetype="image/svg+xml")
 
 
 @bp.delete("/<int:simulation_id>")
