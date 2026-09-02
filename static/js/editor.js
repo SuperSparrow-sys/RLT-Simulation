@@ -146,6 +146,20 @@ function bestaetigenDialog(titel, text, bestaetigenText = "Löschen") {
   });
 }
 
+/* Steht der Tastaturfokus in einem Feld, in dem jemand gerade Text
+   bearbeitet? Der Entf-Lauscher haengt am window und bekaeme sonst auch die
+   Tastendruecke ab, die dem Bezeichnungsfeld einer Karte gelten - Entf
+   loeschte dann statt eines Zeichens die ganze Karte samt ihren Pfeilen.
+   Geprueft werden Eingabefeld, Textbereich, Auswahlfeld und jedes als
+   contenteditable markierte Element; Knoepfe und die Leinwand selbst zaehlen
+   ausdruecklich nicht dazu, dort soll die Taste weiter wirken. */
+function istTexteingabe(element) {
+  if (!element) return false;
+  if (element.isContentEditable) return true;
+  const name = (element.tagName || "").toUpperCase();
+  return name === "INPUT" || name === "TEXTAREA" || name === "SELECT";
+}
+
 function textEingabeDialog(titel, vorgabe) {
   return new Promise((abschliessen) => {
     const huelle = document.createElement("div");
@@ -583,6 +597,56 @@ const Editor = {
     this.zeichne();
   },
 
+  /* Baut aus [[anzahl, einzahl, mehrzahl], ...] den Satz 'Werden mit
+     gelöscht: 5 Pfeile.' - dieselbe Idee (und fast derselbe Code) wie
+     Start._verlustHinweis() in start.js, dort aus demselben Grund noch einmal
+     eigenstaendig definiert (siehe dortiger Kommentar zu zeigeFehler()).
+     Sind es null Pfeile, entfaellt der Satz: dann geht nichts weiter
+     verloren als die Karte selbst. */
+  _verlustHinweis(teile) {
+    const genannt = teile
+      .filter(([anzahl]) => anzahl)
+      .map(([anzahl, einzahl, mehrzahl]) => `${anzahl} ${anzahl === 1 ? einzahl : mehrzahl}`);
+    if (!genannt.length) return "";
+    return ` <span class="dialog-text-verlust">Werden mit gelöscht: ${genannt.join(", ")}.</span>`;
+  },
+
+  /* Eine Karte zu loeschen reisst alle Pfeile mit, die an ihr haengen - der
+     Server raeumt sie mit weg. Deshalb dieselbe Rueckfrage wie ueberall
+     sonst (Projekt, Anlage, Wetterdaten, Lauf), und sie nennt die Zahl der
+     Pfeile, damit vorher zu sehen ist, was verloren geht. */
+  async karteLoeschenDialog(karteId) {
+    const karte = this.karteNach(karteId);
+    if (!karte) return;
+    const pfeile = (this.anlage.pfeile || []).filter(
+      (p) => p.von_karte_id === karteId || p.nach_karte_id === karteId
+    ).length;
+
+    const bestaetigt = await bestaetigenDialog(
+      "Karte löschen",
+      `Karte "${htmlSicher(karte.name)}" wirklich löschen?` +
+        this._verlustHinweis([[pfeile, "Pfeil", "Pfeile"]])
+    );
+    if (!bestaetigt) return;
+
+    let antwort;
+    try {
+      antwort = await fetch(`/api/karten/${karteId}`, { method: "DELETE" });
+    } catch {
+      zeigeFehler("Karte konnte nicht gelöscht werden.");
+      return;
+    }
+    if (!antwort.ok) {
+      zeigeFehler("Karte konnte nicht gelöscht werden.");
+      return;
+    }
+    if (this.auswahl === karteId) {
+      this.auswahl = null;
+      panelLeeren();
+    }
+    await this.laden(this.anlage.id);
+  },
+
   aktualisiereSicht() {
     document
       .getElementById("welt")
@@ -844,22 +908,16 @@ const Editor = {
       this.karteHinzufuegen(typ, Math.round(x), Math.round(y));
     });
 
+    /* Der Lauscher haengt bewusst am window und nicht an der Leinwand: die
+       Auswahl einer Karte bleibt auch bestehen, waehrend der Fokus im
+       Parameterfenster daneben liegt. Genau deshalb muss er selbst pruefen,
+       wo der Fokus steht - sonst loescht Entf beim Tippen im Feld
+       "Bezeichnung" die ganze Karte statt eines Zeichens. */
     window.addEventListener("keydown", async (e) => {
       if (e.key !== "Delete" || this.auswahl === null) return;
-      let antwort;
-      try {
-        antwort = await fetch(`/api/karten/${this.auswahl}`, { method: "DELETE" });
-      } catch {
-        zeigeFehler("Karte konnte nicht geloescht werden.");
-        return;
-      }
-      if (!antwort.ok) {
-        zeigeFehler("Karte konnte nicht geloescht werden.");
-        return;
-      }
-      this.auswahl = null;
-      panelLeeren();
-      await this.laden(this.anlage.id);
+      if (istTexteingabe(document.activeElement)) return;
+      if (document.querySelector(".dialog-huelle")) return;
+      await this.karteLoeschenDialog(this.auswahl);
     });
   },
 };

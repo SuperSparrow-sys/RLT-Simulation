@@ -24,6 +24,18 @@ def test_editor_seite_laedt_eine_anlage(app):
     assert antwort.status_code == 200
 
 
+def test_editor_seite_unbekannte_anlage_meldet_404(app):
+    """Vorher rendierte /anlage/<id> fuer JEDE Zahl den Editor, ununterscheidbar
+    von einer echten, leeren Anlage (siehe core.anlagen.anlage_existiert()) -
+    eine falsche oder veraltete Adresse muss als solche erkennbar sein."""
+    klient = app.test_client()
+    antwort = klient.get("/anlage/9999")
+    assert antwort.status_code == 404
+    html = antwort.get_data(as_text=True)
+    assert "gibt es nicht" in html
+    assert 'id="anlagenname"' not in html  # nicht der Editor selbst
+
+
 def test_editor_seite_bindet_pfeile_js_vor_editor_js_ein(app):
     """Ohne dieses Script-Tag existiert 'Pfeile' nicht und editor.js' Aufrufe
     von Pfeile.zeichneAlle()/Pfeile.binde() brechen mit einem ReferenceError
@@ -54,6 +66,36 @@ def test_editor_seite_bindet_editor_js_fuer_palette_js_ein(app):
 
     assert "js/palette.js" in html
     assert "js/editor.js" in html
+
+
+def test_entf_taste_greift_nicht_im_eingabefeld_und_fragt_nach(app):
+    """Zwei Befunde in einem Lauscher, beide ohne JS-Testlauf nicht pruefbar.
+
+    Der Entf-Lauscher haengt am window (die Auswahl bleibt auch bestehen,
+    waehrend der Fokus im Parameterfenster liegt) und muss deshalb selbst
+    pruefen, wo der Fokus steht - sonst loeschte Entf beim Tippen im Feld
+    "Bezeichnung" die ganze Karte samt ihren Pfeilen. Und Loeschen braucht
+    dieselbe Rueckfrage wie ueberall sonst.
+
+    Die Pruefung liest die ausgelieferte Datei, weil es im Projekt keinen
+    JS-Testlauf gibt; nachgestellt wurde beides im Browser. Sie haelt nur
+    fest, DASS Fokuspruefung und Rueckfrage im Lauscher stehen - nicht, wie
+    sie formuliert sind.
+    """
+    klient = app.test_client()
+    quelle = klient.get("/static/js/editor.js").get_data(as_text=True)
+
+    assert "function istTexteingabe(" in quelle
+    lauscher = quelle[quelle.index('window.addEventListener("keydown"'):]
+    lauscher = lauscher[:lauscher.index("});")]
+    assert "istTexteingabe(document.activeElement)" in lauscher
+    assert "karteLoeschenDialog" in lauscher
+
+    dialog = quelle[quelle.index("async karteLoeschenDialog("):]
+    dialog = dialog[:dialog.index("\n  },")]
+    assert "bestaetigenDialog(" in dialog
+    # Die Rueckfrage nennt, was mit der Karte verloren geht.
+    assert "_verlustHinweis(" in dialog
 
 
 def test_startseite_antwortet_mit_200(app):
