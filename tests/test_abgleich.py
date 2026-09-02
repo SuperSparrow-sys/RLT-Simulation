@@ -15,8 +15,8 @@ TOLERANZ = {"strom": 0.02, "kaelte": 0.02}
 # Kennwerte des eigenen Laufs, nicht der Excel. Gemessen am 2026-09-01 mit dem
 # damaligen Stand von Rechenkern, Vorlage und Solver (Referenzjahr 2000,
 # tests/daten/wetterdaten_try04.csv, 8760 Stunden).
-STAND_WAERME_MWH = 515.9963646670897  # <- gemessener Wert, 2026-09-01
-STAND_WASSER_M3 = 474.75434877354365  # <- gemessener Wert, 2026-09-01
+STAND_WAERME_MWH = 436.6556  # gemessen 2026-09-02, mit geregelter WRG
+STAND_WASSER_M3 = 702.0604  # gemessen 2026-09-02, mit geregelter WRG
 
 
 @pytest.fixture
