@@ -305,7 +305,7 @@ def test_alle_parameter_deklarieren_eine_darstellung_und_ganzzahlige_dezimalstel
             anzahl += 1
             assert p.darstellung in gueltig, f"{klasse.KENNUNG}.{p.schluessel}"
             assert isinstance(p.dezimalstellen, int)
-    assert anzahl == 136
+    assert anzahl == 138
 
 
 def test_alle_auswahl_parameter_tragen_wert_und_label():

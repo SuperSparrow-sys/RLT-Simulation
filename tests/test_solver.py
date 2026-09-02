@@ -414,14 +414,12 @@ def test_abbruch_beendet_den_lauf_vorzeitig():
     assert len(lauf.stunden) < 100
 
 
-def test_fehlende_konvergenz_wird_gemeldet_aber_bricht_nicht_ab():
+def _schwingende_anlage(xp_2):
     """Ein zu scharf eingestellter Regler an einem stark ueberdimensionierten Erhitzer.
 
-    500 kW auf 1000 m³/h heben die Luft um mehr als tausend Kelvin, sobald der Regler
-    aufmacht. Mit Xp = 5 ueberschiesst er in jedem Durchgang und schwingt, statt sich
-    einzupendeln. Der Lauf muss trotzdem weiterlaufen und jede betroffene Stunde
-    benennen - eine Anlage, die in einzelnen Stunden schwingt, soll immer noch eine
-    brauchbare Jahressumme liefern.
+    500 kW auf 1000 m³/h heben die Luft um mehr als tausend Kelvin, sobald der
+    Regler aufmacht. Je nach Xp ueberschiesst er entweder in jedem Durchgang
+    (Zweitakt) oder kriecht nur langsam auf den Sollwert zu.
     """
     karten = {
         1: karte(1, "wetter"),
@@ -429,9 +427,9 @@ def test_fehlende_konvergenz_wird_gemeldet_aber_bricht_nicht_ab():
         3: karte(3, "erhitzer", {"V_nenn": 1000.0, "QH_max": 500.0, "dp_nenn": 0.0}),
         4: karte(4, "ventilator", {"V_max": 1000.0, "PE_max": 0.001, "regelart": "-"}),
         5: karte(5, "fortluft"),
-        6: karte(6, "p_regler", {"xp_1": 10.0, "xp_2": 5.0, "sollwert_2": 20.0}),
+        6: karte(6, "p_regler", {"xp_1": 10.0, "xp_2": xp_2, "sollwert_2": 20.0}),
     }
-    g = verbinde(
+    return verbinde(
         karten,
         [
             (1, "T_AU", 2, "T_AU"),
@@ -443,11 +441,52 @@ def test_fehlende_konvergenz_wird_gemeldet_aber_bricht_nicht_ab():
             (3, "T_aus", 6, "istwert_2"),
         ],
     )
-    lauf = solver.Solver(g).starte(wetterstunden(3))
 
-    # Der Lauf bricht nicht ab
+
+def test_ein_zweitakt_wird_gemittelt_statt_ausgewuerfelt():
+    """Pendelt die Rechnung zwischen zwei Zuständen, gilt ihr Mittel.
+
+    Vorher lief die Schleife bis zum Anschlag und gab den ZULETZT gerechneten
+    Stand aus - und der hing allein daran, ob MAX_ITERATIONEN gerade oder
+    ungerade ist. Bei einem Regler, der zwischen 0 und 100 Prozent kippt, hieß
+    das: „die ganze Stunde an" oder „die ganze Stunde aus", ausgewürfelt von
+    einer Einstellung, die mit der Anlage nichts zu tun hat. Jetzt kommt der
+    Wert dazwischen heraus, und er bleibt derselbe, wenn man die Zahl der
+    Durchgänge ändert.
+    """
+    lauf = solver.Solver(_schwingende_anlage(5.0)).starte(wetterstunden(3))
+
     assert len(lauf.stunden) == 3
-    # und er meldet jede betroffene Stunde mit Nummer und Restabweichung
+    assert not lauf.warnungen
+    assert len(lauf.takte) == 3
+    assert lauf.takte[0]["stunde"] == 1
+    assert "taktet" in lauf.takte[0]["text"]
+
+    # Dasselbe Ergebnis bei ungerader Durchgangszahl - genau das war vorher
+    # nicht so.
+    grenze = config.MAX_ITERATIONEN
+    try:
+        config.MAX_ITERATIONEN = grenze + 1
+        andere = solver.Solver(_schwingende_anlage(5.0)).starte(wetterstunden(3))
+    finally:
+        config.MAX_ITERATIONEN = grenze
+    for a, b in zip(lauf.stunden, andere.stunden):
+        assert a[3]["QH"] == pytest.approx(b[3]["QH"])
+
+
+def test_langsame_annaeherung_wird_weiterhin_als_warnung_gemeldet():
+    """Ein Kreis, der sich seinem Wert nur nähert, statt um ihn zu springen,
+    ist etwas anderes als ein Takt - er ist schlicht nicht fertig geworden.
+    Mit einem sehr breiten Proportionalbereich kriecht der Regler so langsam,
+    dass hundert Durchgänge nicht reichen. Der Lauf muss trotzdem
+    weiterlaufen und jede betroffene Stunde benennen: eine Anlage, die in
+    einzelnen Stunden nicht fertig rechnet, soll immer noch eine brauchbare
+    Jahressumme liefern.
+    """
+    lauf = solver.Solver(_schwingende_anlage(4000.0)).starte(wetterstunden(3))
+
+    assert len(lauf.stunden) == 3
+    assert not lauf.takte
     assert len(lauf.warnungen) == 3
     assert lauf.warnungen[0]["stunde"] == 1
     assert lauf.warnungen[0]["abweichung"] > config.MAX_AENDERUNG

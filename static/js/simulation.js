@@ -96,6 +96,19 @@ const Simulation = {
       // Fruehere Laeufe sind eine Zugabe im Dialog, kein Grund, ihn zu verweigern.
     }
 
+    // Stille Fehler beim Zusammenstecken (core/pruefung.py). Hier und nicht
+    // spaeter: Wer gleich einen Jahreslauf startet, soll VORHER erfahren, dass
+    // die Waermeleistung eines Erhitzers nirgends ankommt - hinterher steht
+    // die Zahl schon in der Bilanz und sieht richtig aus. Es ist ein Hinweis,
+    // kein Riegel: der Knopf "Los" bleibt benutzbar.
+    let meldungen = [];
+    try {
+      const antwort = await fetch(`/api/anlagen/${Editor.anlage.id}/pruefung`);
+      if (antwort.ok) meldungen = (await antwort.json()).meldungen || [];
+    } catch {
+      // Auch die Pruefung ist eine Zugabe - ohne sie startet der Lauf trotzdem.
+    }
+
     const dialog = document.createElement("div");
     dialog.className = "dialog-huelle";
     dialog.innerHTML = `
@@ -128,6 +141,7 @@ const Simulation = {
             <input type="number" id="wahl-bis" min="1" max="8760" value="8760">
           </label>
         </div>
+        ${this._pruefungHtml(meldungen)}
         ${this._fruehereLaeufeHtml(fruehereLaeufe)}
         <div class="dialog-knoepfe">
           <button id="btn-abbrechen">Abbrechen</button>
@@ -246,6 +260,23 @@ const Simulation = {
   // rechnet. Stattdessen ein eigenes Kennzeichen, und ein Klick darauf
   // greift den Lauf wieder auf statt eine (noch nicht vorhandene) Bilanz zu
   // laden.
+  /* Die Befunde der Anlagenpruefung im Simulationsdialog. Leer heisst: nichts
+     gefunden - dann steht dort auch nichts, statt einer beruhigenden Zeile,
+     die man nach dem dritten Mal ohnehin nicht mehr liest. */
+  _pruefungHtml(meldungen) {
+    if (!meldungen || !meldungen.length) return "";
+    const zeilen = meldungen
+      .map((m) => `<li>${htmlSicher(m.text)}</li>`)
+      .join("");
+    return `
+      <div class="pruefung-hinweis">
+        <p class="pruefung-titel">${meldungen.length === 1
+          ? "Ein Hinweis zur Anlage"
+          : `${meldungen.length} Hinweise zur Anlage`}</p>
+        <ul class="pruefung-liste">${zeilen}</ul>
+      </div>`;
+  },
+
   _fruehereLaeufeHtml(laeufe) {
     if (!laeufe.length) {
       return `

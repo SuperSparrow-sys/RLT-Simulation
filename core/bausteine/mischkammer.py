@@ -44,18 +44,66 @@ class Mischkammer(Baustein):
         um = ein.get("umluft_ein", Luft())
         anteil = min(float(ein.get("umluftanteil", 0.0)), p["max_umluft"])
 
-        T = ((100.0 - anteil) * au.T + anteil * um.T) / 100.0
-        x = ((100.0 - anteil) * au.x + anteil * um.x) / 100.0
-        V = au.V + um.V
+        # Wieviel stromabwaerts abgenommen wird - der Solver legt es am
+        # eigenen Luftausgang ab (core/solver.py, _eingaenge). DIESE Menge
+        # verlaesst die Mischkammer, nicht die Summe dessen, was an ihren
+        # beiden Eingaengen angeboten wird: Was durch eine Mischkammer
+        # stroemt, bestimmt der Ventilator dahinter; die beiden Klappen
+        # teilen diesen einen Strom nur auf. Vorher stand hier
+        # V = au.V + um.V, und das Angebot beider Seiten addierte sich - in
+        # core/vorlagen/testanlage.py kamen so 7000 m³/h heraus, wo der
+        # Ventilator 5000 forderte. Erhitzer, Kuehler und Befeuchter davor
+        # rechneten dann mit 40 Prozent zu viel Luft, und der Ventilator
+        # setzte die Menge anschliessend still wieder auf seine eigene.
+        V_soll = float(ein.get("luft_aus", Luft()).V)
+
+        # Die Umluftklappe kann nur beimischen, was die Abluftseite anbietet.
+        # Fehlt etwas, holt die Aussenluftklappe den Rest - so wie eine echte
+        # Mischkammer, deren beide Klappen gegenlaeufig laufen.
+        V_um = min(um.V, anteil / 100.0 * V_soll)
+        V_au = max(0.0, V_soll - V_um)
+
+        if V_soll > 0:
+            T = (V_au * au.T + V_um * um.T) / V_soll
+            x = (V_au * au.x + V_um * um.x) / V_soll
+        else:
+            T, x = au.T, au.x
+
+        # Der WIRKSAME Anteil, nicht der geforderte: er sagt, was die
+        # Mischkammer tatsaechlich beigemischt hat.
+        wirksam = V_um / V_soll * 100.0 if V_soll > 0 else 0.0
 
         return (
             {
-                "luft_aus": Luft(V=V, T=T, x=x, dp=0.0),
-                "T_MI": T, "F_MI": x, "umluftanteil": anteil,
+                "luft_aus": Luft(V=V_soll, T=T, x=x, dp=0.0),
+                "T_MI": T, "F_MI": x, "umluftanteil": wirksam,
             },
             zustand,
         )
 
     def bedarf(self, aus_bedarf, p):
+        """Nennbedarf: die ganze Menge ueber die Aussenluftseite.
+
+        Das ist der Auslegungsfall - bei geschlossener Umluftklappe muss die
+        Aussenluftseite den vollen Strom tragen. Wieviel im Betrieb
+        tatsaechlich von welcher Seite kommt, entscheidet berechne() anhand
+        der Klappenstellung; hier geht es nur um die Groesse der Kanaele.
+        """
         gesamt = sum(aus_bedarf.values())
         return {"aussenluft_ein": gesamt, "umluft_ein": 0.0}
+
+    def bedarf_gestellt(self, aus_bedarf, p, werte):
+        """Gestellter Bedarf - was die Mischkammer in DIESER Stunde abnimmt.
+
+        Ohne diese Aufteilung fordert die Umluftseite dauerhaft null, und der
+        Verteiler davor schickt seinen Strom nach seinem eigenen Schluessel
+        statt nach dem, was die Mischkammer braucht. Mit ihr zieht die
+        Umluftklappe genau ihren Anteil, und der Rest der Abluft geht dorthin,
+        wo er hingehoert - zur Fortluft.
+        """
+        gesamt = sum(aus_bedarf.values())
+        anteil = min(float(werte.get("umluftanteil", 0.0)), p["max_umluft"]) / 100.0
+        return {
+            "aussenluft_ein": gesamt * (1.0 - anteil),
+            "umluft_ein": gesamt * anteil,
+        }

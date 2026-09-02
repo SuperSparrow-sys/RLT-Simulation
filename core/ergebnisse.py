@@ -94,6 +94,25 @@ def fortschritt_speichern(simulation_id, fertig):
     db.commit()
 
 
+def _meldungen_json(lauf):
+    """Konvergenzwarnungen UND taktende Stunden als eine JSON-Liste.
+
+    Beides sind Aussagen des Rechenkerns ueber einzelne Stunden, aber
+    verschiedener Art: eine Warnung heisst "hier ist die Rechnung nicht
+    fertig geworden", ein Takt heisst "hier taktet eine Zweipunktregelung
+    schneller, als eine Stundenrechnung sie aufloesen kann - ausgewiesen ist
+    das Mittel". Sie stehen in derselben Spalte, damit dafuer keine zweite
+    gebraucht wird (und keine Wanderung bestehender Datenbanken), und werden
+    ueber das Feld 'art' auseinandergehalten. Aeltere Laeufe haben dieses
+    Feld nicht; sie gelten als Konvergenzwarnungen, was sie auch waren.
+    """
+    return json.dumps(
+        [dict(w, art="konvergenz") for w in lauf.warnungen]
+        + [dict(t, art="takt") for t in getattr(lauf, "takte", [])],
+        ensure_ascii=False,
+    )
+
+
 def abschliesse(simulation_id, lauf, graph, dauer, status):
     """Schreibt den Endstand in die von beginne() angelegte Zeile und
     speichert Zeitreihen und Bilanz - das Gegenstueck zu beginne(), fuer
@@ -103,7 +122,7 @@ def abschliesse(simulation_id, lauf, graph, dauer, status):
         "UPDATE simulation SET status = ?, dauer_s = ?, warnungen = ?, "
         "fortschritt = ? WHERE id = ?",
         (
-            status, dauer, json.dumps(lauf.warnungen, ensure_ascii=False),
+            status, dauer, _meldungen_json(lauf),
             len(lauf.stunden), simulation_id,
         ),
     )
@@ -121,7 +140,7 @@ def speichere(anlage_id, wetterdatensatz_id, von, bis, lauf, graph, dauer, statu
         "bis_stunde, status, dauer_s, warnungen, fortschritt) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (anlage_id, wetterdatensatz_id, von, bis, status, dauer,
-         json.dumps(lauf.warnungen, ensure_ascii=False), len(lauf.stunden)),
+         _meldungen_json(lauf), len(lauf.stunden)),
     )
     simulation_id = cur.lastrowid
     _ergebnisse_einfuegen(db, simulation_id, lauf, graph)
@@ -425,8 +444,17 @@ def lade_warnungen(simulation_id, anzahl=5):
     zeile = db.execute(
         "SELECT warnungen FROM simulation WHERE id = ?", (simulation_id,)
     ).fetchone()
-    alle = json.loads(zeile["warnungen"]) if zeile else []
-    return {"anzahl": len(alle), "beispiele": _stichprobe(alle, anzahl)}
+    gespeichert = json.loads(zeile["warnungen"]) if zeile else []
+    # Aeltere Laeufe kennen das Feld 'art' nicht - was dort steht, waren
+    # Konvergenzwarnungen (siehe _meldungen_json).
+    alle = [m for m in gespeichert if m.get("art", "konvergenz") == "konvergenz"]
+    takte = [m for m in gespeichert if m.get("art") == "takt"]
+    return {
+        "anzahl": len(alle),
+        "beispiele": _stichprobe(alle, anzahl),
+        "takte": len(takte),
+        "takt_beispiele": _stichprobe(takte, anzahl),
+    }
 
 
 def lade_baustein_warnungen(simulation_id):

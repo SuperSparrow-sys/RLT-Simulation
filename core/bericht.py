@@ -837,6 +837,14 @@ def baue_pdf(daten) -> bytes:
     else:
         schreiber.absatz(f"{warnungen['anzahl']} Stunden ohne Konvergenz, u. a.:")
         schreiber.liste([f"Stunde {b['stunde']}: {b['text']}" for b in warnungen["beispiele"]])
+    if warnungen.get("takte"):
+        # Kein Fehler, sondern eine Aussage ueber die Anlage - siehe
+        # core/solver.py und die gleichlautende Stelle in templates/bericht.html.
+        schreiber.absatz(
+            f"In {warnungen['takte']} Stunden taktet eine Zweipunktregelung "
+            "schneller, als eine Stundenrechnung sie auflösen kann. Ausgewiesen "
+            "ist dort das Mittel beider Schaltzustände."
+        )
     if not daten["baustein_warnungen"]:
         schreiber.absatz("Keine Warnungen aus Bausteinen.")
     else:

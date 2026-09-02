@@ -59,7 +59,7 @@ class Waermerueckgewinnung(Baustein):
 
     AUSGABEN = ["T_ZU", "F_ZU", "T_FO", "F_FO", "Q_WRG", "dp_ZU", "dp_AB"]
     AUSGABE_LABEL = {
-        "Q_WRG": "rückgewonnene Leistung (kW)",
+        "Q_WRG": "rückgewonnene Wärmeleistung, sensibel (kW)",
         "T_ZU": "Zulufttemperatur nach WRG (°C)",
         "F_ZU": "Zuluftfeuchte, absolut (g/kg)",
         "T_FO": "Fortlufttemperatur (°C)",
@@ -96,6 +96,12 @@ class Waermerueckgewinnung(Baustein):
             T_FO = ab.T - p["rueckwaermzahl"] / 100.0 * (ab.T - zu.T) * anteil_ab * wirksam
             F_FO = ab.x - p["rueckfeuchtzahl"] / 100.0 * (ab.x - zu.x) * anteil_ab * wirksam
 
+        # Nur der SENSIBLE Anteil: die Temperaturerhoehung der Zuluft. Wird
+        # ueber die Rueckfeuchtzahl auch Feuchte uebertragen, steckt darin
+        # zusaetzlich latente Waerme, die diese Zahl nicht enthaelt - die Excel
+        # rechnet sie an dieser Stelle ebenfalls nicht mit (Anlage!J38).
+        # Deshalb heisst die Ausgabe "sensibel"; wer die gesamte
+        # zurueckgewonnene Enthalpie will, bildet sie aus T_ZU und F_ZU.
         Q_WRG = zu.V / 3600.0 * 1.2 * 1.007 * (T_ZU - zu.T)
 
         dp_ZU = dp_AB = 0.0

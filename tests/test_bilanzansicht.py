@@ -225,7 +225,11 @@ def test_bilanz_ohne_warnungen_meldet_zahl_null(app):
         sim = ergebnisse.speichere(anlage, wetter, 0, 1, lauf, graph, dauer=0.1)
 
     daten = app.test_client().get(f"/api/simulation/{sim}/bilanz").get_json()
-    assert daten["warnungen"] == {"anzahl": 0, "beispiele": []}
+    # Vier Felder: Konvergenzwarnungen und taktende Stunden, je mit Zahl und
+    # Stichprobe (core/ergebnisse.py, lade_warnungen).
+    assert daten["warnungen"] == {
+        "anzahl": 0, "beispiele": [], "takte": 0, "takt_beispiele": [],
+    }
 
 
 def test_abbrechen_liefert_weniger_stunden_als_angefordert(app, monkeypatch):

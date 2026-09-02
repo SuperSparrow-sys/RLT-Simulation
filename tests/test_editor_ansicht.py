@@ -181,3 +181,20 @@ def test_der_anlagenname_steht_auch_dort_wo_er_ganz_zu_lesen_ist():
 
     # Und niemand setzt den Namen an der Funktion vorbei.
     assert 'getElementById("anlagenname").textContent =' not in js
+
+
+def test_der_hauptknopf_bleibt_auch_in_einer_knopfreihe_hervorgehoben():
+    """In jeder Knopfreihe soll genau ein Knopf gefüllt sein - der, den man
+    am Ende drückt. Die Regel für die Nebenknöpfe (.dialog-knoepfe button)
+    traf vorher auch .knopf-haupt und gewann gegen dessen Regel weiter oben
+    (Spezifität 0,1,1 gegen 0,1,0): In jedem Dialog sah „Los" danach aus wie
+    „Abbrechen" daneben. Nachgemessen im Browser: Hintergrund weiß statt
+    blau. Das :not() in der Regel ist deshalb tragend und kein Beiwerk."""
+    css = (
+        pathlib.Path(__file__).resolve().parent.parent
+        / "static" / "css" / "style.css"
+    ).read_text(encoding="utf-8")
+    stelle = css.index(".dialog-knoepfe button")
+    abschnitt = css[stelle:stelle + 400]
+    assert ":not(.knopf-haupt)" in abschnitt
+    assert ":not(.knopf-haupt-gefahr)" in abschnitt

@@ -83,6 +83,18 @@ class PRegler(Baustein):
     }
 
     def _stufe(self, y_alt, sollwert, istwert, xp):
+        """Ein Schritt der Stellgroesse, begrenzt auf 0 bis 100 Prozent.
+
+        Der Regler verschiebt seine Stellgroesse je Rechendurchgang um
+        Abweichung/Xp und faengt beim Wert des vorigen Durchgangs an. Ueber die
+        Durchgaenge einer Stunde laeuft er damit so lange nach, bis die
+        Abweichung null ist - er verhaelt sich also integrierend und
+        hinterlaesst KEINE bleibende Regelabweichung, anders als ein reiner
+        P-Regler im Lehrbuch. Xp bestimmt, wie schnell er ankommt, nicht wie
+        weit er daneben liegt. Der Name stammt aus der Excel-Mappe
+        (Anlage!S140 und Nachbarn), und mit ihr steht und faellt der Vergleich;
+        deshalb bleibt er - die Erklaerung in core/lehrinhalte/ sagt es dazu.
+        """
         if not xp:
             return y_alt
         return klemme(y_alt - (istwert - sollwert) / xp)

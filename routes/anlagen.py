@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 
-from core import anlagen, ergebnisse, laeufe, verlauf, vorlagen
+from core import anlagen, ergebnisse, laeufe, pruefung, verlauf, vorlagen
 
 bp = Blueprint("anlagen", __name__, url_prefix="/api")
 
@@ -162,6 +162,22 @@ def verlauf_vor(anlage_id):
         return jsonify({"fehler": str(fehler)}), 400
     except KeyError as fehler:
         return jsonify({"fehler": str(fehler)}), 404
+
+
+@bp.get("/anlagen/<int:anlage_id>/pruefung")
+def anlage_pruefen(anlage_id):
+    """Stille Fehler beim Zusammenstecken - siehe core/pruefung.py.
+
+    Bewusst eine eigene Auskunft und nicht Teil von als_json(): sie wird nur
+    dann gebraucht, wenn jemand danach fragt (vor einem Lauf), und sie soll
+    das Laden des Editors nicht bei jeder Aenderung mit einer Rechnung ueber
+    alle Verbindungen belasten.
+    """
+    try:
+        g = anlagen.lade_graph(anlage_id)
+    except KeyError as fehler:
+        return jsonify({"fehler": str(fehler)}), 404
+    return jsonify({"meldungen": pruefung.pruefe(g)})
 
 
 @bp.get("/anlagen/<int:anlage_id>/simulationen")

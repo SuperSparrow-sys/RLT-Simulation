@@ -18,6 +18,12 @@ Je Stunde laufen zwei Durchgaenge:
    Raum seine Abluft im selben Massstab wie seine Zuluft; die ausfuehrliche
    Begruendung steht bei Solver._aktualisiere_gestellte_abnahme().
 
+   Pendelt der Vorwaertslauf zwischen zwei Zustaenden, statt sich einem zu
+   naehern, gilt ihr Mittel. Das ist kein Rechenkniff, sondern die einzige
+   Aussage, die eine Stundenrechnung ueber einen schneller taktenden
+   Zweipunktregler machen kann - und sie haengt an der Anlage statt daran, ob
+   MAX_ITERATIONEN gerade oder ungerade ist.
+
 Danach werden die Speichergroessen auf die naechste Stunde uebertragen - die
 Entsprechung des VBA-Unterprogramms Speicher().
 """
@@ -36,6 +42,10 @@ class Lauf:
     stunden: list = field(default_factory=list)
     bilanz: dict = field(default_factory=dict)
     warnungen: list = field(default_factory=list)
+    # Stunden, in denen eine Zweipunktregelung schneller taktet, als eine
+    # Stundenrechnung sie aufloesen kann - getrennt von den Warnungen, weil
+    # es kein Rechenfehler ist (siehe Solver._rechne_stunde).
+    takte: list = field(default_factory=list)
 
 
 class Solver:
@@ -276,9 +286,46 @@ class Solver:
                     groesste = max(groesste, abs(wert - vor))
         return groesste
 
+    @staticmethod
+    def _mittel(a, b):
+        """Der Mittelwert zweier Staende - fuer Grenzzyklen.
+
+        Dient sowohl den Ausgaben als auch den Speichergroessen; beide haben
+        dieselbe Form {karte_id: {name: wert}}. Wuerde nur die Ausgabe
+        gemittelt, startete die naechste Stunde aus einem der beiden Takte -
+        also wieder abhaengig davon, welcher Durchgang zuletzt lief.
+
+        Gemittelt wird, was sich mitteln laesst: Zahlen und Luftzustaende.
+        Alles andere (Texte, etwa Warnungen einer Karte) wird aus dem
+        JUENGEREN Stand uebernommen; einen halben Text gibt es nicht.
+        """
+        gemittelt = {}
+        for karte_id, werte_b in b.items():
+            werte_a = a.get(karte_id, {})
+            neu = {}
+            for name, wert_b in werte_b.items():
+                wert_a = werte_a.get(name)
+                if isinstance(wert_b, Luft) and isinstance(wert_a, Luft):
+                    neu[name] = Luft(
+                        V=(wert_a.V + wert_b.V) / 2.0,
+                        T=(wert_a.T + wert_b.T) / 2.0,
+                        x=(wert_a.x + wert_b.x) / 2.0,
+                        dp=(wert_a.dp + wert_b.dp) / 2.0,
+                    )
+                elif isinstance(wert_b, (int, float)) and isinstance(wert_a, (int, float)):
+                    neu[name] = (wert_a + wert_b) / 2.0
+                else:
+                    neu[name] = wert_b
+            gemittelt[karte_id] = neu
+        return gemittelt
+
     def _rechne_stunde(self, stunde, zustaende, gefordert):
         ausgaben = {}
         letzte_abweichung = float("inf")
+        # Fuer die Zweitakt-Erkennung weiter unten: der Stand von VOR dem
+        # letzten Durchgang und die Zustaende dazu.
+        vorvorher = None
+        vorherige_zustaende = {}
 
         # Zwei Arten von Gedaechtnis, siehe Baustein.ZUSTAND_UEBER_ITERATION:
         # Speichergroessen sehen in jeder Iteration den Stundenanfang, Regler
@@ -342,13 +389,45 @@ class Solver:
 
             letzte_abweichung = self._abweichung(vorher, ausgaben)
             if letzte_abweichung < config.MAX_AENDERUNG:
-                return ausgaben, neue_zustaende, durchgang + 1, None
+                return ausgaben, neue_zustaende, durchgang + 1, None, False
+
+            # Grenzzyklus: Der Durchgang wiederholt nicht den vorigen Stand,
+            # aber den VORVORIGEN - die Rechnung pendelt zwischen zwei
+            # Zustaenden. Das ist kein Rechenfehler, sondern das, was ein
+            # Zweipunktregler tut, dessen Stellglied die geregelte Groesse um
+            # mehr veraendert als seine Schaltdifferenz breit ist: Er schaltet
+            # ein, ueberschreitet den Sollwert und schaltet sofort wieder aus.
+            # In der Wirklichkeit taktet er dabei mehrmals je Stunde; eine
+            # Stundenrechnung kann das nicht aufloesen.
+            #
+            # Frueher lief die Schleife in so einem Fall bis zum Anschlag und
+            # gab den ZULETZT gerechneten Stand aus. Der haengt dann allein
+            # daran, ob MAX_ITERATIONEN gerade oder ungerade ist - bei einem
+            # Waescher also "die ganze Stunde an" oder "die ganze Stunde aus",
+            # ausgewuerfelt von einer Einstellung, die mit der Anlage nichts zu
+            # tun hat. Stattdessen gilt jetzt das Mittel der beiden Zustaende:
+            # der Waescher lief eben die halbe Stunde. Das ist der einzige
+            # Wert, den eine Stundenrechnung ueber einen Takt sinnvoll angeben
+            # kann, und er haengt an der Anlage statt an der Iterationszahl.
+            if vorvorher is not None:
+                zyklus = self._abweichung(vorvorher, ausgaben)
+                if zyklus < config.MAX_AENDERUNG:
+                    return (
+                        self._mittel(vorher, ausgaben),
+                        self._mittel(vorherige_zustaende, neue_zustaende),
+                        durchgang + 1,
+                        None,
+                        True,
+                    )
+            vorvorher = vorher
+            vorherige_zustaende = neue_zustaende
 
         return (
             ausgaben,
             neue_zustaende,
             config.MAX_ITERATIONEN,
             letzte_abweichung,
+            False,
         )
 
     # -- Lauf -------------------------------------------------------------
@@ -368,7 +447,7 @@ class Solver:
             if abbruch is not None and abbruch():
                 break
 
-            ausgaben, zustaende, durchgaenge, abweichung = self._rechne_stunde(
+            ausgaben, zustaende, durchgaenge, abweichung, taktet = self._rechne_stunde(
                 stunde, zustaende, gefordert
             )
             if abweichung is not None:
@@ -383,6 +462,23 @@ class Solver:
                         "text": (
                             f"Stunde {nummer} nicht konvergiert, "
                             f"größte Änderung {abweichung:.4f}".replace(".", ",")
+                        ),
+                    }
+                )
+            elif taktet:
+                # Kein Fehler, sondern eine Aussage ueber die Anlage: hier
+                # taktet eine Zweipunktregelung schneller, als eine
+                # Stundenrechnung sie aufloesen kann. Ausgewiesen wird das
+                # Mittel beider Zustaende (siehe _rechne_stunde). Als eigene
+                # Art von Meldung, damit sie im Bericht nicht neben echten
+                # Konvergenzfehlern steht.
+                lauf.takte.append(
+                    {
+                        "stunde": nummer,
+                        "zeitpunkt": str(stunde.get("zeitpunkt", "")),
+                        "text": (
+                            f"Stunde {nummer}: Zweipunktregelung taktet, "
+                            f"ausgewiesen ist das Mittel beider Zustände"
                         ),
                     }
                 )

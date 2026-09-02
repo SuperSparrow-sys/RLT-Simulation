@@ -93,7 +93,12 @@ def rechne_referenzjahr(app, ohne_befeuchtungsregelung=False):
         "kaelte": lauf.bilanz["kaelte"] / 1000.0,
         "wasser": lauf.bilanz["wasser"] / 1000.0,
     }
-    return {"bilanz": bilanz, "stunden": lauf.stunden, "warnungen": lauf.warnungen}
+    return {
+        "bilanz": bilanz,
+        "stunden": lauf.stunden,
+        "warnungen": lauf.warnungen,
+        "takte": lauf.takte,
+    }
 
 
 def _ohne_befeuchtungsregelung(graph, graph_modul):
@@ -196,7 +201,8 @@ if __name__ == "__main__":
     eigene = rechne_referenzjahr(anwendung)
 
     print(als_text(vergleiche(eigene["bilanz"], excel)))
-    print(f"\nKonvergenzwarnungen: {len(eigene['warnungen'])}")
+    print(f"\nTaktende Stunden (Mittel gebildet): {len(eigene.get('takte', []))}")
+    print(f"Konvergenzwarnungen: {len(eigene['warnungen'])}")
     for warnung in eigene["warnungen"][:5]:
         print("  ", warnung["text"])
 

@@ -191,12 +191,18 @@ ERKLAERUNGEN = {
     # -- Regelung --------------------------------------------------------
     "p_regler": {
         "beschreibung": (
-            "Ein zweistufiger Proportionalregler mit zwei unabhängigen "
+            "Ein zweistufiger stetiger Regler mit zwei unabhängigen "
             "Ausgängen (schnell und träge), gedacht für Bauteile, die zwei "
             "Freiheitsgrade brauchen. Xp ist die Bandbreite: je kleiner, "
             "desto kräftiger reagiert der Regler auf eine Abweichung "
             "zwischen Ist- und Sollwert. Ist ein Sollwert- oder "
-            "Istwert-Eingang nicht verbunden, gilt der feste Parameterwert."
+            "Istwert-Eingang nicht verbunden, gilt der feste Parameterwert. "
+            "Wichtig zum Verständnis: Er verschiebt seine Stellgröße in jedem "
+            "Rechendurchgang um Abweichung ÷ Xp und trifft am Ende einer "
+            "Stunde genau den Sollwert - eine bleibende Regelabweichung, wie "
+            "sie ein reiner P-Regler im Lehrbuch hinterlässt, bleibt hier "
+            "nicht übrig. Xp bestimmt also, wie schnell er ankommt, nicht wie "
+            "weit er daneben liegt. Der Name stammt aus der Excel-Vorlage."
         ),
         "hinweis": (
             "Ein einziger Pfeil vom Regler zum geregelten Bauteil genügt "

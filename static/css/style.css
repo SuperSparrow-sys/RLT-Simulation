@@ -1308,6 +1308,32 @@ a.knopf-mini { display: inline-block; text-decoration: none; }
   z-index: 20;
   padding: 24px;
 }
+/* Befunde der Anlagenpruefung im Simulationsdialog (core/pruefung.py).
+   Bewusst in der Hinweisfarbe und nicht in der Warnfarbe: es sind Hinweise
+   auf etwas, das man vielleicht vergessen hat, kein Fehler und kein Riegel -
+   der Lauf laesst sich damit ganz normal starten. */
+.pruefung-hinweis {
+  margin: 4px 0 12px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--warning);
+  background: var(--warning-tint);
+  border-radius: var(--radius-sm);
+}
+.pruefung-titel {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--warning);
+}
+.pruefung-liste {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.pruefung-liste li { margin-bottom: 3px; }
+
 .dialog {
   background: var(--surface);
   border-radius: var(--radius-lg);
@@ -1332,9 +1358,14 @@ a.knopf-mini { display: inline-block; text-decoration: none; }
   border-bottom: 1px solid var(--border-light);
 }
 .dialog-knoepfe { display: flex; gap: 8px; justify-content: flex-end; margin-top: 22px; }
-.dialog-knoepfe button,
-.fortschritt button,
-.projekt-aktionen button {
+/* Die NEBENknoepfe einer Knopfreihe. Das :not() ist der Kern der Regel: ohne
+   es traf sie auch .knopf-haupt und gewann gegen dessen Regel weiter oben
+   (0,1,1 gegen 0,1,0) - in jedem Dialog sah der Hauptknopf danach aus wie
+   "Abbrechen" daneben, und die Reihe hatte keinen erkennbaren Schwerpunkt
+   mehr. Dasselbe gilt fuer den roten Loeschknopf. */
+.dialog-knoepfe button:not(.knopf-haupt):not(.knopf-haupt-gefahr),
+.fortschritt button:not(.knopf-haupt):not(.knopf-haupt-gefahr),
+.projekt-aktionen button:not(.knopf-haupt):not(.knopf-haupt-gefahr) {
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
@@ -1344,9 +1375,12 @@ a.knopf-mini { display: inline-block; text-decoration: none; }
   font-family: inherit;
   font-size: 13px;
 }
-.dialog-knoepfe button:hover,
-.fortschritt button:hover,
-.projekt-aktionen button:hover { background: var(--surface-alt); border-color: var(--border-strong); }
+.dialog-knoepfe button:not(.knopf-haupt):not(.knopf-haupt-gefahr):hover,
+.fortschritt button:not(.knopf-haupt):not(.knopf-haupt-gefahr):hover,
+.projekt-aktionen button:not(.knopf-haupt):not(.knopf-haupt-gefahr):hover {
+  background: var(--surface-alt);
+  border-color: var(--border-strong);
+}
 .dialog-knoepfe button:disabled,
 .fortschritt button:disabled { opacity: .6; cursor: default; }
 .panel-zeile-nebeneinander { flex-direction: row; gap: 12px; }

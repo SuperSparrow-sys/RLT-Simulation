@@ -32,9 +32,21 @@ class Kuehler(Baustein):
         Param("T_KW_mittel", "Mittlere Kaltwassertemperatur (T_KW_mittel)", "°C", 6.0,
               darstellung=ZAHL, dezimalstellen=1,
               hinweis="Bestimmt, wie kalt die Luft überhaupt werden kann. Die "
-                      "Oberfläche des Kühlers wird mit Kaltwassertemperatur plus 15 % "
-                      "des Abstands zur eintretenden Luft gerechnet; unter deren "
+                      "Oberfläche des Kühlers liegt zwischen dieser Temperatur und "
+                      "der eintretenden Luft (siehe Kontaktfaktor); unter ihrem "
                       "Taupunkt fällt Wasser aus und die Luft wird entfeuchtet."),
+        # Bisher stand die 0,15 unbenannt in oberflaechentemperatur(). Sie ist
+        # aber keine Naturkonstante, sondern beschreibt, wie gut ein bestimmter
+        # Kuehler seine Luft an das Kaltwasser heranfuehrt - genau die Groesse,
+        # an der man in einer Uebung dreht. Der Vorgabewert ist der der
+        # Excel-Mappe (Anlage!T3), die Rechnung bleibt damit unveraendert.
+        Param("kontaktfaktor", "Kontaktfaktor der Kühlfläche", "Anteil 0–1", 0.15,
+              darstellung=ZAHL, dezimalstellen=2, minimum=0.0, maximum=1.0,
+              hinweis="Wie weit die Oberflächentemperatur vom Kaltwasser zur "
+                      "eintretenden Luft hin abweicht: 0 hieße, die Oberfläche wäre "
+                      "so kalt wie das Wasser, 1 hieße, sie wäre so warm wie die "
+                      "Luft und der Kühler wirkungslos. Kleiner heißt tiefere "
+                      "Lufttemperatur und mehr Entfeuchtung."),
     ]
 
     PORTS = [
@@ -55,7 +67,14 @@ class Kuehler(Baustein):
     }
 
     def oberflaechentemperatur(self, T_ein, p):
-        return p["T_KW_mittel"] + 0.15 * (T_ein - p["T_KW_mittel"])
+        """Anlage!T3 - die Temperatur, an die der Kuehler die Luft heranfuehrt.
+
+        Sie liegt zwischen Kaltwasser und Eintrittsluft; wo genau, sagt der
+        Kontaktfaktor. Ist die Eintrittsluft KAELTER als das Kaltwasser, liegt
+        sie darueber - dann waermt der Kuehler, statt zu kuehlen. berechne()
+        warnt in diesem Fall (siehe dort).
+        """
+        return p["T_KW_mittel"] + p["kontaktfaktor"] * (T_ein - p["T_KW_mittel"])
 
     def berechne(self, ein, p, zustand):
         luft = ein.get("luft_ein", Luft())

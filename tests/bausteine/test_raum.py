@@ -132,7 +132,11 @@ def test_wandtemperatur_folgt_der_raumtemperatur():
     assert zustand["T_Wand"] < aus["T_Raum"] + 0.5
 
 
-def test_raumfeuchte_folgt_der_zuluft_und_der_feuchtelast():
+def test_raumfeuchte_naehert_sich_zuluft_und_feuchtelast():
+    """Der Beharrungswert der Feuchtebilanz ist die Formel der Excel:
+    x_zu + M/(rho*V). Weil die Raumluft eine Feuchtekapazität hat, wird er
+    nicht in einer Stunde erreicht, sondern nach ein paar Stunden - deshalb
+    hier über zwanzig Stunden gerechnet."""
     p = parameter()
     ein = {
         "zuluft_ein": Luft(V=10000.0, T=20.0, x=6.0),
@@ -141,8 +145,53 @@ def test_raumfeuchte_folgt_der_zuluft_und_der_feuchtelast():
         "QH_S": 0.0, "QH_O": 0.0, "QH_W": 0.0, "QH_N": 0.0, "QH_H": 0.0,
         "waermelast": 0.0, "feuchtelast": 12.0,
     }
-    aus, _ = Raum().berechne(ein, p, {"T_Raum": 20.0, "T_Wand": 20.0})
+    zustand = {"T_Raum": 20.0, "T_Wand": 20.0, "F_Raum": 6.0}
+    for _ in range(20):
+        aus, zustand = Raum().berechne(ein, p, zustand)
     assert aus["F_Raum"] == pytest.approx(6.0 + 12.0 * 1000.0 / (10000.0 * 1.2))
+
+
+def test_die_raumfeuchte_folgt_ihrem_eigenen_vorwert():
+    """Sie springt nicht: die eingeschlossene Luftmenge ist ihr Speicher.
+    Innerhalb einer Stunde nähert sich die Feuchte dem Beharrungswert, ohne
+    ihn zu erreichen - und sie überschwingt ihn nicht."""
+    p = parameter()
+    ein = {
+        "zuluft_ein": Luft(V=2000.0, T=20.0, x=10.0),
+        "abluft_aus": Luft(V=2000.0),
+        "T_AU": 10.0, "F_AU": 4.0,
+        "QH_S": 0.0, "QH_O": 0.0, "QH_W": 0.0, "QH_N": 0.0, "QH_H": 0.0,
+        "waermelast": 0.0, "feuchtelast": 0.0,
+    }
+    aus, _ = Raum().berechne(ein, p, {"T_Raum": 20.0, "T_Wand": 20.0, "F_Raum": 4.0})
+    assert 4.0 < aus["F_Raum"] < 10.0
+
+
+def test_ohne_zuluft_reichert_sich_die_feuchte_im_raum_an():
+    """Bei stehender Luft gibt es keinen Abfluss: die Feuchtelast verteilt
+    sich auf die eingeschlossene Luftmasse und kommt zum vorigen Wert dazu.
+
+    Vorher stand hier F_AU + M*1000/Volumen - das mischt Einheiten (g/h je m³
+    ist kein g/kg) und setzte den Raum ausserdem auf die AUSSENfeuchte
+    zurück, als hätte er über Nacht seinen Zustand vergessen."""
+    p = parameter()
+    ein = {
+        "zuluft_ein": Luft(V=0.0),
+        "abluft_aus": Luft(V=0.0),
+        "T_AU": 10.0, "F_AU": 4.0,
+        "QH_S": 0.0, "QH_O": 0.0, "QH_W": 0.0, "QH_N": 0.0, "QH_H": 0.0,
+        "waermelast": 0.0, "feuchtelast": 1.2,
+    }
+    zustand = {"T_Raum": 20.0, "T_Wand": 20.0, "F_Raum": 7.0}
+    aus, _ = Raum().berechne(ein, p, zustand)
+    volumen = Raum().geometrie(p)["volumen"]
+    assert aus["F_Raum"] == pytest.approx(7.0 + 1.2 * 1000.0 / (1.2 * volumen))
+
+    # Ohne Feuchtelast bleibt sie stehen - eingeschlossene Luft trocknet nicht
+    # von selbst und nimmt auch nicht die Aussenfeuchte an.
+    ein["feuchtelast"] = 0.0
+    aus, _ = Raum().berechne(ein, p, zustand)
+    assert aus["F_Raum"] == pytest.approx(7.0)
 
 
 def test_abluft_traegt_den_raumzustand():
@@ -159,6 +208,8 @@ def test_abluft_traegt_den_raumzustand():
     assert aus["abluft_aus"].T == pytest.approx(aus["T_Raum"])
 
 
-def test_anfangszustand_setzt_raum_und_wand_auf_den_startwert():
-    p = parameter(start_temperatur=15.0)
-    assert Raum().anfangszustand(p) == {"T_Raum": 15.0, "T_Wand": 15.0}
+def test_anfangszustand_setzt_raum_wand_und_feuchte_auf_die_startwerte():
+    p = parameter(start_temperatur=15.0, start_feuchte=6.0)
+    assert Raum().anfangszustand(p) == {
+        "T_Raum": 15.0, "T_Wand": 15.0, "F_Raum": 6.0,
+    }

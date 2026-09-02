@@ -213,6 +213,23 @@
           </ul>
         </div>
       {% endif %}
+      {# Kein Fehler, sondern eine Aussage ueber die Anlage: hier taktet eine
+         Zweipunktregelung schneller, als eine Stundenrechnung sie aufloesen
+         kann (core/solver.py). Deshalb ein eigener, ruhiger Absatz und nicht
+         die Warnfarbe. #}
+      {% if daten.warnungen.takte %}
+        <div class="warnhinweis warnhinweis-ok">
+          <p>In {{ daten.warnungen.takte }} Stunden taktet eine Zweipunktregelung
+             schneller, als eine Stundenrechnung sie auflösen kann. Ausgewiesen
+             ist dort das Mittel beider Schaltzustände - der Regler lief also
+             einen Teil der Stunde. Beispiele:</p>
+          <ul class="warn-beispiele">
+            {% for w in daten.warnungen.takt_beispiele %}
+            <li>Stunde {{ w.stunde }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
       {% if daten.baustein_warnungen %}
         <div class="warnhinweis">
           <p>Warnungen aus Bausteinen</p>

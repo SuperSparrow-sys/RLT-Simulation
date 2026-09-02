@@ -3,7 +3,7 @@ from datetime import datetime
 import pytest
 
 from app import create_app
-from core import anlagen, database, ergebnisse, solver
+from core import anlagen, database, ergebnisse, solver, verlauf
 from core.wetter import speicher
 
 
@@ -923,3 +923,41 @@ def test_felder_reichen_das_merkmal_ohne_wirkung_durch(app):
     felder = {f["schluessel"]: f for f in karte["felder"]}
     assert felder["nennbeleuchtung"]["ohne_wirkung"] is True
     assert felder["grundflaeche"]["ohne_wirkung"] is False
+
+
+def test_die_anlagenpruefung_meldet_einen_verbraucher_ohne_bilanz(app):
+    """Der häufigste stille Fehler: ein vergessener Pfeil zur Bilanz.
+
+    Die Bilanzkarte summiert, was AN IHR hängt - ein nicht verbundener
+    Erhitzer fehlt deshalb lautlos in der Jahressumme, und niemand sieht es
+    der Zahl an. Die Prüfung (core/pruefung.py) sucht genau das; der
+    Simulationsdialog zeigt es, BEVOR gerechnet wird.
+    """
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        anlagen.karte_anlegen(anlage, "erhitzer", 0.0, 0.0)
+
+    antwort = app.test_client().get(f"/api/anlagen/{anlage}/pruefung")
+    assert antwort.status_code == 200
+    arten = [m["art"] for m in antwort.get_json()["meldungen"]]
+    assert "ohne_bilanz" in arten
+    assert "kein_wetter" in arten
+
+
+def test_die_anlagenpruefung_schweigt_zu_reserveanschluessen(app):
+    """Ein Sammler hält immer einen freien Anschluss bereit, damit ein
+    weiterer Pfeil andocken kann (core/graph.py). Dieser eine ist kein
+    vergessener Pfeil - würde er gemeldet, stünde an jeder vollständig
+    verdrahteten Anlage eine Meldung, und niemand läse die Liste noch."""
+    from core.vorlagen import testanlage
+
+    with app.app_context():
+        with verlauf.stumm():
+            projekt = anlagen.projekt_anlegen("P")
+            anlage = testanlage.baue(projekt, "Testanlage")
+
+    meldungen = app.test_client().get(
+        f"/api/anlagen/{anlage}/pruefung"
+    ).get_json()["meldungen"]
+    assert meldungen == []

@@ -148,6 +148,11 @@ class Raum(Baustein):
               darstellung=ZAHL, dezimalstellen=1,
               hinweis="Nur der Anfangswert der ersten gerechneten Stunde; nach ein "
                       "paar Tagen Simulation ist sein Einfluss verschwunden."),
+        Param("start_feuchte", "Startfeuchte des Raums", "g/kg", 8.0,
+              darstellung=ZAHL, dezimalstellen=1, minimum=0.0,
+              hinweis="Wie die Starttemperatur nur der Anfangswert der ersten "
+                      "gerechneten Stunde. Bei laufender Lüftung stellt sich die "
+                      "Raumfeuchte innerhalb weniger Stunden auf die Zuluft ein."),
     ]
 
     PORTS = [
@@ -364,11 +369,40 @@ class Raum(Baustein):
         C_Wand = g["innenwand"] * p["bauart"] / 3600.0
         T_Wand_neu = T_Wand - QH_Wand / C_Wand if C_Wand else T_Wand
 
-        # Feuchtebilanz, Anlage!AJ90
-        if V_zu > 0:
-            F_Raum = (V_zu * x_zu * 1.2 + M_i * 1000.0) / (V_zu * 1.2)
+        # Feuchtebilanz - dieselbe Form wie die Waermebilanz darueber:
+        #
+        #     m_Luft * dx/dt = rho * V_zu * (x_zu - x) + M_i
+        #
+        # also A = -rho*V_zu (Abfluss je g/kg), B = rho*V_zu*x_zu + M_i (Zufluss
+        # in g/h), C = rho*V_Raum (die Feuchtekapazitaet der Raumluft), geloest
+        # ueber dieselbe Stunde und dieselbe geschlossene Formel.
+        #
+        # Die Excel (Anlage!AJ90) rechnet die Feuchte OHNE Speicher, also rein
+        # stationaer: F = x_zu + M_i/(rho*V_zu). Das ist genau der Beharrungswert
+        # dieser Gleichung, und weil die Zeitkonstante V_Raum/V_zu bei ueblichen
+        # Luftwechseln deutlich unter einer Stunde liegt, kommt dieselbe Zahl
+        # heraus - nachgerechnet ueber das Referenzjahr, siehe
+        # tests/test_abgleich.py. Zwei Dinge werden dadurch aber richtig, die
+        # vorher falsch waren:
+        #
+        # 1. Bei stehender Luft (V_zu = 0) stand hier F_AU + M_i*1000/Volumen -
+        #    das mischt Einheiten (g/h je m³ ist kein g/kg) und setzte den Raum
+        #    ausserdem auf die AUSSENfeuchte zurueck, als haette er ueber Nacht
+        #    seinen Zustand vergessen. Jetzt reichert sich die eingeschlossene
+        #    Luft von ihrem eigenen Wert aus an: dx = M_i/(rho*V_Raum).
+        # 2. Der Raum traegt seine Feuchte jetzt ueber die Stunden weiter, so
+        #    wie er seine Temperatur weitertraegt.
+        F_alt = float(zustand.get("F_Raum", F_AU))
+        m_luft = 1.2 * g["volumen"]
+        zufluss = 1.2 * V_zu * x_zu + M_i * 1000.0
+        abfluss = 1.2 * V_zu
+        if m_luft <= 0:
+            F_Raum = x_zu if V_zu > 0 else F_alt
+        elif abfluss <= 0:
+            F_Raum = F_alt + M_i * 1000.0 / m_luft
         else:
-            F_Raum = F_AU + (M_i * 1000.0 / g["volumen"] if g["volumen"] else 0.0)
+            beharrung_f = zufluss / abfluss
+            F_Raum = beharrung_f + (F_alt - beharrung_f) * math.exp(-abfluss / m_luft)
 
         Q_Raum = T_Raum * (1.005 * 1.2 * g["volumen"] / 3600.0)
 
@@ -383,12 +417,13 @@ class Raum(Baustein):
         for schluessel, w in abluft:
             aus[schluessel] = Luft(V=w.V, T=T_Raum, x=F_Raum, dp=0.0)
 
-        return aus, {"T_Raum": T_Raum, "T_Wand": T_Wand_neu}
+        return aus, {"T_Raum": T_Raum, "T_Wand": T_Wand_neu, "F_Raum": F_Raum}
 
     def anfangszustand(self, p):
         return {
             "T_Raum": p["start_temperatur"],
             "T_Wand": p["start_temperatur"],
+            "F_Raum": p["start_feuchte"],
         }
 
     def bedarf(self, aus_bedarf, p):
