@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Bericht – {{ daten.anlage.name }}</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/bericht.css') }}">
+</head>
+<body class="seite-bericht">
+  <header class="bericht-kopfleiste">
+    <a class="bericht-zurueck" href="{{ url_for('pages.editor', anlage_id=daten.anlage.id) }}">← Zurück zur Anlage</a>
+    <div class="bericht-kopfleiste-knoepfe">
+      <button type="button" id="btn-drucken">Drucken</button>
+      <a class="knopf-haupt"
+         href="{{ url_for('bericht.pdf', anlage_id=daten.anlage.id, simulation_id=daten.simulation_id) }}">
+        PDF herunterladen
+      </a>
+    </div>
+  </header>
+
+  <main class="bericht">
+    <h1>Ergebnisbericht – {{ daten.anlage.name }}</h1>
+
+    <dl class="bericht-kopf">
+      <div><dt>Projekt</dt><dd>{{ daten.anlage.projekt_name }}</dd></div>
+      <div><dt>Wetterdatensatz</dt><dd>{{ daten.wetter.name if daten.wetter else "–" }}{% if daten.wetter and daten.wetter.ort %} · {{ daten.wetter.ort }}{% endif %}{% if daten.wetter and daten.wetter.jahr %} · {{ daten.wetter.jahr|int }}{% endif %}</dd></div>
+      <div><dt>Lauf gestartet</dt><dd>{{ daten.sim.gestartet_am }}</dd></div>
+      <div><dt>Status</dt><dd>{{ daten.status_text }}</dd></div>
+      <div><dt>Gerechnete Stunden</dt><dd>{{ daten.stunden_gerechnet }} (Stunde {{ daten.sim.von_stunde }}–{{ daten.sim.bis_stunde }})</dd></div>
+      <div><dt>Bericht erzeugt</dt><dd>{{ daten.erzeugt_am.strftime("%d.%m.%Y %H:%M") }}</dd></div>
+    </dl>
+
+    <section class="bericht-abschnitt">
+      <h2>Jahresbilanz</h2>
+      <table class="bilanz bericht-tabelle">
+        <thead>
+          <tr><th>Größe</th><th class="zahl">Menge</th><th>Einheit</th><th class="zahl">Preis</th><th class="zahl">Kosten</th></tr>
+        </thead>
+        <tbody>
+          {% for z in daten.bilanz %}
+          <tr>
+            <td>{{ z.label }}</td>
+            <td class="zahl">{{ format_zahl(z.menge) }}</td>
+            <td>{{ z.einheit }}</td>
+            <td class="zahl">{{ format_zahl(z.preis) }}</td>
+            <td class="zahl">{{ format_zahl(z.kosten) }} EUR</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr><td colspan="4">Summe</td><td class="zahl">{{ format_zahl(daten.bilanz_summe) }} EUR</td></tr>
+        </tfoot>
+      </table>
+    </section>
+
+    {% if svg.monat or svg.dauerlinie %}
+    <section class="bericht-abschnitt">
+      <h2>Diagramme</h2>
+      <div class="bericht-diagramme">
+        {% if svg.monat %}<div class="bericht-diagramm-karte">{{ svg.monat|safe }}</div>{% endif %}
+        {% if svg.dauerlinie %}<div class="bericht-diagramm-karte">{{ svg.dauerlinie|safe }}</div>{% endif %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% if svg.datenlogger %}
+    <section class="bericht-abschnitt">
+      <h2>Datenlogger</h2>
+      <div class="bericht-diagramme">
+        {% for eintrag in svg.datenlogger %}
+        <div class="bericht-diagramm-karte">
+          <p class="bericht-diagramm-titel">{{ eintrag.titel }}</p>
+          {{ eintrag.svg|safe }}
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% else %}
+    <section class="bericht-abschnitt">
+      <h2>Datenlogger</h2>
+      <p class="leerhinweis">Kein Datenlogger mit benannten Anschlüssen in dieser Anlage.</p>
+    </section>
+    {% endif %}
+
+    <section class="bericht-abschnitt">
+      <h2>Warnungen</h2>
+      {% if daten.warnungen.anzahl == 0 %}
+        <p class="warnhinweis warnhinweis-ok">Alle Stunden konvergiert.</p>
+      {% else %}
+        <div class="warnhinweis">
+          <p>{{ daten.warnungen.anzahl }} Stunden ohne Konvergenz, Beispiele:</p>
+          <ul class="warn-beispiele">
+            {% for w in daten.warnungen.beispiele %}
+            <li>Stunde {{ w.stunde }}: {{ w.text }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+      {% if daten.baustein_warnungen %}
+        <div class="warnhinweis">
+          <p>Warnungen aus Bausteinen</p>
+          <ul class="warn-beispiele">
+            {% for w in daten.baustein_warnungen %}
+            <li><strong>{{ w.karte_name }}</strong>: {{ w.text }} — {{ w.anzahl }} Stunde{{ "n" if w.anzahl != 1 else "" }}
+              (z.&nbsp;B. {% for s in w.beispiele %}Stunde {{ s }}{% if not loop.last %}, {% endif %}{% endfor %})</li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% else %}
+        <p class="warnhinweis warnhinweis-ok">Keine Warnungen aus Bausteinen.</p>
+      {% endif %}
+    </section>
+
+    <section class="bericht-abschnitt">
+      <h2>Die Anlage</h2>
+      <ul class="bericht-karten">
+        {% for karte in daten.karten %}
+        <li class="bericht-karte">
+          <div class="bericht-karte-kopf">
+            <span class="bericht-karte-name">{{ karte.name }}</span>
+            <span class="bericht-karte-typ">{{ karte.typ_name }} · {{ karte.gruppe }}</span>
+          </div>
+          {% if karte.kennwerte %}
+          <p class="bericht-karte-kennwerte">
+            {% for k in karte.kennwerte %}{{ k.label }}: {{ k.text }}{% if not loop.last %} · {% endif %}{% endfor %}
+          </p>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+  </main>
+
+  <script>
+    document.getElementById("btn-drucken").onclick = () => window.print();
+  </script>
+</body>
+</html>

@@ -494,6 +494,8 @@ const Simulation = {
         ${warnhinweisHtml}
         ${bausteinWarnhinweisHtml}
         <div class="dialog-knoepfe">
+          <a class="knopf-mini" href="/anlage/${Editor.anlage.id}/lauf/${simulationId}/bericht">Bericht ansehen</a>
+          <a class="knopf-mini" href="/anlage/${Editor.anlage.id}/lauf/${simulationId}/bericht.pdf">PDF herunterladen</a>
           <button id="btn-protokoll">Stundenprotokoll</button>
           <button class="knopf-haupt" id="btn-schliessen">Schließen</button>
         </div>

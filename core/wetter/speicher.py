@@ -55,6 +55,17 @@ def lade_stunden(datensatz_id, von=None, bis=None):
     return ergebnis
 
 
+def datensatz(datensatz_id):
+    """Kopfdaten eines einzelnen Wetterdatensatzes (Name, Ort, Jahr, Quelle) -
+    fuer den Kopf des Berichts (core.bericht), der nicht die ganze
+    Uebersichtsliste datensaetze() braucht."""
+    db = get_db()
+    zeile = db.execute(
+        "SELECT * FROM wetterdatensatz WHERE id = ?", (datensatz_id,)
+    ).fetchone()
+    return dict(zeile) if zeile else None
+
+
 def datensaetze():
     """Alle Wetterdatensaetze - mit Stundenzahl und der Zahl der
     Simulationslaeufe, die auf sie verweisen (letzteres, damit die

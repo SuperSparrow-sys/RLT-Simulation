@@ -315,6 +315,12 @@ textarea:focus-visible {
    und die Unterstreichung muss weg, sonst wirkt es nicht wie ein Knopf. */
 a.knopf-haupt { display: inline-block; text-decoration: none; }
 
+/* Dasselbe fuer .knopf-mini auf einem <a> - der "Bericht ansehen"-Verweis im
+   Bilanzdialog (static/js/simulation.js, zeigeBilanz()) sitzt neben echten
+   <button>-Knoepfen und soll genauso aussehen, nicht wie ein blauer,
+   unterstrichener Link. */
+a.knopf-mini { display: inline-block; text-decoration: none; }
+
 /* Zurueckhaltender als .knopf-haupt - fuer "Einpassen" neben dem Hauptknopf
    der Kopfleiste, nicht fuer die eine zentrale Handlung der Seite. */
 .knopf-sekundaer {

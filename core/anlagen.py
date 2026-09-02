@@ -652,6 +652,21 @@ def projekte():
     ]
 
 
+def anlage_kopf(anlage_id):
+    """Name, Notiz und Projektzugehoerigkeit einer einzelnen Anlage - fuer den
+    Kopf des Berichts (core.bericht), der weder die volle als_json()
+    (Karten, Ports, Pfeile) noch anlagen_von() (immer eine Liste) braucht."""
+    db = get_db()
+    zeile = db.execute(
+        "SELECT a.id, a.name, a.notiz, a.projekt_id, p.name AS projekt_name "
+        "FROM anlage a JOIN projekt p ON p.id = a.projekt_id WHERE a.id = ?",
+        (anlage_id,),
+    ).fetchone()
+    if zeile is None:
+        raise KeyError(f"Anlage {anlage_id} gibt es nicht")
+    return dict(zeile)
+
+
 def anlagen_von(projekt_id=None):
     """Alle Anlagen, wahlweise auf ein Projekt eingegrenzt - mit der Zahl
     ihrer Karten und Simulationslaeufe (letztere fuer dieselbe Rueckfrage vor

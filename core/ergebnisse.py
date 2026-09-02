@@ -251,6 +251,22 @@ def lade_zeitreihe(simulation_id, karte_id, groesse):
     return _aus_blob(zeile["werte"]) if zeile else []
 
 
+def lade_simulation(simulation_id):
+    """Die Kopfdaten eines Simulationslaufs (Anlage, Wetterdatensatz,
+    Zeitraum, Zeitpunkt, Dauer, Status) - fuer den Kopf des Berichts
+    (core.bericht), der mehr braucht als simulation_anlage_id() liefert."""
+    db = get_db()
+    zeile = db.execute(
+        "SELECT id, anlage_id, wetterdatensatz_id, von_stunde, bis_stunde, "
+        "status, kennung, gestartet_am, dauer_s, fortschritt AS gerechnete_stunden "
+        "FROM simulation WHERE id = ?",
+        (simulation_id,),
+    ).fetchone()
+    if zeile is None:
+        raise KeyError(f"Simulationslauf {simulation_id} gibt es nicht")
+    return dict(zeile)
+
+
 def simulation_anlage_id(simulation_id):
     """Die Anlage, zu der ein Simulationslauf gehoert - fuer Aufrufer, die aus
     einer simulation_id zuerst den aktuellen Anlagengraph laden muessen
