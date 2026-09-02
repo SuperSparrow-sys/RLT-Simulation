@@ -377,9 +377,12 @@ class Solver:
                         "stunde": nummer,
                         "zeitpunkt": str(stunde.get("zeitpunkt", "")),
                         "abweichung": abweichung,
+                        # Deutsche Schreibweise wie ueberall, wo eine Zahl
+                        # als Text erscheint (siehe core/bericht.py,
+                        # format_zahl): dieser Satz steht im Bericht.
                         "text": (
                             f"Stunde {nummer} nicht konvergiert, "
-                            f"größte Änderung {abweichung:.4f}"
+                            f"größte Änderung {abweichung:.4f}".replace(".", ",")
                         ),
                     }
                 )

@@ -768,7 +768,8 @@ def _vergleich_pdf(schreiber, vgl, leinwand):
             else:
                 vorzeichen = "+" if w["abweichung"] >= 0 else ""
                 werte.append(
-                    f"{format_zahl(w['menge'], 3)} ({vorzeichen}{w['abweichung'] * 100:.1f} %)"
+                    f"{format_zahl(w['menge'], 3)} "
+                    f"({vorzeichen}{format_zahl(w['abweichung'] * 100, 1)} %)"
                 )
         zeilen.append([f"{zeile['label']} [{zeile['einheit']}]", *werte])
     zeilen.append([

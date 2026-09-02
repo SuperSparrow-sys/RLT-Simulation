@@ -8,6 +8,7 @@ einen echten."""
 import math
 import re
 import time
+from pathlib import Path
 from datetime import datetime, timedelta
 
 import pytest
@@ -909,3 +910,28 @@ def test_jahresdiagramme_bei_8760_stunden_bleiben_schnell_und_kompakt(app):
     # spuerbar langsamen Berichtserzeugung zu erkennen) verliert.
     assert dauer < 10.0
 
+
+
+def test_keine_zahl_im_angezeigten_text_traegt_einen_punkt():
+    """Deutsche Schreibweise gilt auch für Zahlen, die in einem Satz stecken.
+
+    Aufgefallen ist es an der Konvergenzwarnung im Bericht: „größte Änderung
+    100.0000" - ein Punkt, während die Bilanztabelle daneben Kommas zeigte.
+    Dieselbe Sache wie in der Oberfläche (static/js/zahlen.js).
+
+    Ausgenommen sind Formatierungen, die KEIN angezeigter Text sind: die
+    Koordinaten in core/pdf.py und core/zeichnung.py müssen Punkte tragen,
+    sonst versteht sie weder ein PDF-Leser noch ein Browser. Sie stehen
+    deshalb hier namentlich.
+    """
+    wurzel = Path(__file__).resolve().parent.parent
+    erlaubt = {"core/pdf.py", "core/zeichnung.py"}
+    verstoesse = []
+    for datei in sorted((wurzel / "core").rglob("*.py")) + sorted((wurzel / "routes").glob("*.py")):
+        rel = datei.relative_to(wurzel).as_posix()
+        if rel in erlaubt:
+            continue
+        for nummer, zeile in enumerate(datei.read_text(encoding="utf-8").splitlines(), 1):
+            if re.search(r":,?\.[1-9]f\}", zeile) and "replace" not in zeile:
+                verstoesse.append(f"{rel}:{nummer}: {zeile.strip()}")
+    assert not verstoesse, "\n".join(verstoesse)
