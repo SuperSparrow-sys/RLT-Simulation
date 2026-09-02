@@ -269,6 +269,114 @@ def test_bauteile_vor_dem_ventilator_bleiben_auf_dem_nennstrom():
     assert lauf.stunden[-1][3]["V"] == pytest.approx(2400.0)      # Ventilatoraustritt
 
 
+def test_raum_hinter_einem_sammler_bekommt_seine_abluftmenge():
+    """Anlage!AH33 = M42/2 - auch wenn ein Sammler dazwischen steht.
+
+    Befund vor dieser Pruefung: 'Sammler.bedarf' meldet den Grundnamen
+    'luft_ein', seine Anschluesse heissen aber 'luft_ein_1', 'luft_ein_2'. Der
+    Rueckwaertslauf ordnete nur exakt nach Schluessel zu, die Forderung landete
+    nirgends - der Raum bekam gar keine Abluftmenge, gab 0 m³/h ab, der Sammler
+    mischte auf 0 °C, und die Waermerueckgewinnung dahinter bekam Fortluft von
+    Aussentemperatur statt Raumtemperatur und gewann nichts zurueck.
+    """
+    karten = {
+        1: karte(1, "wetter"),
+        2: karte(2, "aussenluft"),
+        3: karte(3, "ventilator",
+                 {"rolle": "zuluft", "V_max": 6000.0, "PE_max": 0.001, "regelart": "-"}),
+        4: karte(4, "einfacher_raum",
+                 {"spez_transmission": 0.5, "sollwert_stat": 15.0}),
+        5: karte(5, "sammler"),
+        6: karte(6, "ventilator",
+                 {"rolle": "abluft", "V_max": 4500.0, "PE_max": 0.001, "regelart": "-"}),
+        7: karte(7, "fortluft"),
+    }
+    g = verbinde(
+        karten,
+        [
+            (1, "T_AU", 2, "T_AU"),
+            (1, "F_AU", 2, "F_AU"),
+            (2, "luft_aus", 3, "luft_ein"),
+            (3, "luft_aus", 4, "zuluft_ein_1"),
+            (1, "T_AU", 4, "T_AU"),
+            (1, "F_AU", 4, "F_AU"),
+            (4, "abluft_aus_1", 5, "luft_ein_1"),
+            (5, "luft_aus", 6, "luft_ein"),
+            (6, "luft_aus", 7, "luft_ein"),
+        ],
+    )
+    lauf = solver.Solver(g).starte(wetterstunden(2, t_au=0.0))
+    letzte = lauf.stunden[-1]
+
+    assert letzte[4]["abluft_aus_1"].V == pytest.approx(4500.0)
+    # Der Sammler fuehrt die Raumluft weiter, nicht 0 m³/h bei 0 °C.
+    assert letzte[5]["V"] == pytest.approx(4500.0)
+    assert letzte[5]["T_aus"] == pytest.approx(letzte[4]["T_Raum"])
+
+
+def test_ein_freier_anschluss_bekommt_keinen_anteil_des_bedarfs():
+    """Zwei Anschluesse am Sammler, nur einer belegt - er traegt alles.
+
+    Wuerde die Haelfte an den freien Anschluss gehen, forderte sie niemand
+    stromaufwaerts an und ginge stillschweigend verloren: der Raum bekaeme nur
+    die halbe Abluftmenge. Genau so steht es in der Vorlage ax_sim_2_1, deren
+    Sammler einen zweiten, unbelegten Anschluss hat.
+    """
+    karten = {
+        1: karte(1, "einfacher_raum",
+                 {"spez_transmission": 0.5, "sollwert_stat": 15.0}),
+        2: karte(2, "sammler"),
+        3: karte(3, "ventilator",
+                 {"rolle": "abluft", "V_max": 4500.0, "PE_max": 0.001, "regelart": "-"}),
+        4: karte(4, "fortluft"),
+    }
+    # Ein zweiter, freier Anschluss am Sammler - wie ihn die Oberflaeche
+    # nachwachsen laesst, sobald der erste belegt ist.
+    karten[2].ports.append(
+        graph.PortInstanz(
+            id=299, karte_id=2, schluessel="luft_ein_2", basis="luft_ein",
+            art=basis.LUFT, richtung=basis.EINGANG, rolle=basis.LUFTWEG, nummer=2,
+        )
+    )
+    g = verbinde(
+        karten,
+        [
+            (1, "abluft_aus_1", 2, "luft_ein_1"),
+            (2, "luft_aus", 3, "luft_ein"),
+            (3, "luft_aus", 4, "luft_ein"),
+        ],
+    )
+    lauf = solver.Solver(g).starte(wetterstunden(1, t_au=0.0))
+    assert lauf.stunden[0][1]["abluft_aus_1"].V == pytest.approx(4500.0)
+
+
+def test_kein_baustein_meldet_einen_bedarf_ins_leere():
+    """Jeder Schluessel aus 'bedarf' muss einen Anschluss treffen.
+
+    Genau diese beiden Formen versteht der Rueckwaertslauf: entweder einen Port
+    ('luft_ein') oder eine Gruppe nummerierter Ports ueber deren Grundnamen
+    ('luft_ein' -> 'luft_ein_1', 'luft_ein_2'). Trifft ein Schluessel keins von
+    beidem, verschwindet die Forderung spurlos - sie wirft keinen Fehler,
+    sondern hinterlaesst nur eine Null, und genau daran war der Befund beim
+    Sammler so lange unsichtbar. Diese Pruefung haelt den Vertrag fuer alle
+    Bausteine fest, auch fuer kuenftige.
+    """
+    for klasse in basis.alle():
+        p = klasse.vorgabeparameter()
+        ports = graph.erzeuge_ports(klasse, p, 1, ab_id=100)
+        schluessel = {q.schluessel for q in ports}
+        grundnamen = {q.basis for q in ports}
+        aus_bedarf = {
+            q.schluessel: 1000.0 for q in ports
+            if q.art == basis.LUFT and q.richtung == basis.AUSGANG
+        }
+        for name in klasse().bedarf(aus_bedarf, p):
+            assert name in schluessel or name in grundnamen, (
+                f"{klasse.KENNUNG}.bedarf() meldet '{name}', "
+                f"dazu gibt es weder einen Port noch eine Portgruppe"
+            )
+
+
 def test_zustandsgroessen_werden_zur_naechsten_stunde_fortgeschrieben():
     karten = {1: karte(1, "raum", {"start_temperatur": 20.0, "spez_beleuchtung": 0.0})}
     g = graph.Anlagengraph(karten=karten, verbindungen=[])

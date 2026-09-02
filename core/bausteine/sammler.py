@@ -51,6 +51,15 @@ class Sammler(Baustein):
     def bedarf(self, aus_bedarf, p):
         """Der geforderte Volumenstrom wird gleichmaessig auf die Straenge verteilt.
 
+        Gemeldet wird der GRUNDNAME 'luft_ein', nicht die nummerierten
+        Anschluesse 'luft_ein_1', 'luft_ein_2': wie viele es davon gibt und
+        welche belegt sind, gehoert zur Anlage, nicht zum Baustein. Der Solver
+        verteilt einen Grundnamen gleichmaessig auf die belegten Anschluesse
+        derselben Gruppe (core/solver.py, _rueckwaerts) - das Gegenstueck zum
+        Sammeln ueber das Praefix in berechne() oben, und genau das, was die
+        Mappe tut, wenn sie die Abluft eines Raums in zwei gleiche Haelften
+        teilt (Anlage!AH33 = AH35 = M42/2).
+
         Die tatsaechliche Aufteilung ergibt sich im Vorwaertslauf aus den
         Ventilatoren der einzelnen Straenge; dieser Wert ist nur der Startwert
         der Iteration.

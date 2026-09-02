@@ -65,8 +65,11 @@ class Solver:
         for v in self.graph.verbindungen:
             ziele.setdefault(v.von_port.id, []).append(v.nach_port.id)
 
+        belegt = {v.nach_port.id for v in self.graph.verbindungen}
+
         self._luftausgaenge = {}   # karte_id -> [(schluessel, port_id, ziel-port-ids)]
         self._portnummern = {}     # karte_id -> {schluessel: port_id}
+        self._lufteingangsgruppen = {}  # karte_id -> {grundname: (port_ids,)}
         for karte_id, karte in self.graph.karten.items():
             self._portnummern[karte_id] = {p.schluessel: p.id for p in karte.ports}
             self._luftausgaenge[karte_id] = [
@@ -74,6 +77,21 @@ class Solver:
                 for p in karte.ports
                 if p.art == basis.LUFT and p.richtung == basis.AUSGANG
             ]
+
+            # Nummerierte Lufteingaenge nach ihrem Grundnamen buendeln - und nur
+            # die, an denen wirklich ein Pfeil haengt. Ein freier Anschluss darf
+            # keinen Anteil abbekommen: was ihm zugeteilt wuerde, fordert
+            # niemand stromaufwaerts an und ginge stillschweigend verloren.
+            gruppen = {}
+            for port in karte.ports:
+                if port.art != basis.LUFT or port.richtung != basis.EINGANG:
+                    continue
+                if port.schluessel == port.basis or port.id not in belegt:
+                    continue
+                gruppen.setdefault(port.basis, []).append(port.id)
+            self._lufteingangsgruppen[karte_id] = {
+                name: tuple(ids) for name, ids in gruppen.items()
+            }
 
         # Karten, die im Vorwaertslauf einen anderen Bedarf melden als im
         # Nenn-Rueckwaertslauf (heute nur der Ventilator).
@@ -111,10 +129,30 @@ class Solver:
                     aus_bedarf, karte.parameter, ausgaben.get(karte_id, {})
                 )
 
+            # Die Gegenrichtung zu dem, was der Vorwaertslauf laengst tut: dort
+            # sammelt eine Karte mit nummerierten Anschluessen ueber das Praefix
+            # ihres Eingangs (siehe Sammler.berechne und _eingaenge unten). Der
+            # Rueckwaertslauf ordnete dagegen nur exakt nach Schluessel zu -
+            # 'bedarf' meldet aber den Grundnamen ('luft_ein'), waehrend die
+            # angelegten Ports 'luft_ein_1', 'luft_ein_2' heissen. Die Forderung
+            # landete deshalb nirgends: der Raum vor einem Sammler bekam gar
+            # keine Abluftmenge zugewiesen, seine Abluft blieb bei 0 m³/h und
+            # 0 °C stehen und die Waermerueckgewinnung dahinter gewann nichts
+            # zurueck. Trifft der Schluessel keinen Port, gilt er deshalb der
+            # ganzen Gruppe gleichnamiger Anschluesse und wird gleichmaessig auf
+            # sie verteilt - so wie die Mappe die Abluft des Raums in zwei
+            # gleiche Haelften teilt (Anlage!AH33 = AH35 = M42/2).
             nummern = self._portnummern[karte_id]
+            gruppen = self._lufteingangsgruppen[karte_id]
             for schluessel, menge in eigener.items():
                 if schluessel in nummern:
                     gefordert[nummern[schluessel]] = menge
+                    continue
+                anschluesse = gruppen.get(schluessel)
+                if anschluesse:
+                    anteil = menge / len(anschluesse)
+                    for port_id in anschluesse:
+                        gefordert[port_id] = anteil
 
             # Verteiler braucht die Aufteilung im Vorwaertslauf. Sie gehoert zur
             # Topologie und wird nur im Nenn-Durchgang gesetzt.
