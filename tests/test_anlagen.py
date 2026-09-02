@@ -1,7 +1,10 @@
+from datetime import datetime
+
 import pytest
 
 from app import create_app
-from core import anlagen, database
+from core import anlagen, database, ergebnisse, solver
+from core.wetter import speicher
 
 
 @pytest.fixture
@@ -473,3 +476,183 @@ def test_messwerte_von_bleibt_verfuegbar_wenn_schon_verbunden(app):
         messwerte = anlagen.messwerte_von(anlage)
 
     assert any(m["schluessel"] == "T_Raum" for m in messwerte)
+
+
+# -- Loeschen und Umbenennen -----------------------------------------------
+
+def _wetter_anlegen():
+    return speicher.datensatz_anlegen(
+        "W", "upload",
+        [{"zeitpunkt": datetime(2024, 1, 1), "t_au": 0.0, "x_au": 4.0,
+          "str_s": 0.0, "str_o": 0.0, "str_w": 0.0, "str_n": 0.0, "str_h": 0.0}],
+    )
+
+
+def _lauf_anlegen(anlage_id, wetter_id):
+    """Legt einen abgeschlossenen Simulationslauf mit Zeitreihe und Bilanz an
+    - fuer die Kaskaden-Tests unten reicht ein einstuendiger Lauf."""
+    graph = anlagen.lade_graph(anlage_id)
+    lauf = solver.Lauf(
+        stunden=[{}], bilanz={"strom_ht": 0.0, "strom_nt": 0.0, "waerme": 0.0,
+                               "kaelte": 0.0, "wasser": 0.0},
+        warnungen=[],
+    )
+    return ergebnisse.speichere(anlage_id, wetter_id, 0, 1, lauf, graph, dauer=0.1)
+
+
+def test_projekt_umbenennen(app):
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("Alt")
+        anlagen.projekt_umbenennen(projekt, "Neu")
+        name = database.get_db().execute(
+            "SELECT name FROM projekt WHERE id = ?", (projekt,)
+        ).fetchone()["name"]
+    assert name == "Neu"
+
+
+def test_projekt_umbenennen_unbekanntes_projekt_meldet_fehler(app):
+    with app.app_context():
+        with pytest.raises(KeyError):
+            anlagen.projekt_umbenennen(9999, "Neu")
+
+
+def test_projekt_loeschen_nimmt_anlagen_karten_und_laeufe_mit(app):
+    """Ein Projekt mit einer Anlage, die eine Karte und einen gespeicherten
+    Lauf traegt - nach dem Loeschen darf keine Zeile mehr uebrig sein, auch
+    nicht in zeitreihe/bilanz (ON DELETE CASCADE ueber drei Ebenen: projekt ->
+    anlage -> simulation -> zeitreihe/bilanz)."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        anlagen.karte_anlegen(anlage, "erhitzer", 0.0, 0.0)
+        wetter = _wetter_anlegen()
+        sim = _lauf_anlegen(anlage, wetter)
+
+        anlagen.projekt_loeschen(projekt)
+
+        db = database.get_db()
+        assert db.execute(
+            "SELECT COUNT(*) AS n FROM anlage WHERE projekt_id = ?", (projekt,)
+        ).fetchone()["n"] == 0
+        assert db.execute(
+            "SELECT COUNT(*) AS n FROM karte WHERE anlage_id = ?", (anlage,)
+        ).fetchone()["n"] == 0
+        assert db.execute(
+            "SELECT COUNT(*) AS n FROM simulation WHERE id = ?", (sim,)
+        ).fetchone()["n"] == 0
+        assert db.execute(
+            "SELECT COUNT(*) AS n FROM zeitreihe WHERE simulation_id = ?", (sim,)
+        ).fetchone()["n"] == 0
+        assert db.execute(
+            "SELECT COUNT(*) AS n FROM bilanz WHERE simulation_id = ?", (sim,)
+        ).fetchone()["n"] == 0
+        # Der Wetterdatensatz gehoert nicht zum Projekt und bleibt stehen.
+        assert db.execute(
+            "SELECT COUNT(*) AS n FROM wetterdatensatz WHERE id = ?", (wetter,)
+        ).fetchone()["n"] == 1
+        assert db.execute("PRAGMA foreign_key_check").fetchall() == []
+
+
+def test_anlage_umbenennen(app):
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "Alt")
+        anlagen.anlage_umbenennen(anlage, "Neu")
+        name = database.get_db().execute(
+            "SELECT name FROM anlage WHERE id = ?", (anlage,)
+        ).fetchone()["name"]
+    assert name == "Neu"
+
+
+def test_anlage_umbenennen_unbekannte_anlage_meldet_fehler(app):
+    with app.app_context():
+        with pytest.raises(KeyError):
+            anlagen.anlage_umbenennen(9999, "Neu")
+
+
+def test_anlage_loeschen_nimmt_karten_pfeile_und_laeufe_mit(app):
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        a = anlagen.karte_anlegen(anlage, "erhitzer", 0.0, 0.0)
+        b = anlagen.karte_anlegen(anlage, "kuehler", 300.0, 0.0)
+        anlagen.pfeil_anlegen(anlage, a, b)
+        wetter = _wetter_anlegen()
+        sim = _lauf_anlegen(anlage, wetter)
+
+        anlagen.anlage_loeschen(anlage)
+
+        db = database.get_db()
+        assert db.execute(
+            "SELECT COUNT(*) AS n FROM karte WHERE anlage_id = ?", (anlage,)
+        ).fetchone()["n"] == 0
+        assert db.execute(
+            "SELECT COUNT(*) AS n FROM pfeil WHERE anlage_id = ?", (anlage,)
+        ).fetchone()["n"] == 0
+        assert db.execute(
+            "SELECT COUNT(*) AS n FROM zeitreihe WHERE simulation_id = ?", (sim,)
+        ).fetchone()["n"] == 0
+        # Das Projekt selbst bleibt bestehen - nur diese eine Anlage ist weg.
+        assert db.execute(
+            "SELECT COUNT(*) AS n FROM projekt WHERE id = ?", (projekt,)
+        ).fetchone()["n"] == 1
+        assert db.execute("PRAGMA foreign_key_check").fetchall() == []
+
+
+def test_anlagen_von_zaehlt_simulationen_mit(app):
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        wetter = _wetter_anlegen()
+        _lauf_anlegen(anlage, wetter)
+        _lauf_anlegen(anlage, wetter)
+        eintrag = next(a for a in anlagen.anlagen_von(projekt) if a["id"] == anlage)
+    assert eintrag["simulationen"] == 2
+
+
+def test_projekte_zaehlt_simulationen_ueber_alle_anlagen(app):
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        eine = anlagen.anlage_anlegen(projekt, "A")
+        andere = anlagen.anlage_anlegen(projekt, "B")
+        wetter = _wetter_anlegen()
+        _lauf_anlegen(eine, wetter)
+        _lauf_anlegen(andere, wetter)
+        eintrag = next(p for p in anlagen.projekte() if p["id"] == projekt)
+    assert eintrag["simulationen"] == 2
+    assert eintrag["anlagen"] == 2
+
+
+def test_api_projekt_umbenennen_und_loeschen(app):
+    klient = app.test_client()
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("Alt")
+
+    antwort = klient.patch(f"/api/projekte/{projekt}", json={"name": "Neu"})
+    assert antwort.status_code == 200
+    assert klient.get("/api/projekte").get_json()[0]["name"] == "Neu"
+
+    antwort = klient.delete(f"/api/projekte/{projekt}")
+    assert antwort.status_code == 200
+    assert klient.get("/api/projekte").get_json() == []
+
+
+def test_api_projekt_umbenennen_unbekannt_meldet_404(app):
+    klient = app.test_client()
+    antwort = klient.patch("/api/projekte/9999", json={"name": "Neu"})
+    assert antwort.status_code == 404
+
+
+def test_api_anlage_umbenennen_und_loeschen(app):
+    klient = app.test_client()
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "Alt")
+
+    antwort = klient.patch(f"/api/anlagen/{anlage}", json={"name": "Neu"})
+    assert antwort.status_code == 200
+    assert klient.get(f"/api/anlagen?projekt_id={projekt}").get_json()[0]["name"] == "Neu"
+
+    antwort = klient.delete(f"/api/anlagen/{anlage}")
+    assert antwort.status_code == 200
+    assert klient.get(f"/api/anlagen?projekt_id={projekt}").get_json() == []

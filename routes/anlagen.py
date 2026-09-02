@@ -35,6 +35,42 @@ def anlage_anlegen():
     return jsonify({"id": anlage_id}), 201
 
 
+@bp.patch("/projekte/<int:projekt_id>")
+def projekt_umbenennen(projekt_id):
+    daten = request.get_json(force=True)
+    try:
+        anlagen.projekt_umbenennen(projekt_id, daten["name"])
+    except KeyError as fehler:
+        return jsonify({"fehler": str(fehler)}), 404
+    return jsonify({"ok": True})
+
+
+@bp.delete("/projekte/<int:projekt_id>")
+def projekt_loeschen(projekt_id):
+    # Erst jeden laufenden Lauf der betroffenen Anlagen sauber abbrechen,
+    # dann erst loeschen - siehe core.laeufe.abbrich_vor_loeschen().
+    laeufe.abbrich_vor_loeschen(projekt_id=projekt_id)
+    anlagen.projekt_loeschen(projekt_id)
+    return jsonify({"ok": True})
+
+
+@bp.patch("/anlagen/<int:anlage_id>")
+def anlage_umbenennen(anlage_id):
+    daten = request.get_json(force=True)
+    try:
+        anlagen.anlage_umbenennen(anlage_id, daten["name"])
+    except KeyError as fehler:
+        return jsonify({"fehler": str(fehler)}), 404
+    return jsonify({"ok": True})
+
+
+@bp.delete("/anlagen/<int:anlage_id>")
+def anlage_loeschen(anlage_id):
+    laeufe.abbrich_vor_loeschen(anlage_id=anlage_id)
+    anlagen.anlage_loeschen(anlage_id)
+    return jsonify({"ok": True})
+
+
 @bp.get("/vorlagen")
 def vorlagen_liste():
     return jsonify(vorlagen.alle())

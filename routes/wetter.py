@@ -13,6 +13,25 @@ def liste():
     return jsonify(speicher.datensaetze())
 
 
+@bp.patch("/<int:datensatz_id>")
+def umbenennen(datensatz_id):
+    daten = request.get_json(force=True)
+    try:
+        speicher.datensatz_umbenennen(datensatz_id, daten["name"])
+    except KeyError as fehler:
+        return jsonify({"fehler": str(fehler)}), 404
+    return jsonify({"ok": True})
+
+
+@bp.delete("/<int:datensatz_id>")
+def loeschen(datensatz_id):
+    try:
+        speicher.datensatz_loeschen(datensatz_id)
+    except ValueError as fehler:
+        return jsonify({"fehler": str(fehler)}), 400
+    return jsonify({"ok": True})
+
+
 @bp.post("/abrufen")
 def abrufen():
     """Ruft ein Jahr Wetterdaten fuer einen Ort ueber die Open-Meteo Archive-API

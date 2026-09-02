@@ -95,6 +95,25 @@ def test_startseite_enthaelt_das_abrufformular(app):
     assert 'value="eigene"' in html
 
 
+def test_startseite_bindet_loeschen_css_ein(app):
+    """Das eigene Stylesheet fuer Loeschen/Umbenennen - ohne dieses Tag
+    bleiben die neuen Aktionsknoepfe unformatiert (siehe Kommentar in
+    loeschen.css, weshalb es eine eigene Datei statt style.css ist)."""
+    klient = app.test_client()
+    html = klient.get("/").get_data(as_text=True)
+    assert "css/loeschen.css" in html
+
+
+def test_editor_seite_bindet_loeschen_css_ein(app):
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("Referenz")
+        anlage = ax_sim_2_1.baue(projekt, "AX_SIM 2.1")
+
+    klient = app.test_client()
+    html = klient.get(f"/anlage/{anlage}").get_data(as_text=True)
+    assert "css/loeschen.css" in html
+
+
 def test_startseite_bindet_kein_editor_script_ein(app):
     """start.js ist eigenstaendig (siehe dortiger Kommentar) - laedt die
     Startseite trotzdem editor.js/panel.js/simulation.js mit, waere das ein

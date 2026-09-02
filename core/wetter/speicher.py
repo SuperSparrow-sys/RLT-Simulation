@@ -56,15 +56,57 @@ def lade_stunden(datensatz_id, von=None, bis=None):
 
 
 def datensaetze():
+    """Alle Wetterdatensaetze - mit Stundenzahl und der Zahl der
+    Simulationslaeufe, die auf sie verweisen (letzteres, damit die
+    Oberflaeche vor dem Loeschen weiss, ob und warum das verweigert wird,
+    statt es erst zu versuchen - siehe datensatz_loeschen())."""
     db = get_db()
     return [
         {
             "id": z["id"], "name": z["name"], "quelle": z["quelle"], "ort": z["ort"],
-            "jahr": z["jahr"], "stunden": z["stunden"],
+            "jahr": z["jahr"], "stunden": z["stunden"], "simulationen": z["simulationen"],
         }
         for z in db.execute(
-            "SELECT w.*, (SELECT COUNT(*) FROM wetterstunde s "
-            "             WHERE s.datensatz_id = w.id) AS stunden "
+            "SELECT w.*, "
+            "       (SELECT COUNT(*) FROM wetterstunde s "
+            "        WHERE s.datensatz_id = w.id) AS stunden, "
+            "       (SELECT COUNT(*) FROM simulation sim "
+            "        WHERE sim.wetterdatensatz_id = w.id) AS simulationen "
             "FROM wetterdatensatz w ORDER BY w.id DESC"
         )
     ]
+
+
+def datensatz_umbenennen(datensatz_id, name):
+    db = get_db()
+    cur = db.execute(
+        "UPDATE wetterdatensatz SET name = ? WHERE id = ?", (name, datensatz_id)
+    )
+    db.commit()
+    if cur.rowcount == 0:
+        raise KeyError(f"Wetterdatensatz {datensatz_id} gibt es nicht")
+
+
+def datensatz_loeschen(datensatz_id):
+    """Loescht einen Wetterdatensatz mitsamt seinen Wetterstunden (ON DELETE
+    CASCADE, siehe core/database.py) - aber nur, wenn kein Simulationslauf
+    mehr auf ihn verweist. Ein gespeicherter Lauf ohne seinen Wetterdatensatz
+    waere nicht mehr nachvollziehbar (welches Wetter fuehrte zu dieser
+    Bilanz?); die Spalte simulation.wetterdatensatz_id hat deshalb bewusst
+    kein ON DELETE CASCADE und keine Kaskade auf 'setze NULL' - dieselbe
+    Fremdschluesselpruefung wuerde den DELETE sonst mit einem rohen
+    'FOREIGN KEY constraint failed' verweigern; diese Pruefung hier meldet
+    stattdessen, wie viele Laeufe betroffen sind."""
+    db = get_db()
+    verwendung = db.execute(
+        "SELECT COUNT(*) AS n FROM simulation WHERE wetterdatensatz_id = ?",
+        (datensatz_id,),
+    ).fetchone()["n"]
+    if verwendung:
+        einheit = "Simulationslauf" if verwendung == 1 else "Simulationsläufen"
+        raise ValueError(
+            f"Der Wetterdatensatz wird von {verwendung} {einheit} verwendet und "
+            "kann nicht gelöscht werden."
+        )
+    db.execute("DELETE FROM wetterdatensatz WHERE id = ?", (datensatz_id,))
+    db.commit()

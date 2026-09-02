@@ -46,6 +46,17 @@ def abbrechen(kennung):
     return jsonify({"ok": True})
 
 
+@bp.delete("/<int:simulation_id>")
+def loeschen(simulation_id):
+    try:
+        ergebnisse.simulation_loeschen(simulation_id)
+    except KeyError as fehler:
+        return jsonify({"fehler": str(fehler)}), 404
+    except ValueError as fehler:
+        return jsonify({"fehler": str(fehler)}), 400
+    return jsonify({"ok": True})
+
+
 @bp.get("/<int:simulation_id>/bilanz")
 def bilanz(simulation_id):
     return jsonify(

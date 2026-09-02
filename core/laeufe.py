@@ -96,6 +96,26 @@ def _laufen(app, kennung, simulation_id, anlage_id, wetterdatensatz_id, von, bis
                 dauer=time.time() - begonnen,
             )
         except Exception as fehler:  # noqa: BLE001 - der Lauf darf die App nicht kippen
+            # War die Anlage (oder ihr Projekt) waehrend des Laufs geloescht
+            # worden, ist die beim Start angelegte 'simulation'-Zeile laengst
+            # weg (ON DELETE CASCADE, core/database.py) - der Schreibversuch
+            # oben (ergebnisse.fortschritt_speichern()/abschliesse()) scheitert
+            # dann an genau dieser Fremdschluesselpruefung. Kein echter
+            # Fehler, sondern der erwartete, saubere Ausgang von
+            # laeufe.abbrich_vor_loeschen(): statt der rohen SQL-Meldung
+            # ("FOREIGN KEY constraint failed") zeigt der Stand denselben
+            # Status wie ein normaler Abbruch.
+            try:
+                db = database.get_db()
+                noch_da = db.execute(
+                    "SELECT 1 FROM simulation WHERE id = ?", (simulation_id,)
+                ).fetchone()
+            except Exception:  # noqa: BLE001 - die Pruefung selbst darf nicht kippen
+                noch_da = True
+            if noch_da is None:
+                _setze(kennung, status="abgebrochen", simulation_id=simulation_id)
+                return
+
             _setze(kennung, status="fehler", fehler=str(fehler), simulation_id=simulation_id)
             try:
                 # Die beim Start angelegte Zeile (status='laeuft') darf nicht
@@ -138,6 +158,35 @@ def starte(app, anlage_id, wetterdatensatz_id, von, bis):
     )
     faden.start()
     return kennung
+
+
+def abbrich_vor_loeschen(anlage_id=None, projekt_id=None):
+    """Signalisiert jedem noch laufenden Simulationslauf einer Anlage (oder
+    aller Anlagen eines Projekts) den Abbruch, bevor die zugehoerigen
+    Datenbankzeilen geloescht werden. Genau eines der beiden Argumente wird
+    angegeben.
+
+    Ohne dieses Signal rechnete der Hintergrund-Thread eines laufenden Laufs
+    (_laufen()) bis zum natuerlichen Ende weiter - bei einem Jahreslauf bis
+    zu acht Minuten -, obwohl niemand das Ergebnis mehr abholen kann: die
+    'simulation'-Zeile ist durch ON DELETE CASCADE (core/database.py,
+    anlage -> simulation) bereits mit der Anlage geloescht, und sein
+    abschliessender Schreibversuch in core.ergebnisse.abschliesse() scheitert
+    dann an genau dieser Fremdschluesselpruefung (INSERT INTO zeitreihe mit
+    einer nicht mehr vorhandenen simulation_id). Das ist an sich schon
+    unschaedlich - der breite except in _laufen() faengt es ab, es entsteht
+    keine verwaiste Zeile -, aber unnoetig spaet und mit einer rohen
+    SQL-Fehlermeldung als 'fehler'-Text. abbrechen() laesst den Solver
+    stattdessen an der naechsten Stunde von selbst aufhoeren (siehe
+    core/solver.py, Parameter 'abbruch' von Solver.starte())."""
+    if anlage_id is not None:
+        anlage_ids = [anlage_id]
+    else:
+        anlage_ids = [a["id"] for a in anlagen.anlagen_von(projekt_id)]
+    for aid in anlage_ids:
+        zeile = ergebnisse.laufende_simulation(aid)
+        if zeile and zeile.get("kennung"):
+            abbrechen(zeile["kennung"])
 
 
 def laufender_auftrag(anlage_id):

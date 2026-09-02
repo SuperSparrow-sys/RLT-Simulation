@@ -152,6 +152,55 @@ const Simulation = {
       });
     });
 
+    dialog.querySelectorAll(".frueherer-lauf-loeschen").forEach((knopf) => {
+      // Eigener Klick-Handler, nicht die Zeile selbst - sonst wuerde ein
+      // Klick auf "Löschen" zugleich die Zeile "oeffnen" (siehe oben).
+      knopf.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const zeile = knopf.closest(".frueherer-lauf");
+        const simulationId = knopf.dataset.simulationId;
+        const bestaetigt = await bestaetigenDialog(
+          "Simulationslauf löschen",
+          "Dieser Simulationslauf wird endgültig gelöscht, mitsamt seiner " +
+            "gespeicherten Stundenreihe und Bilanz."
+        );
+        if (!bestaetigt) return;
+
+        knopf.disabled = true;
+        let antwort;
+        try {
+          antwort = await fetch(`/api/simulation/${simulationId}`, { method: "DELETE" });
+        } catch {
+          zeigeFehler("Simulationslauf konnte nicht gelöscht werden.");
+          knopf.disabled = false;
+          return;
+        }
+        if (!antwort.ok) {
+          let text = "Simulationslauf konnte nicht gelöscht werden.";
+          try {
+            const daten = await antwort.json();
+            if (daten.fehler) text = daten.fehler;
+          } catch {
+            /* Antwort war kein JSON - bei der Vorgabemeldung bleiben. */
+          }
+          zeigeFehler(text);
+          knopf.disabled = false;
+          return;
+        }
+
+        zeile.remove();
+        if (!dialog.querySelectorAll(".frueherer-lauf").length) {
+          const liste = dialog.querySelector(".fruehere-laeufe");
+          if (liste) {
+            const hinweis = document.createElement("p");
+            hinweis.className = "leerhinweis";
+            hinweis.textContent = "Für diese Anlage wurde noch nicht simuliert.";
+            liste.replaceWith(hinweis);
+          }
+        }
+      });
+    });
+
     dialog.querySelector("#btn-abbrechen").onclick = () => dialog.remove();
     dialog.querySelector("#btn-los").onclick = () => {
       const wetterId = Number(dialog.querySelector("#wahl-wetter").value);
@@ -195,10 +244,17 @@ const Simulation = {
         const rechts = laeuftNoch
           ? `<span class="zahl frueherer-lauf-laeuft">läuft …</span>`
           : `<span class="zahl">${l.kosten_gesamt.toFixed(2)} EUR</span>`;
+        // Ein laufender Lauf laesst sich hier nicht loeschen (siehe
+        // core.ergebnisse.simulation_loeschen) - erst abbrechen, dann
+        // loeschen, oder gleich die ganze Anlage loeschen.
+        const loeschKnopf = laeuftNoch
+          ? ""
+          : `<button type="button" class="knopf-mini knopf-mini-gefahr frueherer-lauf-loeschen"
+                     data-simulation-id="${l.id}" title="Diesen Lauf löschen">Löschen</button>`;
         return `<li class="frueherer-lauf" data-simulation-id="${l.id}"
               data-status="${htmlSicher(l.status)}" data-kennung="${htmlSicher(l.kennung || "")}">
           <span>${htmlSicher(l.wetter_name)} · Stunde ${l.von_stunde}–${l.bis_stunde}</span>
-          ${rechts}
+          <span class="frueherer-lauf-rechts">${rechts}${loeschKnopf}</span>
         </li>`;
       })
       .join("");

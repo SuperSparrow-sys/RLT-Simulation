@@ -30,6 +30,53 @@ def anlage_anlegen(projekt_id, name, notiz=""):
     return cur.lastrowid
 
 
+def projekt_umbenennen(projekt_id, name):
+    db = get_db()
+    cur = db.execute(
+        "UPDATE projekt SET name = ?, geaendert_am = datetime('now') WHERE id = ?",
+        (name, projekt_id),
+    )
+    db.commit()
+    if cur.rowcount == 0:
+        raise KeyError(f"Projekt {projekt_id} gibt es nicht")
+
+
+def projekt_loeschen(projekt_id):
+    """Loescht ein Projekt mitsamt allen seinen Anlagen.
+
+    ON DELETE CASCADE (core/database.py) reisst dabei jede Anlage mit ihren
+    Karten, Pfeilen, Verbindungen und Simulationslaeufen (samt Zeitreihe und
+    Bilanz) mit - ein Projekt mit drei Anlagen und zwoelf Laeufen hinterlaesst
+    keine einzige Zeile. Ruft vorher laeufe.abbrich_vor_loeschen() nicht selbst
+    auf (core/anlagen.py kennt core.laeufe nicht - zirkulaerer Import), das
+    macht die aufrufende Route (routes/anlagen.py)."""
+    db = get_db()
+    db.execute("DELETE FROM projekt WHERE id = ?", (projekt_id,))
+    db.commit()
+
+
+def anlage_umbenennen(anlage_id, name):
+    db = get_db()
+    cur = db.execute(
+        "UPDATE anlage SET name = ?, geaendert_am = datetime('now') WHERE id = ?",
+        (name, anlage_id),
+    )
+    db.commit()
+    if cur.rowcount == 0:
+        raise KeyError(f"Anlage {anlage_id} gibt es nicht")
+
+
+def anlage_loeschen(anlage_id):
+    """Loescht eine Anlage mitsamt Karten, Pfeilen, Verbindungen und
+    Simulationslaeufen (samt Zeitreihe und Bilanz) - alles ueber ON DELETE
+    CASCADE (core/database.py). Ein noch laufender Lauf dieser Anlage wird
+    dabei mitgeloescht; dass sein Rechen-Thread davon sauber erfaehrt, regelt
+    laeufe.abbrich_vor_loeschen() vor diesem Aufruf (siehe routes/anlagen.py)."""
+    db = get_db()
+    db.execute("DELETE FROM anlage WHERE id = ?", (anlage_id,))
+    db.commit()
+
+
 # -- Karten ---------------------------------------------------------------
 
 def karte_anlegen(anlage_id, typ, pos_x=0.0, pos_y=0.0, parameter=None, name=None):
@@ -524,25 +571,38 @@ def messwerte_von(anlage_id):
 
 
 def projekte():
-    """Alle Projekte mit der Zahl ihrer Anlagen."""
+    """Alle Projekte mit der Zahl ihrer Anlagen und Simulationslaeufe.
+
+    Die Laeufe-Zahl zaehlt ueber alle Anlagen des Projekts - sie ist die
+    Grundlage der Rueckfrage vor dem Loeschen ('3 Anlagen mit 12
+    Simulationslaeufen'), nicht nur eine Zierde der Liste."""
     db = get_db()
     return [
         {"id": z["id"], "name": z["name"], "beschreibung": z["beschreibung"],
-         "anlagen": z["anlagen"], "geaendert_am": z["geaendert_am"]}
+         "anlagen": z["anlagen"], "simulationen": z["simulationen"],
+         "geaendert_am": z["geaendert_am"]}
         for z in db.execute(
-            "SELECT p.*, (SELECT COUNT(*) FROM anlage a WHERE a.projekt_id = p.id) "
-            "       AS anlagen "
+            "SELECT p.*, "
+            "       (SELECT COUNT(*) FROM anlage a WHERE a.projekt_id = p.id) "
+            "         AS anlagen, "
+            "       (SELECT COUNT(*) FROM simulation s "
+            "        JOIN anlage a2 ON a2.id = s.anlage_id "
+            "        WHERE a2.projekt_id = p.id) AS simulationen "
             "FROM projekt p ORDER BY p.geaendert_am DESC, p.id DESC"
         )
     ]
 
 
 def anlagen_von(projekt_id=None):
-    """Alle Anlagen, wahlweise auf ein Projekt eingegrenzt."""
+    """Alle Anlagen, wahlweise auf ein Projekt eingegrenzt - mit der Zahl
+    ihrer Karten und Simulationslaeufe (letztere fuer dieselbe Rueckfrage vor
+    dem Loeschen wie bei projekte())."""
     db = get_db()
     abfrage = (
         "SELECT a.*, p.name AS projekt_name, "
-        "       (SELECT COUNT(*) FROM karte k WHERE k.anlage_id = a.id) AS karten "
+        "       (SELECT COUNT(*) FROM karte k WHERE k.anlage_id = a.id) AS karten, "
+        "       (SELECT COUNT(*) FROM simulation s WHERE s.anlage_id = a.id) "
+        "         AS simulationen "
         "FROM anlage a JOIN projekt p ON p.id = a.projekt_id"
     )
     werte = []
@@ -552,7 +612,8 @@ def anlagen_von(projekt_id=None):
     abfrage += " ORDER BY a.id"
     return [
         {"id": z["id"], "projekt_id": z["projekt_id"], "projekt_name": z["projekt_name"],
-         "name": z["name"], "notiz": z["notiz"], "karten": z["karten"]}
+         "name": z["name"], "notiz": z["notiz"], "karten": z["karten"],
+         "simulationen": z["simulationen"]}
         for z in db.execute(abfrage, werte)
     ]
 

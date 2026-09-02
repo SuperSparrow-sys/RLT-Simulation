@@ -110,6 +110,79 @@ function zeigeFehler(nachricht) {
   zeigeFehler.timer = window.setTimeout(() => { leiste.hidden = true; }, 5000);
 }
 
+/* Eigene Kopie statt Import: simulation.js definiert bereits eine identische
+   htmlSicher() (siehe dortiger Kommentar) - editor.js braucht sie fuer die
+   beiden folgenden Dialoge, ohne selbst eine Ladereihenfolge-Abhaengigkeit
+   von simulation.js einzugehen (editor.html bindet simulation.js zwar vor
+   editor.js ein, aber die Abhaengigkeitsrichtung soll trotzdem nicht davon
+   abhaengen, welche Datei zufaellig zuerst geladen wird). */
+function htmlSicher(text) {
+  const traeger = document.createElement("span");
+  traeger.textContent = text == null ? "" : String(text);
+  return traeger.innerHTML;
+}
+
+/* Zwei wiederverwendete Dialoge fuer Loeschen und Umbenennen - dieselbe
+   Idee (und fast derselbe Code) wie in start.js, dort aus demselben Grund
+   noch einmal eigenstaendig definiert (siehe dortiger Kommentar zu
+   zeigeFehler()/htmlSicher()). Beide geben ein Promise zurueck, das sich
+   erst mit dem Schliessen des Dialogs aufloest. simulation.js verwendet
+   beide fuer "Frueherer Lauf loeschen" mit, obwohl es sie nicht selbst
+   definiert - dieselbe bestehende Abhaengigkeit wie bei zeigeFehler(). */
+function bestaetigenDialog(titel, text, bestaetigenText = "Löschen") {
+  return new Promise((abschliessen) => {
+    const huelle = document.createElement("div");
+    huelle.className = "dialog-huelle";
+    huelle.innerHTML = `
+      <div class="dialog">
+        <h2>${htmlSicher(titel)}</h2>
+        <p class="dialog-text">${text}</p>
+        <div class="dialog-knoepfe">
+          <button id="btn-abbrechen">Abbrechen</button>
+          <button class="knopf-haupt-gefahr" id="btn-bestaetigen">${htmlSicher(bestaetigenText)}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(huelle);
+    huelle.querySelector("#btn-abbrechen").onclick = () => { huelle.remove(); abschliessen(false); };
+    huelle.querySelector("#btn-bestaetigen").onclick = () => { huelle.remove(); abschliessen(true); };
+  });
+}
+
+function textEingabeDialog(titel, vorgabe) {
+  return new Promise((abschliessen) => {
+    const huelle = document.createElement("div");
+    huelle.className = "dialog-huelle";
+    huelle.innerHTML = `
+      <div class="dialog">
+        <h2>${htmlSicher(titel)}</h2>
+        <label class="panel-zeile">
+          <span class="panel-label">Name</span>
+          <input type="text" id="feld-text-eingabe" value="${htmlSicher(vorgabe)}">
+        </label>
+        <div class="dialog-knoepfe">
+          <button id="btn-abbrechen">Abbrechen</button>
+          <button class="knopf-haupt" id="btn-uebernehmen">Übernehmen</button>
+        </div>
+      </div>`;
+    document.body.appendChild(huelle);
+    const feld = huelle.querySelector("#feld-text-eingabe");
+    feld.focus();
+    feld.select();
+    const schliessen = (wert) => { huelle.remove(); abschliessen(wert); };
+    huelle.querySelector("#btn-abbrechen").onclick = () => schliessen(null);
+    const uebernehmen = () => {
+      const wert = feld.value.trim();
+      if (!wert) {
+        zeigeFehler("Bitte einen Namen eingeben.");
+        return;
+      }
+      schliessen(wert);
+    };
+    huelle.querySelector("#btn-uebernehmen").onclick = uebernehmen;
+    feld.addEventListener("keydown", (e) => { if (e.key === "Enter") uebernehmen(); });
+  });
+}
+
 const Editor = {
   anlage: null,
   auswahl: null,
@@ -139,6 +212,28 @@ const Editor = {
       this._nochNichtEingepasst = false;
       this.einpassen();
     }
+  },
+
+  async anlageUmbenennen() {
+    const neuerName = await textEingabeDialog("Anlage umbenennen", this.anlage.name);
+    if (neuerName === null) return;
+    let antwort;
+    try {
+      antwort = await fetch(`/api/anlagen/${this.anlage.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: neuerName }),
+      });
+    } catch {
+      zeigeFehler("Anlage konnte nicht umbenannt werden.");
+      return;
+    }
+    if (!antwort.ok) {
+      zeigeFehler("Anlage konnte nicht umbenannt werden.");
+      return;
+    }
+    this.anlage.name = neuerName;
+    document.getElementById("anlagenname").textContent = neuerName;
   },
 
   karteNach(id) {
@@ -756,4 +851,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   await Palette.laden();
   await Editor.laden(window.ANLAGE_ID);
   pfeileBinden(Editor);
+
+  const btnUmbenennen = document.getElementById("btn-anlage-umbenennen");
+  if (btnUmbenennen) {
+    btnUmbenennen.addEventListener("click", () => Editor.anlageUmbenennen());
+  }
 });

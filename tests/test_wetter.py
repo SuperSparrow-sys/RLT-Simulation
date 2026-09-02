@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from app import create_app
-from core import database
+from core import anlagen, database, ergebnisse, solver
 from core.wetter import speicher, try_import
 
 REFERENZ = Path(__file__).parent.parent / "referenz" / "RLTSimulation_Vorlage_AX_SIM_2.1.xls"
@@ -161,3 +161,102 @@ def test_api_listet_die_datensaetze(app):
     antwort = app.test_client().get("/api/wetter")
     assert antwort.status_code == 200
     assert antwort.get_json()[0]["name"] == "TRY04"
+
+
+# -- Loeschen und Umbenennen -----------------------------------------------
+
+def _stunden(anzahl=1):
+    return [
+        {
+            "zeitpunkt": datetime(2024, 1, 1, i % 24), "t_au": 0.0, "x_au": 4.0,
+            "str_s": 0.0, "str_o": 0.0, "str_w": 0.0, "str_n": 0.0, "str_h": 0.0,
+        }
+        for i in range(anzahl)
+    ]
+
+
+def test_datensatz_umbenennen(app):
+    with app.app_context():
+        datensatz = speicher.datensatz_anlegen("Alt", "upload", _stunden())
+        speicher.datensatz_umbenennen(datensatz, "Neu")
+        name = database.get_db().execute(
+            "SELECT name FROM wetterdatensatz WHERE id = ?", (datensatz,)
+        ).fetchone()["name"]
+    assert name == "Neu"
+
+
+def test_datensatz_umbenennen_unbekannt_meldet_fehler(app):
+    with app.app_context():
+        with pytest.raises(KeyError):
+            speicher.datensatz_umbenennen(9999, "Neu")
+
+
+def test_datensatz_loeschen_entfernt_seine_stunden(app):
+    with app.app_context():
+        datensatz = speicher.datensatz_anlegen("W", "upload", _stunden(5))
+        speicher.datensatz_loeschen(datensatz)
+        db = database.get_db()
+        assert db.execute(
+            "SELECT COUNT(*) AS n FROM wetterdatensatz WHERE id = ?", (datensatz,)
+        ).fetchone()["n"] == 0
+        assert db.execute(
+            "SELECT COUNT(*) AS n FROM wetterstunde WHERE datensatz_id = ?", (datensatz,)
+        ).fetchone()["n"] == 0
+
+
+def test_datensatz_loeschen_wird_verweigert_wenn_ein_lauf_darauf_verweist(app):
+    """Ein gespeicherter Simulationslauf ohne seinen Wetterdatensatz waere
+    nicht mehr nachvollziehbar - siehe core/wetter/speicher.py."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        datensatz = speicher.datensatz_anlegen("W", "upload", _stunden())
+        graph = anlagen.lade_graph(anlage)
+        lauf = solver.Lauf(
+            stunden=[{}], bilanz={"strom_ht": 0.0, "strom_nt": 0.0, "waerme": 0.0,
+                                   "kaelte": 0.0, "wasser": 0.0},
+            warnungen=[],
+        )
+        ergebnisse.speichere(anlage, datensatz, 0, 1, lauf, graph, dauer=0.1)
+
+        with pytest.raises(ValueError, match="wird von 1 Simulationslauf verwendet"):
+            speicher.datensatz_loeschen(datensatz)
+
+        # Weiterhin vollstaendig vorhanden - kein Teilloeschen.
+        db = database.get_db()
+        assert db.execute(
+            "SELECT COUNT(*) AS n FROM wetterdatensatz WHERE id = ?", (datensatz,)
+        ).fetchone()["n"] == 1
+
+
+def test_api_datensatz_umbenennen_und_loeschen(app):
+    klient = app.test_client()
+    with app.app_context():
+        datensatz = speicher.datensatz_anlegen("Alt", "upload", _stunden())
+
+    antwort = klient.patch(f"/api/wetter/{datensatz}", json={"name": "Neu"})
+    assert antwort.status_code == 200
+    assert klient.get("/api/wetter").get_json()[0]["name"] == "Neu"
+
+    antwort = klient.delete(f"/api/wetter/{datensatz}")
+    assert antwort.status_code == 200
+    assert klient.get("/api/wetter").get_json() == []
+
+
+def test_api_datensatz_loeschen_verweigert_bei_verweisendem_lauf(app):
+    klient = app.test_client()
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        datensatz = speicher.datensatz_anlegen("W", "upload", _stunden())
+        graph = anlagen.lade_graph(anlage)
+        lauf = solver.Lauf(
+            stunden=[{}], bilanz={"strom_ht": 0.0, "strom_nt": 0.0, "waerme": 0.0,
+                                   "kaelte": 0.0, "wasser": 0.0},
+            warnungen=[],
+        )
+        ergebnisse.speichere(anlage, datensatz, 0, 1, lauf, graph, dauer=0.1)
+
+    antwort = klient.delete(f"/api/wetter/{datensatz}")
+    assert antwort.status_code == 400
+    assert "Simulationslauf" in antwort.get_json()["fehler"]

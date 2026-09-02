@@ -27,6 +27,66 @@ function htmlSicher(text) {
   return traeger.innerHTML;
 }
 
+/* Zwei wiederverwendete Dialoge fuer Loeschen und Umbenennen - je ein
+   Promise, das sich erst mit dem Schliessen des Dialogs aufloest, damit sich
+   'const ok = await bestaetigenDialog(...)' schreiben laesst statt mit
+   Callbacks zu hantieren. 'text' darf HTML enthalten (fuer eingebettete
+   Zahlen/Namen) - Aufrufer muessen frei vergebene Namen selbst vorher mit
+   htmlSicher() maskieren, genau wie ueberall sonst in dieser Datei. */
+function bestaetigenDialog(titel, text, bestaetigenText = "Löschen") {
+  return new Promise((abschliessen) => {
+    const huelle = document.createElement("div");
+    huelle.className = "dialog-huelle";
+    huelle.innerHTML = `
+      <div class="dialog">
+        <h2>${htmlSicher(titel)}</h2>
+        <p class="dialog-text">${text}</p>
+        <div class="dialog-knoepfe">
+          <button id="btn-abbrechen">Abbrechen</button>
+          <button class="knopf-haupt-gefahr" id="btn-bestaetigen">${htmlSicher(bestaetigenText)}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(huelle);
+    huelle.querySelector("#btn-abbrechen").onclick = () => { huelle.remove(); abschliessen(false); };
+    huelle.querySelector("#btn-bestaetigen").onclick = () => { huelle.remove(); abschliessen(true); };
+  });
+}
+
+function textEingabeDialog(titel, vorgabe) {
+  return new Promise((abschliessen) => {
+    const huelle = document.createElement("div");
+    huelle.className = "dialog-huelle";
+    huelle.innerHTML = `
+      <div class="dialog">
+        <h2>${htmlSicher(titel)}</h2>
+        <label class="panel-zeile">
+          <span class="panel-label">Name</span>
+          <input type="text" id="feld-text-eingabe" value="${htmlSicher(vorgabe)}">
+        </label>
+        <div class="dialog-knoepfe">
+          <button id="btn-abbrechen">Abbrechen</button>
+          <button class="knopf-haupt" id="btn-uebernehmen">Übernehmen</button>
+        </div>
+      </div>`;
+    document.body.appendChild(huelle);
+    const feld = huelle.querySelector("#feld-text-eingabe");
+    feld.focus();
+    feld.select();
+    const schliessen = (wert) => { huelle.remove(); abschliessen(wert); };
+    huelle.querySelector("#btn-abbrechen").onclick = () => schliessen(null);
+    const uebernehmen = () => {
+      const wert = feld.value.trim();
+      if (!wert) {
+        zeigeFehler("Bitte einen Namen eingeben.");
+        return;
+      }
+      schliessen(wert);
+    };
+    huelle.querySelector("#btn-uebernehmen").onclick = uebernehmen;
+    feld.addEventListener("keydown", (e) => { if (e.key === "Enter") uebernehmen(); });
+  });
+}
+
 const BADGE_TEXT = {
   fertig: (l) => `Letzter Lauf: ${l.kosten_gesamt.toFixed(2)} EUR`,
   abgebrochen: () => "Letzter Lauf abgebrochen",
@@ -118,9 +178,16 @@ const Start = {
 
     const kopf = document.createElement("div");
     kopf.className = "projekt-kopf";
+    const kopfZeile = document.createElement("div");
+    kopfZeile.className = "projekt-kopf-zeile";
     const titel = document.createElement("h2");
     titel.textContent = projekt.name;
-    kopf.appendChild(titel);
+    kopfZeile.appendChild(titel);
+    kopfZeile.appendChild(this.eintragAktionenElement(
+      () => this.projektUmbenennenDialog(projekt),
+      () => this.projektLoeschenDialog(projekt),
+    ));
+    kopf.appendChild(kopfZeile);
     if (projekt.beschreibung) {
       const beschreibung = document.createElement("p");
       beschreibung.className = "projekt-beschreibung";
@@ -178,7 +245,142 @@ const Start = {
     this._fuelleStatus(badge, status);
     link.appendChild(badge);
 
-    return link;
+    // Umbenennen/Loeschen als eigene Zeile UNTER dem Link statt darin - ein
+    // <button> innerhalb eines <a> wuerde beim Klick immer auch navigieren.
+    const eintrag = document.createElement("div");
+    eintrag.className = "anlage-eintrag";
+    eintrag.appendChild(link);
+    eintrag.appendChild(this.eintragAktionenElement(
+      () => this.anlageUmbenennenDialog(anlage),
+      () => this.anlageLoeschenDialog(anlage),
+    ));
+    return eintrag;
+  },
+
+  // Zwei kleine Knoepfe (Umbenennen/Loeschen) - fuer Projekt- und
+  // Anlagekarten identisch aufgebaut, deshalb hier einmal gemeinsam gebaut.
+  eintragAktionenElement(umbenennen, loeschen) {
+    const zeile = document.createElement("div");
+    zeile.className = "eintrag-aktionen";
+    const btnUmbenennen = document.createElement("button");
+    btnUmbenennen.type = "button";
+    btnUmbenennen.className = "knopf-mini";
+    btnUmbenennen.textContent = "Umbenennen";
+    btnUmbenennen.addEventListener("click", (e) => { e.preventDefault(); umbenennen(); });
+    const btnLoeschen = document.createElement("button");
+    btnLoeschen.type = "button";
+    btnLoeschen.className = "knopf-mini knopf-mini-gefahr";
+    btnLoeschen.textContent = "Löschen";
+    btnLoeschen.addEventListener("click", (e) => { e.preventDefault(); loeschen(); });
+    zeile.append(btnUmbenennen, btnLoeschen);
+    return zeile;
+  },
+
+  async projektUmbenennenDialog(projekt) {
+    const neuerName = await textEingabeDialog("Projekt umbenennen", projekt.name);
+    if (neuerName === null) return;
+    let antwort;
+    try {
+      antwort = await fetch(`/api/projekte/${projekt.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: neuerName }),
+      });
+    } catch {
+      zeigeFehler("Projekt konnte nicht umbenannt werden.");
+      return;
+    }
+    if (!antwort.ok) {
+      zeigeFehler("Projekt konnte nicht umbenannt werden.");
+      return;
+    }
+    await this.laden();
+  },
+
+  // 'projekt.anlagen'/'projekt.simulationen' kommen bereits gezaehlt von
+  // /api/projekte (core.anlagen.projekte()) - keine eigene Abfrage noetig,
+  // um die Rueckfrage mit einer Zahl statt eines blossen "Wirklich loeschen?"
+  // zu fuellen.
+  async projektLoeschenDialog(projekt) {
+    const bestaetigt = await bestaetigenDialog(
+      "Projekt löschen",
+      `Projekt "${htmlSicher(projekt.name)}" wirklich löschen?` +
+        this._verlustHinweis([
+          [projekt.anlagen, "Anlage", "Anlagen"],
+          [projekt.simulationen, "Simulationslauf", "Simulationsläufen"],
+        ])
+    );
+    if (!bestaetigt) return;
+    let antwort;
+    try {
+      antwort = await fetch(`/api/projekte/${projekt.id}`, { method: "DELETE" });
+    } catch {
+      zeigeFehler("Projekt konnte nicht gelöscht werden.");
+      return;
+    }
+    if (!antwort.ok) {
+      zeigeFehler("Projekt konnte nicht gelöscht werden.");
+      return;
+    }
+    await this.laden();
+  },
+
+  async anlageUmbenennenDialog(anlage) {
+    const neuerName = await textEingabeDialog("Anlage umbenennen", anlage.name);
+    if (neuerName === null) return;
+    let antwort;
+    try {
+      antwort = await fetch(`/api/anlagen/${anlage.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: neuerName }),
+      });
+    } catch {
+      zeigeFehler("Anlage konnte nicht umbenannt werden.");
+      return;
+    }
+    if (!antwort.ok) {
+      zeigeFehler("Anlage konnte nicht umbenannt werden.");
+      return;
+    }
+    await this.laden();
+  },
+
+  async anlageLoeschenDialog(anlage) {
+    const bestaetigt = await bestaetigenDialog(
+      "Anlage löschen",
+      `Anlage "${htmlSicher(anlage.name)}" wirklich löschen?` +
+        this._verlustHinweis([
+          [anlage.karten, "Karte", "Karten"],
+          [anlage.simulationen, "Simulationslauf", "Simulationsläufen"],
+        ])
+    );
+    if (!bestaetigt) return;
+    let antwort;
+    try {
+      antwort = await fetch(`/api/anlagen/${anlage.id}`, { method: "DELETE" });
+    } catch {
+      zeigeFehler("Anlage konnte nicht gelöscht werden.");
+      return;
+    }
+    if (!antwort.ok) {
+      zeigeFehler("Anlage konnte nicht gelöscht werden.");
+      return;
+    }
+    await this.laden();
+  },
+
+  // Baut aus [[anzahl, einzahl, mehrzahl], ...] den Satz 'Werden mit
+  // gelöscht: 3 Anlagen, 12 Simulationsläufen.' - und, wenn alle Zahlen 0
+  // sind (eine leere Anlage/ein leeres Projekt), gar nichts: dann geht
+  // nichts weiter verloren, eine Rueckfrage ohne Zahlen waere hier keine
+  // zusaetzliche Auskunft.
+  _verlustHinweis(teile) {
+    const genannt = teile
+      .filter(([anzahl]) => anzahl)
+      .map(([anzahl, einzahl, mehrzahl]) => `${anzahl} ${anzahl === 1 ? einzahl : mehrzahl}`);
+    if (!genannt.length) return "";
+    return ` <span class="dialog-text-verlust">Werden mit gelöscht: ${genannt.join(", ")}.</span>`;
   },
 
   _fuelleStatus(badge, status) {
@@ -397,7 +599,7 @@ const Start = {
     const zeilen = this.wetter
       .map(
         (w) => `
-        <tr>
+        <tr data-id="${w.id}">
           <td>${htmlSicher(w.name)}</td>
           <td><span class="wetter-quelle-etikett">${htmlSicher(
             WETTER_QUELLE_TEXT[w.quelle] || w.quelle
@@ -405,6 +607,18 @@ const Start = {
           <td>${htmlSicher(w.ort)}</td>
           <td>${w.jahr ?? ""}</td>
           <td class="zahl">${w.stunden}</td>
+          <td class="wetter-tabelle-aktionen">
+            <button type="button" class="knopf-mini wetter-umbenennen">Umbenennen</button>
+            <button type="button" class="knopf-mini knopf-mini-gefahr wetter-loeschen"
+                    ${w.simulationen ? "disabled" : ""}
+                    title="${
+                      w.simulationen
+                        ? `Wird von ${w.simulationen} ${
+                            w.simulationen === 1 ? "Simulationslauf" : "Simulationsläufen"
+                          } verwendet`
+                        : ""
+                    }">Löschen</button>
+          </td>
         </tr>`
       )
       .join("");
@@ -414,10 +628,77 @@ const Start = {
     tabelle.innerHTML = `
       <thead>
         <tr><th>Name</th><th>Quelle</th><th>Ort</th><th>Jahr</th>
-            <th class="zahl">Stunden</th></tr>
+            <th class="zahl">Stunden</th><th></th></tr>
       </thead>
       <tbody>${zeilen}</tbody>`;
     bereich.appendChild(tabelle);
+
+    tabelle.querySelectorAll("tbody tr").forEach((zeile) => {
+      const datensatz = this.wetter.find((w) => w.id === Number(zeile.dataset.id));
+      zeile.querySelector(".wetter-umbenennen").addEventListener("click", () =>
+        this.wetterUmbenennenDialog(datensatz)
+      );
+      zeile.querySelector(".wetter-loeschen").addEventListener("click", () =>
+        this.wetterLoeschenDialog(datensatz)
+      );
+    });
+  },
+
+  async wetterUmbenennenDialog(datensatz) {
+    const neuerName = await textEingabeDialog("Wetterdatensatz umbenennen", datensatz.name);
+    if (neuerName === null) return;
+    let antwort;
+    try {
+      antwort = await fetch(`/api/wetter/${datensatz.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: neuerName }),
+      });
+    } catch {
+      zeigeFehler("Wetterdatensatz konnte nicht umbenannt werden.");
+      return;
+    }
+    if (!antwort.ok) {
+      zeigeFehler("Wetterdatensatz konnte nicht umbenannt werden.");
+      return;
+    }
+    await this._wetterListeAktualisieren(
+      "Umbenannt, die Liste konnte aber nicht aktualisiert werden."
+    );
+  },
+
+  // Der Loeschknopf ist bei einem verwendeten Datensatz schon deaktiviert
+  // (siehe zeichneWetter()) - dieser Zweig greift nur bei einem inzwischen
+  // veralteten Stand (z.B. ein zweiter, offener Tab hat gerade einen Lauf
+  // gestartet), nicht als erster Weg dorthin.
+  async wetterLoeschenDialog(datensatz) {
+    const bestaetigt = await bestaetigenDialog(
+      "Wetterdatensatz löschen",
+      `Wetterdatensatz "${htmlSicher(datensatz.name)}" (${datensatz.stunden} Stunden) ` +
+        "wirklich löschen?"
+    );
+    if (!bestaetigt) return;
+    let antwort;
+    try {
+      antwort = await fetch(`/api/wetter/${datensatz.id}`, { method: "DELETE" });
+    } catch {
+      zeigeFehler("Wetterdatensatz konnte nicht gelöscht werden.");
+      return;
+    }
+    if (!antwort.ok) {
+      let text = "Wetterdatensatz konnte nicht gelöscht werden.";
+      try {
+        const daten = await antwort.json();
+        if (daten.fehler) text = daten.fehler;
+      } catch {
+        /* Antwort war kein JSON - bei der Vorgabemeldung bleiben. */
+      }
+      zeigeFehler(text);
+      return;
+    }
+    await this._wetterListeAktualisieren(
+      "Gelöscht, die Liste konnte aber nicht aktualisiert werden."
+    );
   },
 
   async wetterHochladen(ereignis) {

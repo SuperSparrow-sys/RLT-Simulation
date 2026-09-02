@@ -333,3 +333,142 @@ def test_lauf_meldet_fehler_statt_zu_haengen(app):
 
     assert stand["status"] == "fehler"
     assert stand["fehler"]
+
+
+# -- Loeschen einzelner Laeufe ----------------------------------------------
+
+def test_simulation_loeschen_entfernt_zeitreihe_und_bilanz(app):
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = ax_sim_2_1.baue(projekt, "A")
+        wetter = wetter_anlegen(1)
+        graph = anlagen.lade_graph(anlage)
+        lauf = solver.Lauf(
+            stunden=[{}], bilanz={"strom_ht": 0.0, "strom_nt": 0.0, "waerme": 0.0,
+                                   "kaelte": 0.0, "wasser": 0.0},
+            warnungen=[],
+        )
+        sim = ergebnisse.speichere(anlage, wetter, 0, 1, lauf, graph, dauer=0.1)
+
+        ergebnisse.simulation_loeschen(sim)
+
+        db = database.get_db()
+        assert db.execute(
+            "SELECT COUNT(*) AS n FROM simulation WHERE id = ?", (sim,)
+        ).fetchone()["n"] == 0
+        assert db.execute(
+            "SELECT COUNT(*) AS n FROM zeitreihe WHERE simulation_id = ?", (sim,)
+        ).fetchone()["n"] == 0
+        assert db.execute(
+            "SELECT COUNT(*) AS n FROM bilanz WHERE simulation_id = ?", (sim,)
+        ).fetchone()["n"] == 0
+
+
+def test_simulation_loeschen_unbekannte_id_meldet_fehler(app):
+    with app.app_context():
+        with pytest.raises(KeyError):
+            ergebnisse.simulation_loeschen(9999)
+
+
+def test_simulation_loeschen_verweigert_laufenden_lauf(app):
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = ax_sim_2_1.baue(projekt, "A")
+        wetter = wetter_anlegen(10)
+        sim = ergebnisse.beginne(anlage, wetter, 0, 10, "kennung-x")
+
+        with pytest.raises(ValueError, match="laufender Simulationslauf"):
+            ergebnisse.simulation_loeschen(sim)
+
+        # Weiterhin vorhanden - nichts wurde trotz der Ablehnung entfernt.
+        db = database.get_db()
+        assert db.execute(
+            "SELECT COUNT(*) AS n FROM simulation WHERE id = ?", (sim,)
+        ).fetchone()["n"] == 1
+
+
+def test_api_simulation_loeschen(app):
+    klient = app.test_client()
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = ax_sim_2_1.baue(projekt, "A")
+        wetter = wetter_anlegen(1)
+        graph = anlagen.lade_graph(anlage)
+        lauf = solver.Lauf(
+            stunden=[{}], bilanz={"strom_ht": 0.0, "strom_nt": 0.0, "waerme": 0.0,
+                                   "kaelte": 0.0, "wasser": 0.0},
+            warnungen=[],
+        )
+        sim = ergebnisse.speichere(anlage, wetter, 0, 1, lauf, graph, dauer=0.1)
+
+    antwort = klient.delete(f"/api/simulation/{sim}")
+    assert antwort.status_code == 200
+    assert klient.get(f"/api/anlagen/{anlage}/simulationen").get_json() == []
+
+
+def test_api_simulation_loeschen_laufender_lauf_meldet_400(app):
+    klient = app.test_client()
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = ax_sim_2_1.baue(projekt, "A")
+        wetter = wetter_anlegen(10)
+        sim = ergebnisse.beginne(anlage, wetter, 0, 10, "kennung-x")
+
+    antwort = klient.delete(f"/api/simulation/{sim}")
+    assert antwort.status_code == 400
+
+
+# -- Anlage loeschen waehrend ein Lauf rechnet -------------------------------
+
+def test_anlage_loeschen_waehrend_laufender_simulation_bleibt_sauber(app, monkeypatch):
+    """Der zentrale Fall der Aufgabe: der Rechen-Thread (core/laeufe.py)
+    schreibt am Ende noch in die Datenbank, auch wenn die Anlage laengst
+    geloescht ist. Muss sauber ausgehen - kein Absturz, keine verwaiste Zeile
+    (PRAGMA foreign_key_check leer), egal ob der Thread noch vor oder erst
+    nach dem Loeschen zu schreiben versucht."""
+    original = solver.Solver._rechne_stunde
+
+    def langsamer(self, *args, **kwargs):
+        time.sleep(0.02)
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(solver.Solver, "_rechne_stunde", langsamer)
+
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = ax_sim_2_1.baue(projekt, "A")
+        wetter = wetter_anlegen(500)
+        kennung = laeufe.starte(app, anlage, wetter, 0, 500)
+
+        # Warten, bis der Lauf wirklich begonnen hat (mindestens eine Stunde
+        # gerechnet), damit tatsaechlich mitten im Lauf geloescht wird.
+        for _ in range(200):
+            if laeufe.stand(kennung).get("fertig", 0) > 0:
+                break
+            time.sleep(0.01)
+
+        laeufe.abbrich_vor_loeschen(anlage_id=anlage)
+        anlagen.anlage_loeschen(anlage)
+
+        for _ in range(400):
+            stand = laeufe.stand(kennung)
+            if stand["status"] in ("fertig", "abgebrochen", "fehler"):
+                break
+            time.sleep(0.02)
+
+        db = database.get_db()
+        simulationen = db.execute(
+            "SELECT COUNT(*) AS n FROM simulation WHERE anlage_id = ?", (anlage,)
+        ).fetchone()["n"]
+        verwaist = db.execute("PRAGMA foreign_key_check").fetchall()
+
+    # Der Abbruch sorgt dafuer, dass deutlich weniger als 500 Stunden
+    # gerechnet wurden - waere er wirkungslos, liefe der Solver bis zum Ende
+    # durch (bei 0.02s/Stunde knapp 10s statt sofort abzubrechen). Der Stand
+    # zeigt 'abgebrochen', nicht 'fehler' mit einer rohen SQL-Meldung - siehe
+    # die Fremdschluessel-Pruefung im except-Zweig von _laufen().
+    assert stand["status"] == "abgebrochen", stand
+    assert not stand.get("fehler")
+    assert stand["fertig"] < 500
+    assert simulationen == 0
+    assert verwaist == []

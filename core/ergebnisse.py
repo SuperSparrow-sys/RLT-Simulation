@@ -160,6 +160,33 @@ def _ergebnisse_einfuegen(db, simulation_id, lauf, graph):
     )
 
 
+def simulation_loeschen(simulation_id):
+    """Loescht einen einzelnen Simulationslauf mitsamt seiner Zeitreihe und
+    Bilanz (ON DELETE CASCADE, siehe core/database.py).
+
+    Ein noch laufender Lauf (status='laeuft') laesst sich hierueber nicht
+    loeschen - sein Rechen-Thread (core/laeufe.py) schreibt am Ende noch in
+    genau diese Zeile, und ihn mitten im Lauf verschwinden zu lassen waere
+    kein 'sauberer' Abbruch, sondern ein Wettlauf mit dem Hintergrund-Thread.
+    Erst abbrechen (core.laeufe.abbrechen), dann loeschen - oder die ganze
+    Anlage loeschen (core.anlagen.anlage_loeschen), was den laufenden Lauf
+    ueber ON DELETE CASCADE ohnehin mitnimmt und dem Thread vorher sauber
+    Bescheid gibt (core.laeufe.abbrich_vor_loeschen)."""
+    db = get_db()
+    zeile = db.execute(
+        "SELECT status FROM simulation WHERE id = ?", (simulation_id,)
+    ).fetchone()
+    if zeile is None:
+        raise KeyError(f"Simulationslauf {simulation_id} gibt es nicht")
+    if zeile["status"] == STATUS_LAEUFT:
+        raise ValueError(
+            "Ein laufender Simulationslauf kann nicht geloescht werden - "
+            "zuerst abbrechen."
+        )
+    db.execute("DELETE FROM simulation WHERE id = ?", (simulation_id,))
+    db.commit()
+
+
 def laufende_simulation(anlage_id):
     """Die Zeile des aktuell laufenden Simulationslaufs dieser Anlage, falls
     es einen gibt - sonst None. Juengste zuerst, falls durch einen Randfall

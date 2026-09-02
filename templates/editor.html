@@ -6,6 +6,7 @@
   <title>RLT-Simulation</title>
   <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/loeschen.css') }}">
 </head>
 <body>
   <div id="fehlermeldung" class="fehlermeldung" role="alert" aria-live="assertive" hidden></div>
@@ -15,7 +16,10 @@
 
     <main class="buehne">
       <header class="leiste">
-        <span class="titel" id="anlagenname">Anlage</span>
+        <span class="titel anlagenname-zeile">
+          <span id="anlagenname">Anlage</span>
+          <button class="knopf-mini" id="btn-anlage-umbenennen" title="Anlage umbenennen">Umbenennen</button>
+        </span>
 
         <details class="legende">
           <summary>Verbindungen</summary>
