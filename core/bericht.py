@@ -363,10 +363,14 @@ def _gemeinsame_einheit(reihen):
     """Die eine y-Achsen-Einheit, wenn alle ausgewaehlten Reihen dieselbe
     fuehren (die drei Bilanzgroessen tun das immer: kW) - sonst leer, dann
     traegt jede Reihe ihre Einheit stattdessen in der Legende (siehe
-    _stundendiagramm). Mehrere Einheiten auf einer Achse zu mischen waere
-    irrefuehrend; die Auswahl steht dem Benutzer aber trotzdem frei offen -
-    er sieht in der Legende, wenn er Groessen unterschiedlicher Einheit
-    kombiniert hat."""
+    _stundendiagramm).
+
+    Bewusste Entscheidung, keine offene Frage: eine Bilanzgroesse und eine
+    Datenlogger-Spalte anderer Einheit teilen sich dann eine Achse ohne
+    Einheitentext dort - der Benutzer entscheidet selbst, was er
+    nebeneinanderlegt, die Legende zeigt zuverlaessig, welche Einheit welche
+    Reihe hat. Eine zweite y-Achse waere mehr Bauwerk, als der Fall Nutzen
+    bringt, solange niemand danach fragt."""
     einheiten = {r["einheit"] for r in reihen if r["einheit"]}
     return einheiten.pop() if len(einheiten) == 1 else ""
 
@@ -397,13 +401,27 @@ _VIER_MONATS_FENSTER = [(1, 4, "Januar–April"), (5, 8, "Mai–August"), (9, 12
 
 
 def _vier_monats_ausschnitte(reihen, zeitpunkte):
-    """Bis zu drei Leinwaende, siehe _VIER_MONATS_FENSTER - ein Ausschnitt
-    ohne eigene Daten (ein Lauf, der nicht das volle Jahr rechnet) bleibt
-    einfach aus, statt eine leere Leinwand zu zeigen."""
+    """Bis zu drei Leinwaende, siehe _VIER_MONATS_FENSTER.
+
+    Zwei Faelle bleiben absichtlich aus, statt eine Leinwand zu zeigen, die
+    nichts beitraegt:
+    - ein Fenster ohne eigene Daten (ein Lauf, der nicht das volle Jahr
+      rechnet), und
+    - ein Fenster, das den GESAMTEN Lauf abdeckt (ein kurzer Lauf, der
+      komplett in ein einziges Vier-Monats-Fenster faellt - z.B. ein
+      30-Stunden-Testlauf im August). Dessen Ausschnitt zeigt Punkt fuer
+      Punkt dieselbe Kurve wie der Jahresverlauf selbst (siehe
+      _stundendiagramm() oben) - genau der Fall, den jemand beim Ausprobieren
+      mit einem kurzen Lauf trifft. 'indizes' deckt in diesem Fall alle
+      Zeitpunkte ab (len(indizes) == len(zeitpunkte)); bei einem Lauf, der
+      zwei Fenster ueberschreitet, bleibt in jedem einzelnen Fenster ein Rest
+      uebrig, der Vergleich schlaegt dort also nicht an - beide Ausschnitte
+      bleiben dann zu Recht erhalten.
+    """
     ausschnitte = []
     for von_monat, bis_monat, titelteil in _VIER_MONATS_FENSTER:
         indizes = [i for i, zp in enumerate(zeitpunkte) if von_monat <= zp.month <= bis_monat]
-        if not indizes:
+        if not indizes or len(indizes) == len(zeitpunkte):
             continue
         start, ende = indizes[0], indizes[-1] + 1
         teil_reihen = [{**r, "werte": r["werte"][start:ende]} for r in reihen]

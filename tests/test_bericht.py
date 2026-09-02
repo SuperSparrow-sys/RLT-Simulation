@@ -132,6 +132,44 @@ def _lauf_mit_logger_speichern(app, anzahl_stunden=48):
     return anlage_id, simulation_id
 
 
+def _lauf_im_zeitraum_speichern(app, von_stunde, anzahl_stunden, jahr=2023):
+    """Wie _lauf_speichern(), aber mit einem Wetterdatensatz fuer das ganze
+    Jahr und einem Lauf, der erst bei 'von_stunde' beginnt - fuer Tests, die
+    einen bestimmten Kalenderausschnitt (z.B. Ende April bis Anfang Juni)
+    treffen muessen, was mit dem immer bei Stunde 0 (= 1. Januar)
+    beginnenden _lauf_speichern() nicht geht."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage_id = ax_sim_2_1.baue(projekt, "A")
+        wetter_id = _wetter_anlegen(8760, jahr=jahr)
+        graph = anlagen.lade_graph(anlage_id)
+        bilanz_karte_id = _bilanz_karte_id(graph)
+
+        stunden = [
+            {
+                bilanz_karte_id: {
+                    "waerme": float(10 + n), "kaelte": float(n % 3),
+                    "strom_ht": 1.0, "strom_nt": 0.5, "wasser": 0.2,
+                }
+            }
+            for n in range(anzahl_stunden)
+        ]
+        lauf = solver.Lauf(
+            stunden=stunden,
+            bilanz={
+                "waerme": sum(s[bilanz_karte_id]["waerme"] for s in stunden),
+                "kaelte": sum(s[bilanz_karte_id]["kaelte"] for s in stunden),
+                "strom_ht": anzahl_stunden * 1.0, "strom_nt": anzahl_stunden * 0.5,
+                "wasser": anzahl_stunden * 0.2,
+            },
+            warnungen=[],
+        )
+        simulation_id = ergebnisse.speichere(
+            anlage_id, wetter_id, von_stunde, von_stunde + anzahl_stunden, lauf, graph, dauer=1.0
+        )
+    return anlage_id, simulation_id
+
+
 def _jahr_lauf_speichern(app, jahr=2023):
     """Ein kuenstlicher, aber realistisch geformter Volljahreslauf (8760
     Stunden, 2023 - kein Schaltjahr) fuer die Jahresdiagramme in
@@ -666,6 +704,55 @@ def test_vier_monats_ausschnitte_ohne_daten_in_einem_fenster_bleibt_es_aus():
                "werte": [1.0] * len(zeitpunkte)}]
     ausschnitte = bericht._vier_monats_ausschnitte(reihen, zeitpunkte)
     assert len(ausschnitte) == 2  # Jan-Apr und Mai-Aug, nicht Sep-Dez
+
+
+def test_vier_monats_ausschnitte_kurzer_lauf_komplett_in_einem_fenster_bleibt_aus():
+    """Ein kurzer Lauf, der ganz in ein einziges Vier-Monats-Fenster faellt
+    (hier: 30 Stunden im August) - genau der Fall beim Ausprobieren mit
+    einem kurzen Lauf. Der Ausschnitt zeigt dann Punkt fuer Punkt dieselbe
+    Kurve wie der Jahresverlauf selbst und bringt nichts - er bleibt aus."""
+    zeitpunkte = [datetime(2023, 8, 10) + timedelta(hours=i) for i in range(30)]
+    reihen = [{"schluessel": "waerme", "label": "Wärme", "einheit": "kW",
+               "farbe": zeichnung.FARBE_WAERME, "muster": None,
+               "werte": [float(i) for i in range(30)]}]
+    ausschnitte = bericht._vier_monats_ausschnitte(reihen, zeitpunkte)
+    assert ausschnitte == []
+
+
+def test_vier_monats_ausschnitte_lauf_ueber_zwei_fenster_bleiben_beide_erhalten():
+    """Ein Lauf, der die Grenze zwischen zwei Fenstern ueberschreitet (hier:
+    20. April bis 4. Juni) deckt in KEINEM einzelnen Fenster den gesamten
+    Lauf ab - beide Ausschnitte zeigen darum etwas, was der Jahresverlauf
+    allein nicht auflöst, und bleiben erhalten."""
+    zeitpunkte = [datetime(2023, 4, 20) + timedelta(hours=i) for i in range(45 * 24)]
+    reihen = [{"schluessel": "waerme", "label": "Wärme", "einheit": "kW",
+               "farbe": zeichnung.FARBE_WAERME, "muster": None,
+               "werte": [float(i % 24) for i in range(len(zeitpunkte))]}]
+    ausschnitte = bericht._vier_monats_ausschnitte(reihen, zeitpunkte)
+    assert len(ausschnitte) == 2
+
+
+def test_daten_fuer_kurzer_lauf_in_einem_fenster_hat_jahresverlauf_aber_keinen_ausschnitt(app):
+    """Ende-zu-Ende-Variante: ein 30-Stunden-Lauf (Standardwetter beginnt am
+    1. Januar, faellt also komplett ins Fenster Januar-April) bekommt einen
+    Jahresverlauf, aber keinen (redundanten) Ausschnitt."""
+    _anlage_id, simulation_id = _lauf_speichern(app, anzahl_stunden=30)
+    with app.app_context():
+        daten = bericht.daten_fuer(simulation_id)
+    diagramme = daten["diagramme"]
+    assert diagramme["jahr_stunden"] is not None
+    assert diagramme["vier_monats_ausschnitte"] == []
+
+
+def test_daten_fuer_lauf_ueber_zwei_fenster_behaelt_beide_ausschnitte(app):
+    # 20. April bis 4. Juni 2023 - ueberschreitet die Grenze zwischen den
+    # Fenstern Januar-April und Mai-August.
+    _anlage_id, simulation_id = _lauf_im_zeitraum_speichern(
+        app, von_stunde=(31 + 28 + 31 + 19) * 24, anzahl_stunden=45 * 24
+    )
+    with app.app_context():
+        daten = bericht.daten_fuer(simulation_id)
+    assert len(daten["diagramme"]["vier_monats_ausschnitte"]) == 2
 
 
 def test_daten_fuer_baut_jahresverlauf_in_stundenwerten_mit_standardauswahl(app):
