@@ -311,12 +311,11 @@ textarea:focus-visible {
 /* 14px hier MUSS zu Editor.KARTE_NAME_PX in editor.js passen - die Zahl
    steht an zwei Stellen, weil karteMasseBerechnen() den Zeilenumbruch per
    Canvas-Textmessung mit genau dieser Schriftgroesse berechnet, bevor die
-   Karte ueberhaupt im DOM haengt (siehe dortiger Kommentar). Ausserdem
-   sitzt jeder Name jetzt in einer eigenen .karte-name-huelle (siehe
-   zeichneKarte()), deren transform Editor.aktualisiereBeschriftungen() bei
-   kleiner Zoomstufe um eine Gegenskalierung ergaenzt, damit der Name nicht
-   unter eine Mindestgroesse schrumpft, waehrend Kasten und Rest der Karte
-   normal mitskalieren (siehe Task-Nachbesserung). */
+   Karte ueberhaupt im DOM haengt (siehe dortiger Kommentar). Der Name
+   skaliert wie der Rest der Karte normal mit dem Zoom mit - eine fruehere
+   Gegenskalierung gegen kleine Zoomstufen ist entfallen, weil sie den Namen
+   bei vielen Karten ueber die Nachbarkarte hinauslaufen liess (siehe
+   Editor.aktualisiereBeschriftungen() in editor.js). */
 .karte-name tspan {
   font-size: 14px;
   font-weight: 500;

@@ -38,12 +38,10 @@ function zeilenUmbrechen(text, maxBreite, font) {
   // Ein einzelnes Wort, das fuer sich allein schon breiter ist als
   // maxBreite (z.B. "Wärmerückgewinnung" - ein zusammengesetztes Wort ganz
   // ohne Leerzeichen), kann nicht am Wortzwischenraum umbrechen. Ohne diese
-  // zeichenweise Aufteilung liefe es entweder ueber die Karte hinaus oder
-  // verschwaende - bei gegenskalierten Namen (siehe Editor.
-  // aktualisiereBeschriftungen()) sichtbar hinter der Nachbarkarte - genau
-  // das Abschneiden, das dieser Umbruch eigentlich verhindern soll. Gibt
-  // das letzte, noch passende Stueck zurueck; der Aufrufer haengt bei
-  // Bedarf das naechste Wort daran.
+  // zeichenweise Aufteilung liefe es ueber die Karte hinaus - genau das
+  // Abschneiden, das dieser Umbruch eigentlich verhindern soll. Gibt das
+  // letzte, noch passende Stueck zurueck; der Aufrufer haengt bei Bedarf
+  // das naechste Wort daran.
   function schneide(wort) {
     let rest = wort;
     while (textBreite(rest, font) > maxBreite && rest.length > 1) {
@@ -187,11 +185,11 @@ const Editor = {
   anlage: null,
   auswahl: null,
   sicht: { x: 0, y: 0, zoom: 1 },
-  // Nur beim allerersten Laden automatisch einpassen (siehe laden() und
-  // einpassen() weiter unten) - nicht bei jedem erneuten Laden nach einer
-  // Aenderung, sonst risse jede Aenderung (Karte loeschen, Pfeil anlegen)
-  // den Bildausschnitt der Anwenderin unter ihr weg.
-  _nochNichtEingepasst: true,
+  // Nur beim allerersten Laden automatisch in die Startansicht wechseln
+  // (siehe laden() und startAnsicht() weiter unten) - nicht bei jedem
+  // erneuten Laden nach einer Aenderung, sonst risse jede Aenderung (Karte
+  // loeschen, Pfeil anlegen) den Bildausschnitt der Anwenderin unter ihr weg.
+  _nochNichtGeoeffnet: true,
 
   async laden(anlageId) {
     let antwort;
@@ -208,9 +206,9 @@ const Editor = {
     this.anlage = await antwort.json();
     document.getElementById("anlagenname").textContent = this.anlage.name;
     this.zeichne();
-    if (this._nochNichtEingepasst) {
-      this._nochNichtEingepasst = false;
-      this.einpassen();
+    if (this._nochNichtGeoeffnet) {
+      this._nochNichtGeoeffnet = false;
+      this.startAnsicht();
     }
   },
 
@@ -263,15 +261,16 @@ const Editor = {
   // KARTE_NAME_PX uebereinstimmen (dort als Kommentar vermerkt).
   KARTE_NAME_PX: 14,
   KARTE_NAME_ZEILENHOEHE: 17,
-  // Unter dieser Bildschirmhoehe (in Pixeln) wird der Kartenname nicht
-  // weiter mitverkleinert (siehe aktualisiereBeschriftungen()) - siehe
-  // Task: "Der Name einer Karte darf eine Mindestgroesse nicht
-  // unterschreiten, auch wenn der Kasten kleiner wird."
-  MIN_NAME_PX: 11,
   // Unterhalb dieser Zoomstufe tragen Gruppenzeile und Werte nichts mehr
   // bei (die Gruppe steht ohnehin schon als Farbkante da) und verschwinden,
   // statt zu grauem Nebel zu verblassen - siehe aktualisiereBeschriftungen().
   DETAIL_ZOOM_SCHWELLE: 0.85,
+  // Zoomstufe, mit der der Editor eine Anlage oeffnet (siehe startAnsicht()
+  // weiter unten) - 1 entspricht der Groesse, fuer die Schrift und
+  // Kartenmasse entworfen sind (KARTE_NAME_PX etc.), also von sich aus
+  // lesbar, ohne jede Sondermassnahme. "Einpassen" bleibt daneben als
+  // ausdrueckliche Uebersicht ueber die ganze Anlage (siehe einpassen()).
+  START_ZOOM: 1,
 
   /* Berechnet Breite, Hoehe und alle Textzeilen/-y-Positionen einer Karte,
      bevor sie gezeichnet wird - die Kartenhoehe waechst mit der Anzahl
@@ -287,23 +286,16 @@ const Editor = {
     // 14px statt der sonst auf der Seite ueblichen 12px (siehe .karte-name
     // tspan in style.css - beide muessen zusammenbleiben, sonst misst diese
     // Funktion mit einer anderen Schrift, als tatsaechlich gezeichnet wird):
-    // Bei 36 Karten passt die Vorlage beim automatischen Einpassen nur mit
-    // spuerbarem Herauszoomen ins Bild (siehe Editor.einpassen()) - der
-    // Name ist dort das Wichtigste auf der Karte, eine Stufe groesser haelt
-    // ihn dabei noch lesbar. Den tatsaechlichen Bodensatz gegen den Zoom
-    // haelt aktualisiereBeschriftungen() weiter unten.
+    // der Name ist das Wichtigste auf der Karte.
     const zeilenHoehe = this.KARTE_NAME_ZEILENHOEHE;
     const font = `500 ${this.KARTE_NAME_PX}px Roboto, Arial, sans-serif`;
-    // Der Umbruch faellt schmaler aus, als die Kartenbreite selbst erlauben
-    // wuerde: bei kleiner Zoomstufe waechst der Name durch die
-    // Gegenskalierung (siehe aktualisiereBeschriftungen()) auf dem
-    // Bildschirm breiter, als die - dann geschrumpfte - Karte noch ist. Ein
-    // langer Name, der die volle Kartenbreite ausnutzt, liefe dabei in die
-    // Nachbarkarte hinein. Ein engerer Umbruch bricht ihn stattdessen
-    // frueher auf eine weitere Zeile um (die Kartenhoehe hat dafuer genug
-    // Luft) und haelt die gegenskalierte Breite in einem Rahmen, den auch
-    // eng benachbarte Karten noch vertragen.
-    const zeilenBreite = Math.min(breite - textX - pad, 100);
+    // Umbruch auf die tatsaechliche Kartenbreite, nicht schmaler: der Name
+    // skaliert seit der Ruecknahme der Gegenskalierung (siehe
+    // aktualisiereBeschriftungen()) im gleichen Verhaeltnis wie der Kasten
+    // selbst - er kann den Kasten also bei keiner Zoomstufe mehr verlassen,
+    // ein engerer Umbruch nur noch unnoetig frueh auf eine weitere Zeile
+    // umbrechen wuerde.
+    const zeilenBreite = breite - textX - pad;
     const zeilen = zeilenUmbrechen(karte.name, zeilenBreite, font);
     const nameHoehe = zeilen.length * zeilenHoehe;
     const kopfHoehe = Math.max(icon, nameHoehe);
@@ -361,29 +353,22 @@ const Editor = {
     bild.setAttribute("height", 20);
     gruppe.appendChild(bild);
 
-    // Der Name sitzt in einer eigenen Huelle mit der ersten Zeilenbasislinie
-    // als Ankerpunkt (data-ax/data-ay) - aktualisiereBeschriftungen() haengt
-    // bei kleiner Zoomstufe eine Gegenskalierung an genau diesen Anker, damit
-    // der Name nicht unter eine Mindestgroesse schrumpft, waehrend der Rest
-    // der Karte normal mitskaliert (siehe Task und Kommentar dort). Die
-    // Zeilen selbst stehen deshalb relativ zum Anker (x=0, y=i*Zeilenhoehe),
-    // nicht mehr in absoluten Kartenkoordinaten.
-    const beschriftungsHuelle = document.createElementNS(NS, "g");
-    beschriftungsHuelle.setAttribute("class", "karte-name-huelle");
-    beschriftungsHuelle.dataset.ax = masse.textX;
-    beschriftungsHuelle.dataset.ay = masse.nameStartY;
-    beschriftungsHuelle.setAttribute("transform", `translate(${masse.textX} ${masse.nameStartY})`);
+    // Der Name skaliert wie der Rest der Karte ganz normal mit dem Zoom mit
+    // (siehe Kommentar bei aktualisiereBeschriftungen() zur fruehreren
+    // Gegenskalierung und warum sie entfallen ist) - deshalb reicht ein
+    // gewoehnliches <text> in absoluten Kartenkoordinaten, keine eigene
+    // transformierte Huelle mehr noetig.
     const beschriftung = document.createElementNS(NS, "text");
     beschriftung.setAttribute("class", "karte-name");
+    beschriftung.setAttribute("x", masse.textX);
     for (let i = 0; i < masse.zeilen.length; i++) {
       const zeile = document.createElementNS(NS, "tspan");
-      zeile.setAttribute("x", 0);
-      zeile.setAttribute("y", i * this.KARTE_NAME_ZEILENHOEHE);
+      zeile.setAttribute("x", masse.textX);
+      zeile.setAttribute("y", masse.nameStartY + i * this.KARTE_NAME_ZEILENHOEHE);
       zeile.textContent = masse.zeilen[i];
       beschriftung.appendChild(zeile);
     }
-    beschriftungsHuelle.appendChild(beschriftung);
-    gruppe.appendChild(beschriftungsHuelle);
+    gruppe.appendChild(beschriftung);
 
     // Gruppenname als Text (nicht nur der Farbstreifen) - siehe Kommentar bei
     // GRUPPEN_KLASSE oben zur Begruendung.
@@ -609,36 +594,27 @@ const Editor = {
     this.aktualisiereBeschriftungen();
   },
 
-  /* Haelt die Kartenbeschriftung gegen den Zoom lesbar (siehe Task-
-     Nachbesserung: "Die Schrift schrumpft mit, und das muss sie nicht").
-     Zwei getrennte Massnahmen fuer zwei verschiedene Bestandteile:
+  /* Blendet Gruppenzeile und Werte unterhalb einer Zoomstufe aus - die
+     Gruppe steht ohnehin schon als Farbkante da (siehe
+     .karte-gruppenstreifen), sie verschwinden dort ganz statt zu
+     unlesbarem Grau zu verblassen und kommen zurueck, sobald wieder genug
+     Zoom da ist.
 
-     1. Der Name ist auf jeder Karte das Wichtigste - er bekommt eine
-        Gegenskalierung, sobald die aktuelle Zoomstufe ihn unter
-        MIN_NAME_PX schrumpfen wuerde, und waechst darueber hinaus wieder
-        ganz normal mit dem Zoom mit (kein harter Sprung, sondern ein
-        weicher Uebergang: bei Zoom = MIN_NAME_PX/KARTE_NAME_PX ist die
-        Gegenskalierung genau 1). Alle Karten teilen sich denselben
-        Gegenskalierungsfaktor - er haengt nur von der aktuellen Zoomstufe
-        ab, nicht vom Karteninhalt -, deshalb wird er hier einmal berechnet
-        und auf jede .karte-name-huelle angewendet (siehe deren data-ax/
-        data-ay - der Anker ist die erste Zeilenbasislinie, siehe
-        zeichneKarte()).
-
-     2. Gruppenzeile und Werte tragen unterhalb einer Zoomstufe nichts mehr
-        bei (die Gruppe steht ohnehin schon als Farbkante da, siehe
-        .karte-gruppenstreifen) - sie verschwinden dort ganz, statt zu
-        unlesbarem Grau zu verblassen, und kommen zurueck, sobald wieder
-        genug Zoom da ist. */
+     Der Kartenname selbst braucht hier KEINE Massnahme mehr: er wurde
+     frueher gegen den Zoom gegengeskaliert, damit er bei kleiner Zoomstufe
+     nicht unter eine Mindestgroesse schrumpft (siehe Task-Nachbesserung
+     "Die Schrift schrumpft mit, und das muss sie nicht") - genau das hat
+     ihn bei 36 Karten ueber die Nachbarkarte hinauslaufen lassen, weil der
+     Kasten mitschrumpfte, waehrend der Name seine Groesse behielt (siehe
+     Task "Ueberlappende Karten im gezeichneten Bild"). Der Name skaliert
+     jetzt wieder ganz normal mit dem Kasten mit - stattdessen oeffnet der
+     Editor bei einer von vornherein lesbaren Zoomstufe (siehe
+     startAnsicht() weiter unten); "Einpassen" bleibt eine ausdrueckliche
+     Uebersicht, in der kleine Namen in Ordnung sind, solange nichts
+     ueberlappt (karteMasseBerechnen() bricht dafuer auf die tatsaechliche
+     Kartenbreite um, siehe dortiger Kommentar). */
   aktualisiereBeschriftungen() {
     const zoom = this.sicht.zoom;
-    const mindestVerhaeltnis = this.MIN_NAME_PX / this.KARTE_NAME_PX;
-    const gegenzoom = zoom < mindestVerhaeltnis ? mindestVerhaeltnis / zoom : 1;
-    document.querySelectorAll(".karte-name-huelle").forEach((huelle) => {
-      const { ax, ay } = huelle.dataset;
-      huelle.setAttribute("transform", `translate(${ax} ${ay}) scale(${gegenzoom})`);
-    });
-
     // el.hidden = ... setzt bei einem per createElementNS erzeugten SVG-
     // Element zwar die IDL-Eigenschaft, spiegelt sie aber nicht zuverlaessig
     // auf das tatsaechliche hidden-Attribut (und damit auf die CSS-Regel
@@ -671,10 +647,17 @@ const Editor = {
   },
 
   /* Passt Zoomstufe und Bildausschnitt so an, dass alle Karten sichtbar sind
-     - siehe Task: "Beim Öffnen wird die ganze Anlage eingepasst [...] und
-     über einen Knopf jederzeit wieder herstellbar." Ohne das lief eine
-     grosse Vorlage bei 36 Karten weit rechts aus dem Bild, ohne jeden
-     Hinweis darauf, dass da noch mehr ist. */
+     - die ausdrueckliche Uebersicht ueber den Knopf "Einpassen" (siehe
+     bindeEreignisse() weiter unten). Bei vielen Karten faellt der Zoom dabei
+     so weit, dass Namen klein und teils nur noch als Farbkante erkennbar
+     sind (siehe DETAIL_ZOOM_SCHWELLE) - das ist hier in Ordnung: eine
+     Uebersicht sucht man in, statt in ihr zu lesen. Anders als frueher
+     oeffnet der Editor eine Anlage NICHT mehr in dieser Ansicht (siehe
+     startAnsicht() weiter unten und laden() oben) - bei 36 Karten war die
+     Uebersicht so weit herausgezoomt, dass an ihr nichts mehr zu lesen war,
+     ohne die Gegenskalierung, die das beheben sollte, wiederum Namen ueber
+     die Nachbarkarte hinauslaufen liess (siehe Task "Ueberlappende Karten
+     im gezeichneten Bild"). */
   einpassen() {
     const huelle = this.kartenHuelle();
     const leinwand = document.getElementById("leinwand");
@@ -695,6 +678,42 @@ const Editor = {
     const mitteY = (huelle.minY + huelle.maxY) / 2;
     this.sicht.x = kasten.width / 2 - mitteX * zoom;
     this.sicht.y = kasten.height / 2 - mitteY * zoom;
+    this.aktualisiereSicht();
+  },
+
+  /* Ansicht, in der der Editor eine Anlage oeffnet (siehe laden() oben):
+     START_ZOOM statt voller Einpassung, verankert an der Karte, an der der
+     Luftweg beginnt - dort, wo jemand zu arbeiten anfaengt, nicht an der
+     Uebersicht ueber alles (die bleibt ueber "Einpassen" einen Klick
+     entfernt, die Minikarte gibt dabei die Orientierung). "Wo der Luftweg
+     beginnt" ist absichtlich nicht an einen Kartentyp wie "wetter"
+     gebunden (das koppelte den Editor an eine bestimmte Vorlagenform) -
+     stattdessen schlicht die am weitesten links liegende Karte, bei
+     Gleichstand die am weitesten oben liegende: in jeder bisherigen
+     Vorlage (siehe core/vorlagen/) steht die erste Stufe der Kette links. */
+  startAnsicht() {
+    const leinwand = document.getElementById("leinwand");
+    const kasten = leinwand.getBoundingClientRect();
+    if (!this.anlage || this.anlage.karten.length === 0 || kasten.width === 0) {
+      this.sicht = { x: 0, y: 0, zoom: 1 };
+      this.aktualisiereSicht();
+      return;
+    }
+    let start = this.anlage.karten[0];
+    for (const karte of this.anlage.karten) {
+      if (
+        karte.pos_x < start.pos_x ||
+        (karte.pos_x === start.pos_x && karte.pos_y < start.pos_y)
+      ) {
+        start = karte;
+      }
+    }
+    const zoom = this.START_ZOOM;
+    this.sicht.zoom = zoom;
+    const POLSTER = 90;
+    const startHoehe = start._hoehe || 96;
+    this.sicht.x = POLSTER - start.pos_x * zoom;
+    this.sicht.y = kasten.height / 2 - (start.pos_y + startHoehe / 2) * zoom;
     this.aktualisiereSicht();
   },
 
