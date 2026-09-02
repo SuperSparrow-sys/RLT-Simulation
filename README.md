@@ -23,11 +23,19 @@ Danach im Browser `http://127.0.0.1:5055` öffnen. Beim ersten Start wird die
 SQLite-Datenbank `rlt.db` angelegt. Host, Port und Debugmodus lassen sich über
 Umgebungsvariablen anpassen:
 
-| Variable      | Vorgabe   | Bedeutung                                |
-|---------------|-----------|-------------------------------------------|
-| `RLT_HOST`    | `0.0.0.0` | Bind-Adresse                               |
-| `RLT_PORT`    | `5055`    | Port                                       |
-| `RLT_DEBUG`   | `1`       | Flask-Debugmodus (`1`/`true`/`yes` = an)   |
+| Variable      | Vorgabe     | Bedeutung                                |
+|---------------|-------------|-------------------------------------------|
+| `RLT_HOST`    | `127.0.0.1` | Bind-Adresse                               |
+| `RLT_PORT`    | `5055`      | Port                                       |
+| `RLT_DEBUG`   | `0`         | Flask-Debugmodus (`1`/`true`/`yes` = an)   |
+
+Die Vorgaben sind bewusst sicher: nur lokal erreichbar, Debugkonsole aus. Die
+Werkzeug-Debugkonsole erlaubt beliebige Codeausführung im Browser - wer sie
+braucht, schaltet sie ausdrücklich ein (`RLT_DEBUG=1`) und öffnet `RLT_HOST`
+nur so weit, wie es der eigene Rechner erfordert (z.B. `0.0.0.0`, wenn von
+einem anderen Gerät im selben Netz zugegriffen werden soll) - nicht auf einem
+Rechner, der auch von außerhalb des eigenen Arbeitsplatzes erreichbar ist
+(Tailscale, Portweiterleitung, o.ä.).
 
 ## Dauerbetrieb
 
