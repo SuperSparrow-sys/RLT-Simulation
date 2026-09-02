@@ -1,8 +1,8 @@
 """Mitgelieferte Anlagenvorlagen."""
 
-from core.vorlagen import ax_sim_2_1
+from core.vorlagen import ax_sim_2_1, testanlage
 
-VORLAGEN = {"ax_sim_2_1": ax_sim_2_1}
+VORLAGEN = {"ax_sim_2_1": ax_sim_2_1, "testanlage": testanlage}
 
 
 def alle():
