@@ -47,11 +47,11 @@ class Sequenzregler(Baustein):
         # Formel gar nicht ein. Der Wert bleibt als Parameter stehen (er steht so
         # in der Mappe und in gespeicherten Anlagen), aber die Beschriftung muss
         # sagen, dass an ihm zu drehen nichts bewirkt.
-        Param("xp", "Proportionalbereich (Xp) - ohne Wirkung", "K", 5.0,
+        Param("xp", "Proportionalbereich (Xp)", "K", 5.0,
               darstellung=ZAHL, dezimalstellen=1,
               hinweis="Wird nicht gerechnet: Die Karte bildet die Regelabweichung wie "
                       "die Excel-Vorlage mit einem festen Teiler (Abweichung ÷ 10 K "
-                      "je Durchgang). Ein anderer Wert ändert das Ergebnis nicht."),
+                      "je Durchgang). Ein anderer Wert ändert das Ergebnis nicht.", ohne_wirkung=True),
     ]
 
     PORTS = [

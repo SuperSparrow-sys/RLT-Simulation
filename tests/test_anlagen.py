@@ -906,3 +906,20 @@ def test_felder_reichen_den_hinweis_der_karte_durch(app):
     erhitzer_karte = next(k for k in daten["karten"] if k["id"] == erhitzer)
     v_nenn = next(f for f in erhitzer_karte["felder"] if f["schluessel"] == "V_nenn")
     assert v_nenn["hinweis"] == ""
+
+
+def test_felder_reichen_das_merkmal_ohne_wirkung_durch(app):
+    """Welche Parameter wirkungslos sind, entscheidet die Karte
+    (tests/bausteine/test_basis.py führt die Liste). Hier geht es nur darum,
+    dass das Merkmal in der Auskunft über die Anlage ankommt - sonst könnte
+    das Parameterfenster es gar nicht auswerten."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        beleuchtung = anlagen.karte_anlegen(anlage, "beleuchtung", 0.0, 0.0)
+        daten = anlagen.als_json(anlage)
+
+    karte = next(k for k in daten["karten"] if k["id"] == beleuchtung)
+    felder = {f["schluessel"]: f for f in karte["felder"]}
+    assert felder["nennbeleuchtung"]["ohne_wirkung"] is True
+    assert felder["grundflaeche"]["ohne_wirkung"] is False

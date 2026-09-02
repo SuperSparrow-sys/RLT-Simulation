@@ -142,6 +142,15 @@ class Param:
     Beschriftung samt Einheit schon alles sagt - ein Hinweis an jedem Feld
     liest sich niemand mehr durch.
 
+    `ohne_wirkung` markiert einen Parameter, der in KEINE Formel dieser Karte
+    eingeht. Solche Werte gibt es, weil die Excel-Mappe sie neben der Rechnung
+    fuehrt (etwa die Nennbeleuchtungsstaerke oder ein Leistungspreis) - sie
+    gehen nicht verloren, aber das Parameterfenster zeigt sie als festen Wert
+    statt als Eingabefeld an. Ein beschreibbares Feld ohne Wirkung ist die
+    unfreundlichste Variante: man traegt etwas ein und wartet auf eine
+    Aenderung, die nie kommt. Wer so einen Parameter setzt, sagt im `hinweis`
+    dazu, was stattdessen gerechnet wird.
+
     `minimum`/`maximum` tragen die physikalisch zulaessige Spanne, wenn es eine
     gibt (siehe pruefe_wert() unten) - None heisst "keine Grenze". Sie gehoeren
     an den Parameter und nicht an eine zentrale Prueffunktion, aus demselben
@@ -162,6 +171,7 @@ class Param:
     minimum: float | None = None
     maximum: float | None = None
     hinweis: str = ""
+    ohne_wirkung: bool = False
 
 
 def pruefe_wert(param: "Param", wert) -> str | None:

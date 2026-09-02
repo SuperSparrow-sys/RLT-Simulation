@@ -58,11 +58,11 @@ class Raum(Baustein):
               darstellung=ZAHL, dezimalstellen=2, minimum=0.0, maximum=1.0),
         # geometrie() nimmt nur die Anteile a bis d entgegen - aw_anteil_e wird
         # nirgends gelesen, so wie es auch die Excel-Vorlage nicht tut.
-        Param("aw_anteil_e", "Außenwandanteil Seite e - ohne Wirkung", "Anteil 0–1", 0.0,
+        Param("aw_anteil_e", "Außenwandanteil Seite e", "Anteil 0–1", 0.0,
               darstellung=ZAHL, dezimalstellen=2, minimum=0.0, maximum=1.0,
               hinweis="Wird nicht gerechnet: Seite e geht nur über ihre Länge in die "
                       "Innenwandfläche ein. Wärmeverluste bilden allein die Seiten "
-                      "a bis d - so wie in der Excel-Vorlage."),
+                      "a bis d - so wie in der Excel-Vorlage.", ohne_wirkung=True),
         Param("u_wand_a", "U-Wert Wand a", "W/(m²·K)", 1.62, darstellung=ZAHL, dezimalstellen=2, minimum=0.0,
               hinweis="Wärmedurchgang der Wand: je kleiner, desto besser gedämmt. "
                       "Altbau ohne Dämmung rund 1,5; heutiger Neubau unter 0,3."),

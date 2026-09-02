@@ -33,11 +33,11 @@ class Bilanz(Baustein):
         # core/ergebnisse.py, BILANZ: die Kostenbilanz kennt nur die fuenf
         # Arbeitspreise. Der Leistungspreis stand schon in der Mappe und bleibt
         # als Notiz erhalten, wird aber nirgends verrechnet.
-        Param("preis_strom_leistung", "Strom-Leistungspreis - ohne Wirkung",
+        Param("preis_strom_leistung", "Strom-Leistungspreis",
               "EUR/(kW·a)", 0.0, darstellung=ZAHL, dezimalstellen=2,
               hinweis="Wird nicht gerechnet: In die Kostenbilanz gehen nur die "
                       "Arbeitspreise für Strom, Wärme, Kälte und Wasser ein - keine "
-                      "Leistungs- oder Grundpreise."),
+                      "Leistungs- oder Grundpreise.", ohne_wirkung=True),
         Param("preis_waerme", "Wärmepreis", "EUR/MWh", 50.0,
               darstellung=ZAHL, dezimalstellen=2),
         Param("preis_kaelte", "Kältepreis", "EUR/MWh", 50.0,

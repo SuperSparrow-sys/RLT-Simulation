@@ -45,11 +45,11 @@ class RaumZuluftKaskade(Baustein):
               darstellung=ZAHL, dezimalstellen=1),
         # Anlage!Q140 teilt fest durch 3 - wie beim Sequenzregler geht die
         # Xp-Zelle des Blocks in die Formel nicht ein.
-        Param("xp", "Proportionalbereich (Xp) - ohne Wirkung", "K", 5.0,
+        Param("xp", "Proportionalbereich (Xp)", "K", 5.0,
               darstellung=ZAHL, dezimalstellen=1,
               hinweis="Wird nicht gerechnet: Die Karte bildet die Regelabweichung wie "
                       "die Excel-Vorlage mit einem festen Teiler (Abweichung ÷ 3 K je "
-                      "Durchgang). Ein anderer Wert ändert das Ergebnis nicht."),
+                      "Durchgang). Ein anderer Wert ändert das Ergebnis nicht.", ohne_wirkung=True),
     ]
 
     PORTS = [

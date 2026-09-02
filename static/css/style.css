@@ -1008,6 +1008,20 @@ a.knopf-mini { display: inline-block; text-decoration: none; }
 /* Fest oder Verbindung: eine Zahl neben einem gerade belegten Anschluss ist
    wirkungslos - dieses Feld darf deshalb nicht wie ein normales Eingabefeld
    aussehen (gestrichelter Rahmen statt Eingaberahmen, keine Eingabe). */
+/* Ein Wert, der nur dokumentiert und nicht gerechnet wird (Param.ohne_wirkung):
+   dieselbe gestrichelte Umrandung wie ein ueberschriebener Parameter - beide
+   sagen "dieser Wert wirkt gerade nicht" -, aber in der ruhigeren Schriftfarbe,
+   weil hier nichts zu loesen ist. */
+.panel-ohne-wirkung {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  background: var(--surface-alt);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+}
+
 .panel-ueberschrieben {
   font-size: 12px;
   color: var(--text);

@@ -178,6 +178,7 @@ const Panel = {
   feldEingabe(karte, feld) {
     const wert = karte.parameter[feld.schluessel];
     if (feld.ueberschrieben_von) return this.zeileUeberschrieben(feld);
+    if (feld.ohne_wirkung) return this.zeileOhneWirkung(feld, wert);
     switch (feld.darstellung) {
       case "uhrzeit": return this.zeileUhrzeit(karte, feld, wert);
       case "prozent": return this.zeileZahl(karte, feld, wert, true, false);
@@ -348,6 +349,33 @@ const Panel = {
     loesen.textContent = "Verbindung lösen";
     loesen.addEventListener("click", () => this.loeseVerbindung(feld.ueberschrieben_von.pfeil_id));
     zeile.appendChild(loesen);
+
+    return zeile;
+  },
+
+  // Ein Parameter, der in keine Formel dieser Karte eingeht
+  // (core/bausteine/basis.py: Param.ohne_wirkung). Der Wert bleibt sichtbar -
+  // er steht so in der Excel-Mappe und gehoert zur Dokumentation der Anlage -
+  // aber nicht als Eingabefeld: ein beschreibbares Feld ohne Wirkung laedt
+  // dazu ein, etwas einzutragen und auf eine Aenderung zu warten, die nie
+  // kommt. Was stattdessen gerechnet wird, sagt der Hinweis darunter, den
+  // feldZeile() ohnehin anhaengt.
+  zeileOhneWirkung(feld, wert) {
+    const zeile = document.createElement("div");
+    zeile.className = "panel-zeile";
+    const text = document.createElement("span");
+    text.className = "panel-label";
+    const zeigeEinheit = feld.einheit && feld.einheit !== "-";
+    text.textContent = zeigeEinheit ? `${feld.label} [${feld.einheit}]` : feld.label;
+    zeile.appendChild(text);
+
+    const anzeige = document.createElement("div");
+    anzeige.className = "panel-ohne-wirkung";
+    const zahl = Number(wert);
+    anzeige.textContent = Number.isFinite(zahl)
+      ? zahl.toFixed(feld.dezimalstellen ?? 1)
+      : String(wert);
+    zeile.appendChild(anzeige);
 
     return zeile;
   },

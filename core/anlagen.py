@@ -613,6 +613,7 @@ def als_json(anlage_id):
                         "darstellung": f.darstellung,
                         "dezimalstellen": f.dezimalstellen,
                         "hinweis": f.hinweis,
+                        "ohne_wirkung": f.ohne_wirkung,
                         "ueberschrieben_von": _ueberschreibung(
                             karte, f, nach_verbindung, g
                         ),

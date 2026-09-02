@@ -466,11 +466,18 @@ def test_gleichartige_anschluesse_einer_karte_sind_unterscheidbar():
             gesehen[schluessel] = port.schluessel
 
 
-def test_parameter_ohne_wirkung_sind_als_solche_beschriftet():
+def test_parameter_ohne_wirkung_sind_als_solche_gekennzeichnet():
     """Fuenf Parameter stehen an ihrer Karte, gehen aber in keine Formel ein -
     sie stammen aus der Excel-Mappe, die sie ebenfalls nur danebenstellt.
-    Solange sie da sind, muss die Beschriftung sagen, dass ein Drehen an ihnen
-    nichts bewirkt; sonst sucht ein Anfaenger den Fehler bei sich.
+    Solange sie da sind, muessen sie das Merkmal `ohne_wirkung` tragen: das
+    Parameterfenster zeigt sie daraufhin als festen Wert statt als
+    Eingabefeld (static/js/panel.js, zeileOhneWirkung). Ein beschreibbares
+    Feld ohne Wirkung laedt dazu ein, etwas einzutragen und auf eine
+    Aenderung zu warten, die nie kommt - dann sucht ein Anfaenger den Fehler
+    bei sich.
+
+    Die Liste ist zugleich die vollstaendige: kommt ein sechster hinzu oder
+    wird einer davon doch gerechnet, faellt es hier auf.
 
     * beleuchtung.nennbeleuchtung  - Anlage!AK134 rechnet nur mit AK132*AH115
     * raum.aw_anteil_e             - geometrie() kennt nur die Seiten a bis d
@@ -481,19 +488,28 @@ def test_parameter_ohne_wirkung_sind_als_solche_beschriftet():
     from core.bausteine import lade_alle
 
     lade_alle()
-    ohne_wirkung = [
+    erwartet = {
         ("beleuchtung", "nennbeleuchtung"),
         ("raum", "aw_anteil_e"),
         ("sequenzregler", "xp"),
         ("kaskade", "xp"),
         ("bilanz", "preis_strom_leistung"),
-    ]
-    for kennung, schluessel in ohne_wirkung:
+    }
+    gefunden = {
+        (klasse.KENNUNG, p.schluessel)
+        for klasse in basis.alle()
+        for p in klasse.PARAMETER
+        if p.ohne_wirkung
+    }
+    assert gefunden == erwartet
+
+    # Ein fester Wert ohne Begruendung waere nur raetselhaft - jeder von ihnen
+    # sagt im Hinweis, was stattdessen gerechnet wird.
+    for kennung, schluessel in sorted(erwartet):
         feld = next(
             p for p in basis.hole(kennung).PARAMETER if p.schluessel == schluessel
         )
-        assert "ohne Wirkung" in feld.label, f"{kennung}.{schluessel}"
-        assert "Wird nicht gerechnet" in feld.hinweis, f"{kennung}.{schluessel}"
+        assert feld.hinweis.startswith("Wird nicht gerechnet:"), f"{kennung}.{schluessel}"
 
 
 def test_hinweise_sind_kurze_saetze_und_nicht_ueberall():

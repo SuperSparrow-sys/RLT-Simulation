@@ -28,11 +28,11 @@ class Beleuchtung(Baustein):
               darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
         # AK134 = spez. Leistung * Grundflaeche / 1000; die Nennbeleuchtungs-
         # staerke steht in der Mappe daneben, geht aber in keine Formel ein.
-        Param("nennbeleuchtung", "Nennbeleuchtungsstärke - ohne Wirkung", "lx", 300.0,
+        Param("nennbeleuchtung", "Nennbeleuchtungsstärke", "lx", 300.0,
               darstellung=ZAHL, dezimalstellen=0, minimum=0.0,
               hinweis="Wird nicht gerechnet: Sie hält nur fest, auf welche Helligkeit "
                       "ausgelegt wurde. Wärme und Strom folgen allein aus "
-                      "spezifischer Anschlussleistung mal Grundfläche."),
+                      "spezifischer Anschlussleistung mal Grundfläche.", ohne_wirkung=True),
     ]
 
     PORTS = [
