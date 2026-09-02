@@ -40,11 +40,17 @@ FARBE_GITTER = "#d0d0d0"
 FARBE_TEXT = "#222222"
 FARBE_TEXT_SCHWACH = "#555555"
 
-# Durchgezogen, gestrichelt, gepunktet - je nach [Strichlaenge, Luecke] in
-# Leinwand-Einheiten; None bedeutet durchgezogen.
+# Durchgezogen, gestrichelt, gepunktet, Strich-Punkt - je nach
+# [Strichlaenge, Luecke, ...] in Leinwand-Einheiten (beliebig viele Paare,
+# nicht nur zwei - siehe MUSTER_STRICHPUNKT); None bedeutet durchgezogen.
+# Dieselben vier Muster wie fuer die drei Pfeilarten und die Vorschau im
+# Editor (siehe static/css/style.css, .pfeil-luft/-signal/-energie/-vorschau)
+# - eine Reihe bleibt so nach demselben, im Projekt schon eingefuehrten
+# Verfahren auch ohne Farbe unterscheidbar (Schwarzweissdruck, Farbenblindheit).
 MUSTER_DURCHGEZOGEN = None
 MUSTER_GESTRICHELT = (6, 3)
 MUSTER_GEPUNKTET = (1.5, 2.5)
+MUSTER_STRICHPUNKT = (9, 3, 1.5, 3)
 
 
 def _svg_text(text) -> str:
@@ -130,11 +136,17 @@ def _z(wert) -> str:
     return f"{gerundet:.2f}"
 
 
+def _muster(muster) -> str:
+    """'muster' fuer SVG stroke-dasharray - beliebig viele Zahlen, nicht nur
+    ein Paar (MUSTER_STRICHPUNKT braucht vier)."""
+    return " ".join(_z(m) for m in muster)
+
+
 def _svg_op(op) -> str:
     art = op[0]
     if art == "linie":
         _, x1, y1, x2, y2, farbe, breite, muster = op
-        strich = f' stroke-dasharray="{muster[0]} {muster[1]}"' if muster else ""
+        strich = f' stroke-dasharray="{_muster(muster)}"' if muster else ""
         return (
             f'<line x1="{_z(x1)}" y1="{_z(y1)}" x2="{_z(x2)}" y2="{_z(y2)}" '
             f'stroke="{farbe}" stroke-width="{_z(breite)}"{strich}/>'
@@ -156,7 +168,7 @@ def _svg_op(op) -> str:
     if art == "linienzug":
         _, punkte, farbe, breite, muster = op
         pkt = " ".join(f"{_z(x)},{_z(y)}" for x, y in punkte)
-        strich = f' stroke-dasharray="{muster[0]} {muster[1]}"' if muster else ""
+        strich = f' stroke-dasharray="{_muster(muster)}"' if muster else ""
         return (
             f'<polyline points="{pkt}" fill="none" stroke="{farbe}" '
             f'stroke-width="{_z(breite)}" stroke-linejoin="round" '
@@ -314,7 +326,7 @@ def _schraffieren(leinwand, x, y, w, h, farbe, abstand=4.0):
 
 
 def liniendiagramm(breite, hoehe, titel, serien, y_einheit="", x_beschriftungen=None,
-                    nachkommastellen=0, flaeche=False):
+                    nachkommastellen=0, flaeche=False, legende_immer=False):
     """Liniendiagramm mit gemeinsamer x-Achse 0..1 (schon normiert) - fuer die
     Jahresdauerlinie und Zeitreihen des Datenloggers.
 
@@ -322,6 +334,10 @@ def liniendiagramm(breite, hoehe, titel, serien, y_einheit="", x_beschriftungen=
     x bereits auf [0, 1] normiert (core/bericht.py entscheidet, was x
     bedeutet: Stundenanteil oder Anteil der sortierten Dauerlinie).
     'flaeche': fuellt die erste Reihe unter der Kurve (Dauerlinie) leicht ein.
+    'legende_immer': zeigt die Legende auch bei nur einer Reihe - fuer ein
+    Diagramm wie den Jahresverlauf in Stundenwerten, dessen Titel (anders als
+    bei den Datenlogger-Einzelcharts) nicht schon den Reihennamen traegt, weil
+    er sich je nach Auswahl des Benutzers aendert.
     """
     leinwand = Leinwand(breite, hoehe)
     leinwand.text(breite / 2, 18, titel, groesse=12.5, farbe=FARBE_TEXT, anker="middle",
@@ -333,6 +349,19 @@ def liniendiagramm(breite, hoehe, titel, serien, y_einheit="", x_beschriftungen=
     y_max = max(alle_werte) if alle_werte else 1.0
     skala = _achsenrahmen(leinwand, plot_x, plot_y, plot_w, plot_h, y_max, y_einheit,
                            nachkommastellen)
+
+    if x_beschriftungen:
+        # Senkrechte Gitterlinien nur fuer Marken INNERHALB der Flaeche (0
+        # und 1 fallen ohnehin mit dem schon gezeichneten Achsenrahmen
+        # zusammen) - bei der Dauerlinie/den Datenlogger-Charts sind das
+        # ohnehin nur die beiden Randmarken, hier aendert sich also nichts;
+        # bei den Monatsmarken des Stundendiagramms macht sie erst lesbar,
+        # welcher Bildbereich zu welchem Monat gehoert. Vor den Kurven
+        # gezeichnet, damit die Kurven immer obenauf bleiben.
+        for anteil, _ in x_beschriftungen:
+            if 0 < anteil < 1:
+                x = plot_x + anteil * plot_w
+                leinwand.linie(x, plot_y, x, plot_y + plot_h, farbe=FARBE_GITTER, breite=0.6)
 
     for i, (name, farbe, muster, punkte) in enumerate(serien):
         if not punkte:
@@ -355,7 +384,7 @@ def liniendiagramm(breite, hoehe, titel, serien, y_einheit="", x_beschriftungen=
                 groesse=8.5, farbe=FARBE_TEXT_SCHWACH, anker=anker,
             )
 
-    if len(serien) > 1:
+    if len(serien) > 1 or (legende_immer and serien):
         _legende(leinwand, plot_x, hoehe - 8, [(n, f, m) for n, f, m, _ in serien])
     return leinwand
 

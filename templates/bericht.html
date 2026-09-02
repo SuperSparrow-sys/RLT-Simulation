@@ -13,8 +13,7 @@
     <a class="bericht-zurueck" href="{{ url_for('pages.editor', anlage_id=daten.anlage.id) }}">← Zurück zur Anlage</a>
     <div class="bericht-kopfleiste-knoepfe">
       <button type="button" id="btn-drucken">Drucken</button>
-      <a class="knopf-haupt"
-         href="{{ url_for('bericht.pdf', anlage_id=daten.anlage.id, simulation_id=daten.simulation_id) }}">
+      <a class="knopf-haupt" href="{{ pdf_href }}">
         PDF herunterladen
       </a>
     </div>
@@ -62,6 +61,59 @@
         {% if svg.monat %}<div class="bericht-diagramm-karte">{{ svg.monat|safe }}</div>{% endif %}
         {% if svg.dauerlinie %}<div class="bericht-diagramm-karte">{{ svg.dauerlinie|safe }}</div>{% endif %}
       </div>
+    </section>
+    {% endif %}
+
+    {% if daten.diagramme.stunden_reihen %}
+    <section class="bericht-abschnitt">
+      <h2>Jahresverlauf in Stundenwerten</h2>
+      <form class="bericht-reihen-auswahl" id="form-reihen-auswahl" method="get">
+        <input type="hidden" name="auswahl" value="1">
+        {% set bilanzreihen = daten.diagramme.stunden_reihen | selectattr("gruppe", "equalto", "Bilanz") | list %}
+        {% if bilanzreihen %}
+        <fieldset>
+          <legend>Bilanzgrößen</legend>
+          {% for r in bilanzreihen %}
+          <label class="reihen-kaestchen">
+            <input type="checkbox" name="reihe" value="{{ r.schluessel }}"
+                   {% if r.schluessel in daten.diagramme.stunden_ausgewaehlt %}checked{% endif %}>
+            <span class="reihen-farbe" style="background:{{ r.farbe }}"></span>
+            {{ r.label }}{% if r.einheit %} [{{ r.einheit }}]{% endif %}
+          </label>
+          {% endfor %}
+        </fieldset>
+        {% endif %}
+        {% set loggerreihen = daten.diagramme.stunden_reihen | selectattr("gruppe", "equalto", "Datenlogger") | list %}
+        {% if loggerreihen %}
+        <fieldset>
+          <legend>Datenlogger</legend>
+          {% for r in loggerreihen %}
+          <label class="reihen-kaestchen">
+            <input type="checkbox" name="reihe" value="{{ r.schluessel }}"
+                   {% if r.schluessel in daten.diagramme.stunden_ausgewaehlt %}checked{% endif %}>
+            <span class="reihen-farbe" style="background:{{ r.farbe }}"></span>
+            {{ r.label }}{% if r.einheit %} [{{ r.einheit }}]{% endif %}
+          </label>
+          {% endfor %}
+        </fieldset>
+        {% endif %}
+        <noscript><button type="submit">Auswahl anzeigen</button></noscript>
+      </form>
+
+      {% if svg.jahr_stunden %}
+      <div class="bericht-diagramm-karte bericht-diagramm-breit">{{ svg.jahr_stunden|safe }}</div>
+      {% else %}
+      <p class="leerhinweis">Keine Reihen ausgewählt.</p>
+      {% endif %}
+
+      {% if svg.vier_monats_ausschnitte %}
+      <h3>Ausschnitte zu je vier Monaten</h3>
+      <div class="bericht-diagramme">
+        {% for ausschnitt in svg.vier_monats_ausschnitte %}
+        <div class="bericht-diagramm-karte">{{ ausschnitt|safe }}</div>
+        {% endfor %}
+      </div>
+      {% endif %}
     </section>
     {% endif %}
 
@@ -135,6 +187,18 @@
 
   <script>
     document.getElementById("btn-drucken").onclick = () => window.print();
+
+    // Auswahl der Stundendiagramm-Reihen: jedes Kaestchen schickt das
+    // Formular sofort ab (GET, siehe Formular oben) - die Seite laedt dann
+    // mit der neuen Auswahl in der Adresse neu, wovon auch der
+    // "PDF herunterladen"-Knopf profitiert (routes/bericht.py baut ihn aus
+    // genau dieser Adresse). Kein Bauschritt, kein Framework noetig.
+    const formReihenAuswahl = document.getElementById("form-reihen-auswahl");
+    if (formReihenAuswahl) {
+      formReihenAuswahl.querySelectorAll('input[type="checkbox"]').forEach((kaestchen) => {
+        kaestchen.addEventListener("change", () => formReihenAuswahl.submit());
+      });
+    }
   </script>
 </body>
 </html>

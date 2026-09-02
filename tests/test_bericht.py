@@ -5,7 +5,9 @@ ein synthetischer core.solver.Lauf statt eines echten (minutenlangen)
 Solver-Durchlaufs - core.ergebnisse.speichere() speichert ihn genauso wie
 einen echten."""
 
+import math
 import re
+import time
 from datetime import datetime, timedelta
 
 import pytest
@@ -80,6 +82,105 @@ def _lauf_speichern(app, anzahl_stunden=48, mit_warnung=True):
         )
         simulation_id = ergebnisse.speichere(
             anlage_id, wetter_id, 0, anzahl_stunden, lauf, graph, dauer=1.5
+        )
+    return anlage_id, simulation_id
+
+
+def _karte_id(graph, typ):
+    return next(k.id for k in graph.karten.values() if k.typ == typ)
+
+
+def _lauf_mit_logger_speichern(app, anzahl_stunden=48):
+    """Wie _lauf_speichern(), zusaetzlich mit bestueckter Datenlogger-Karte
+    (ax_sim_2_1 hat vier benannte Spalten: 'WRG'/'T_ZU WRG'/'T Raum'/
+    'F Raum') - fuer Tests der Reihen-Auswahl, die auch Datenlogger-Spalten
+    einschliessen soll."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage_id = ax_sim_2_1.baue(projekt, "A")
+        wetter_id = _wetter_anlegen(anzahl_stunden)
+        graph = anlagen.lade_graph(anlage_id)
+        bilanz_karte_id = _karte_id(graph, "bilanz")
+        logger_id = _karte_id(graph, "datenlogger")
+
+        stunden = [
+            {
+                bilanz_karte_id: {
+                    "waerme": float(10 + n), "kaelte": float(n % 3),
+                    "strom_ht": 1.0, "strom_nt": 0.5, "wasser": 0.2,
+                },
+                logger_id: {
+                    "wert_1": float(n), "wert_2": 20.0 + n * 0.1,
+                    "wert_3": 21.0, "wert_4": 6.0,
+                },
+            }
+            for n in range(anzahl_stunden)
+        ]
+        lauf = solver.Lauf(
+            stunden=stunden,
+            bilanz={
+                "waerme": sum(s[bilanz_karte_id]["waerme"] for s in stunden),
+                "kaelte": sum(s[bilanz_karte_id]["kaelte"] for s in stunden),
+                "strom_ht": anzahl_stunden * 1.0, "strom_nt": anzahl_stunden * 0.5,
+                "wasser": anzahl_stunden * 0.2,
+            },
+            warnungen=[],
+        )
+        simulation_id = ergebnisse.speichere(
+            anlage_id, wetter_id, 0, anzahl_stunden, lauf, graph, dauer=1.5
+        )
+    return anlage_id, simulation_id
+
+
+def _jahr_lauf_speichern(app, jahr=2023):
+    """Ein kuenstlicher, aber realistisch geformter Volljahreslauf (8760
+    Stunden, 2023 - kein Schaltjahr) fuer die Jahresdiagramme in
+    Stundenaufloesung: Waerme hoch im Winter, Kaelte hoch im Sommer, Strom
+    mit taeglichem Gang plus vereinzelten Lastspitzen, dieselbe Kurvenform
+    wie im Excel-Vorbild des Benutzers (treppenfoermig fuer Waerme/Kaelte,
+    stark gezackt fuer eine Lueftungs-Groesse). Kein echter Solver-Lauf (der
+    braeuchte acht Minuten) - core.ergebnisse.speichere() speichert das
+    genauso wie einen echten Lauf."""
+    anzahl_stunden = 8760
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage_id = ax_sim_2_1.baue(projekt, "Jahresanlage")
+        wetter_id = _wetter_anlegen(anzahl_stunden, jahr=jahr)
+        graph = anlagen.lade_graph(anlage_id)
+        bilanz_karte_id = _karte_id(graph, "bilanz")
+        logger_id = _karte_id(graph, "datenlogger")
+
+        stunden = []
+        for n in range(anzahl_stunden):
+            jahreszeit = math.cos(2 * math.pi * (n - 30 * 24) / anzahl_stunden)  # +1 im Winter
+            tagesgang = math.sin(2 * math.pi * (n % 24) / 24)
+            waerme = max(0.0, 220.0 * jahreszeit) + (150.0 if n % 733 == 0 else 0.0)
+            kaelte = max(0.0, -180.0 * jahreszeit) + (140.0 if n % 611 == 0 else 0.0)
+            strom = 40.0 + 25.0 * max(0.0, tagesgang) + (60.0 if n % 401 == 0 else 0.0)
+            aussentemperatur = 10.0 + 12.0 * jahreszeit + 3.0 * tagesgang
+            stunden.append({
+                bilanz_karte_id: {
+                    "waerme": waerme, "kaelte": kaelte,
+                    "strom_ht": strom * 0.6, "strom_nt": strom * 0.4, "wasser": 0.1,
+                },
+                logger_id: {
+                    "wert_1": aussentemperatur, "wert_2": 20.0 + tagesgang,
+                    "wert_3": 21.0, "wert_4": 6.0,
+                },
+            })
+        lauf = solver.Lauf(
+            stunden=stunden,
+            bilanz={
+                "waerme": sum(s[bilanz_karte_id]["waerme"] for s in stunden),
+                "kaelte": sum(s[bilanz_karte_id]["kaelte"] for s in stunden),
+                "strom_ht": sum(s[bilanz_karte_id]["strom_ht"] for s in stunden),
+                "strom_nt": sum(s[bilanz_karte_id]["strom_nt"] for s in stunden),
+                "wasser": anzahl_stunden * 0.1,
+            },
+            warnungen=[],
+        )
+        simulation_id = ergebnisse.speichere(
+            anlage_id, wetter_id, 0, anzahl_stunden, lauf, graph, dauer=5.0
         )
     return anlage_id, simulation_id
 
@@ -433,3 +534,291 @@ def test_baue_pdf_diagramme_ueberschrift_steht_mit_diagramm_auf_derselben_seite(
         schreiber.diagramm(diagramme["monat"])
         schreiber.diagramm(diagramme["dauerlinie"])
     assert schreiber.seite is seite_der_ueberschrift
+
+
+# ---------------------------------------------------------------------------
+# Jahresverlauf in Stundenwerten: Einhuellende, Monatsmarken, Auswahl
+# ---------------------------------------------------------------------------
+
+def test_einhuellende_punkte_unterhalb_ziel_gibt_alle_werte():
+    punkte = bericht._einhuellende_punkte([1.0, 2.0, 3.0], spalten=100)
+    assert len(punkte) == 3
+
+
+def test_einhuellende_punkte_leer():
+    assert bericht._einhuellende_punkte([]) == []
+
+
+def test_einhuellende_punkte_haelt_spitzen_die_eine_mittelung_verschlucken_wuerde():
+    """Der Kern der Entscheidung fuer Minimum/Maximum statt Mittelung: eine
+    einzelne Lastspitze inmitten vieler Nullen bleibt im Diagramm sichtbar -
+    _downsample_mittel() wuerde denselben Verlauf zu einer flachen Linie
+    nahe 0 mitteln."""
+    werte = [0.0] * 3000 + [500.0] + [0.0] * 2999  # eine Spitze unter 6000 Nullen
+    punkte = bericht._einhuellende_punkte(werte, spalten=300)
+    assert max(v for _, v in punkte) == 500.0
+    # Zur Gegenprobe: die Mittelung im selben Fenster verschluckt die Spitze.
+    gemittelt = bericht._downsample_mittel(werte, ziel=300)
+    assert max(v for _, v in gemittelt) < 500.0
+
+
+def test_einhuellende_punkte_bleibt_innerhalb_der_spaltenzahl():
+    werte = [float(i % 17) for i in range(8760)]
+    punkte = bericht._einhuellende_punkte(werte, spalten=300)
+    assert len(punkte) <= 600  # hoechstens 2 Punkte je Spalte
+    x_werte = [x for x, _ in punkte]
+    assert x_werte == sorted(x_werte)
+    assert min(x_werte) >= 0.0 and max(x_werte) <= 1.0
+
+
+def test_monatsmarken_eine_marke_je_kalendermonat():
+    zeitpunkte = (
+        [datetime(2024, 1, 1) + timedelta(hours=i) for i in range(31 * 24)]
+        + [datetime(2024, 2, 1) + timedelta(hours=i) for i in range(5 * 24)]
+    )
+    marken = bericht._monatsmarken(zeitpunkte)
+    assert [text for _, text in marken] == ["Jan", "Feb"]
+    assert marken[0][0] == 0.0
+    assert 0.0 < marken[1][0] < 1.0
+
+
+def test_monatsmarken_leer():
+    assert bericht._monatsmarken([]) == []
+
+
+def test_gemeinsame_einheit_bei_gleicher_einheit():
+    reihen = [{"einheit": "kW"}, {"einheit": "kW"}]
+    assert bericht._gemeinsame_einheit(reihen) == "kW"
+
+
+def test_gemeinsame_einheit_bei_gemischten_einheiten_ist_leer():
+    reihen = [{"einheit": "kW"}, {"einheit": "°C"}]
+    assert bericht._gemeinsame_einheit(reihen) == ""
+
+
+def test_reihen_auswaehlen_none_gibt_standardauswahl():
+    alle = [
+        {"schluessel": "waerme"}, {"schluessel": "kaelte"}, {"schluessel": "strom"},
+        {"schluessel": "logger-1-0"},
+    ]
+    ausgewaehlt = bericht._reihen_auswaehlen(alle, None)
+    assert [r["schluessel"] for r in ausgewaehlt] == ["waerme", "kaelte", "strom"]
+
+
+def test_reihen_auswaehlen_eigene_auswahl():
+    alle = [{"schluessel": "waerme"}, {"schluessel": "kaelte"}, {"schluessel": "logger-1-0"}]
+    ausgewaehlt = bericht._reihen_auswaehlen(alle, ["logger-1-0"])
+    assert [r["schluessel"] for r in ausgewaehlt] == ["logger-1-0"]
+
+
+def test_reihen_auswaehlen_leere_liste_ist_eine_ausdrueckliche_leere_auswahl():
+    """Eine leere Liste ist NICHT dasselbe wie None - None bedeutet 'noch
+    keine eigene Auswahl', eine leere Liste 'der Benutzer hat alles
+    abgehakt'."""
+    alle = [{"schluessel": "waerme"}]
+    assert bericht._reihen_auswaehlen(alle, []) == []
+
+
+def test_bilanzgroessen_stunden_farbe_und_muster_je_reihe_unterschiedlich():
+    """Waerme/Kaelte/Strom muessen sich auch ohne Farbwahrnehmung
+    unterscheiden lassen - Farbe UND Strichmuster duerfen sich darum
+    zwischen den drei Reihen nicht ueberschneiden."""
+    farben = [f for _, _, _, f, _ in bericht.BILANZGROESSEN_STUNDEN]
+    muster = [m for _, _, _, _, m in bericht.BILANZGROESSEN_STUNDEN]
+    assert len(set(farben)) == len(farben)
+    assert len(set(muster)) == len(muster)
+
+
+def test_weitere_reihen_stil_bleibt_ueber_13_reihen_eindeutig():
+    """5 Farben x 4 Muster = 20 Kombinationen - mehr als die hoechstens 10
+    Datenlogger-Spalten plus 3 Bilanzgroessen, die gleichzeitig zur Auswahl
+    stehen koennen."""
+    kombinationen = {bericht._weitere_reihen_stil(i) for i in range(13)}
+    assert len(kombinationen) == 13
+
+
+def test_vier_monats_fenster_deckt_alle_zwoelf_monate_ohne_ueberlappung():
+    monate_gesamt = []
+    for von, bis, _ in bericht._VIER_MONATS_FENSTER:
+        monate_gesamt.extend(range(von, bis + 1))
+    assert sorted(monate_gesamt) == list(range(1, 13))
+
+
+def test_vier_monats_ausschnitte_liefert_drei_fenster_fuer_ein_volles_jahr():
+    zeitpunkte = [datetime(2023, 1, 1) + timedelta(hours=i) for i in range(8760)]
+    reihen = [{"schluessel": "waerme", "label": "Wärme", "einheit": "kW",
+               "farbe": zeichnung.FARBE_WAERME, "muster": None,
+               "werte": [float(i % 24) for i in range(8760)]}]
+    ausschnitte = bericht._vier_monats_ausschnitte(reihen, zeitpunkte)
+    assert len(ausschnitte) == 3
+
+
+def test_vier_monats_ausschnitte_ohne_daten_in_einem_fenster_bleibt_es_aus():
+    # Nur die ersten drei Monate vorhanden - das dritte Fenster (Sep-Dez)
+    # bekommt keine Daten und darf nicht als leere Leinwand auftauchen.
+    # 150 Tage ab 1. Januar 2023 reichen bis in den Mai (Jan 31 + Feb 28 +
+    # Mrz 31 + Apr 30 = 120, plus 30 weitere Tage) - das erste Fenster
+    # (Jan-Apr) ist so voll gedeckt, das zweite (Mai-Aug) nur teilweise, das
+    # dritte (Sep-Dez) bleibt ganz ohne Daten.
+    zeitpunkte = [datetime(2023, 1, 1) + timedelta(hours=i) for i in range(150 * 24)]
+    reihen = [{"schluessel": "waerme", "label": "Wärme", "einheit": "kW",
+               "farbe": zeichnung.FARBE_WAERME, "muster": None,
+               "werte": [1.0] * len(zeitpunkte)}]
+    ausschnitte = bericht._vier_monats_ausschnitte(reihen, zeitpunkte)
+    assert len(ausschnitte) == 2  # Jan-Apr und Mai-Aug, nicht Sep-Dez
+
+
+def test_daten_fuer_baut_jahresverlauf_in_stundenwerten_mit_standardauswahl(app):
+    _anlage_id, simulation_id = _lauf_speichern(app, anzahl_stunden=72)
+    with app.app_context():
+        daten = bericht.daten_fuer(simulation_id)
+    diagramme = daten["diagramme"]
+    assert {r["schluessel"] for r in diagramme["stunden_reihen"]} >= {"waerme", "kaelte", "strom"}
+    assert set(diagramme["stunden_ausgewaehlt"]) == {"waerme", "kaelte", "strom"}
+    assert diagramme["jahr_stunden"] is not None
+    svg = diagramme["jahr_stunden"].als_svg()
+    assert "Wärme" in svg and "Kälte" in svg and "Strom" in svg
+
+
+def test_daten_fuer_mit_eigener_auswahl_zeigt_nur_die_gewaehlten_reihen(app):
+    _anlage_id, simulation_id = _lauf_mit_logger_speichern(app, anzahl_stunden=72)
+    with app.app_context():
+        daten = bericht.daten_fuer(simulation_id, ausgewaehlte_reihen=["waerme"])
+    diagramme = daten["diagramme"]
+    assert diagramme["stunden_ausgewaehlt"] == ["waerme"]
+    svg = diagramme["jahr_stunden"].als_svg()
+    assert "Wärme" in svg
+    assert "Kälte" not in svg and "Strom" not in svg
+
+
+def test_daten_fuer_mit_datenlogger_spalte_in_der_auswahl(app):
+    _anlage_id, simulation_id = _lauf_mit_logger_speichern(app, anzahl_stunden=72)
+    with app.app_context():
+        daten = bericht.daten_fuer(simulation_id)
+        logger_reihen = [
+            r for r in daten["diagramme"]["stunden_reihen"] if r["gruppe"] == "Datenlogger"
+        ]
+        assert logger_reihen  # die Vorlage hat vier benannte Spalten
+        schluessel = logger_reihen[0]["schluessel"]
+        daten = bericht.daten_fuer(simulation_id, ausgewaehlte_reihen=[schluessel])
+    assert daten["diagramme"]["stunden_ausgewaehlt"] == [schluessel]
+    assert daten["diagramme"]["jahr_stunden"] is not None
+
+
+def test_daten_fuer_mit_leerer_auswahl_baut_kein_stundendiagramm(app):
+    _anlage_id, simulation_id = _lauf_speichern(app, anzahl_stunden=72)
+    with app.app_context():
+        daten = bericht.daten_fuer(simulation_id, ausgewaehlte_reihen=[])
+    diagramme = daten["diagramme"]
+    assert diagramme["stunden_ausgewaehlt"] == []
+    assert diagramme["jahr_stunden"] is None
+    assert diagramme["vier_monats_ausschnitte"] == []
+
+
+# ---------------------------------------------------------------------------
+# routes/bericht.py - Auswahl per Query-String, HTML wie PDF
+# ---------------------------------------------------------------------------
+
+def _kaestchen_angehakt(html, schluessel):
+    """Ob das Auswahlkaestchen mit diesem Schluessel 'checked' traegt - das
+    'checked' steht im Template (siehe templates/bericht.html) wegen der
+    Jinja-Bedingung auf einer eigenen Zeile, darum kein simpler Substring-Test."""
+    treffer = re.search(rf'value="{re.escape(schluessel)}"\s*(checked)?>', html)
+    assert treffer, f"Kaestchen fuer {schluessel!r} nicht gefunden"
+    return treffer.group(1) == "checked"
+
+
+def test_route_html_ohne_auswahl_zeigt_standardauswahl(app):
+    anlage_id, simulation_id = _lauf_speichern(app, anzahl_stunden=72)
+    antwort = app.test_client().get(f"/anlage/{anlage_id}/lauf/{simulation_id}/bericht")
+    html = antwort.get_data(as_text=True)
+    assert "Jahresverlauf in Stundenwerten" in html
+    assert _kaestchen_angehakt(html, "waerme")
+    assert _kaestchen_angehakt(html, "kaelte")
+    assert _kaestchen_angehakt(html, "strom")
+
+
+def test_route_html_mit_auswahl_zeigt_nur_gewaehlte_reihe(app):
+    anlage_id, simulation_id = _lauf_speichern(app, anzahl_stunden=72)
+    antwort = app.test_client().get(
+        f"/anlage/{anlage_id}/lauf/{simulation_id}/bericht?auswahl=1&reihe=kaelte"
+    )
+    html = antwort.get_data(as_text=True)
+    assert _kaestchen_angehakt(html, "kaelte")
+    assert not _kaestchen_angehakt(html, "waerme")
+    # Der PDF-Knopf muss dieselbe Auswahl weitertragen (& als &amp; escaped,
+    # weil pdf_href in einem href-Attribut steht - siehe templates/bericht.html).
+    assert (
+        f"/anlage/{anlage_id}/lauf/{simulation_id}/bericht.pdf?auswahl=1&amp;reihe=kaelte"
+        in html
+    )
+
+
+def test_route_html_mit_leerer_auswahl_zeigt_hinweis_statt_diagramm(app):
+    anlage_id, simulation_id = _lauf_speichern(app, anzahl_stunden=72)
+    antwort = app.test_client().get(
+        f"/anlage/{anlage_id}/lauf/{simulation_id}/bericht?auswahl=1"
+    )
+    html = antwort.get_data(as_text=True)
+    assert "Keine Reihen ausgewählt." in html
+
+
+def test_route_pdf_mit_auswahl_enthaelt_nur_die_gewaehlte_reihe(app):
+    anlage_id, simulation_id = _lauf_speichern(app, anzahl_stunden=72)
+    antwort = app.test_client().get(
+        f"/anlage/{anlage_id}/lauf/{simulation_id}/bericht.pdf?auswahl=1&reihe=strom"
+    )
+    assert antwort.status_code == 200
+    inhalt = antwort.data
+    assert b"Jahresverlauf in Stundenwerten" in inhalt
+    assert b"Ausgew\xe4hlte Reihen: Strom." in inhalt  # WinAnsi-kodiert (siehe core/pdf.py)
+
+
+def test_route_pdf_ohne_reihen_meldet_das_statt_leer_zu_bleiben(app):
+    anlage_id, simulation_id = _lauf_speichern(app, anzahl_stunden=72)
+    antwort = app.test_client().get(
+        f"/anlage/{anlage_id}/lauf/{simulation_id}/bericht.pdf?auswahl=1"
+    )
+    assert antwort.status_code == 200
+    assert "Keine Reihen ausgewählt.".encode("cp1252") in antwort.data
+
+
+# ---------------------------------------------------------------------------
+# Volljahr in Stundenaufloesung: gemessene Folgen (Zeichenbefehle, PDF-
+# Groesse, Dauer) - siehe _jahr_lauf_speichern() und das Berichtsdokument
+# der Aufgabe (diagramme-report.md) fuer die eingeordneten Zahlen.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.slow
+def test_jahresdiagramme_bei_8760_stunden_bleiben_schnell_und_kompakt(app):
+    _anlage_id, simulation_id = _jahr_lauf_speichern(app)
+    with app.app_context():
+        begonnen = time.time()
+        daten = bericht.daten_fuer(simulation_id)
+        rohdaten = bericht.baue_pdf(daten)
+        dauer = time.time() - begonnen
+
+    diagramme = daten["diagramme"]
+    assert diagramme["jahr_stunden"] is not None
+    assert len(diagramme["vier_monats_ausschnitte"]) == 3
+
+    # Zeichenbefehle: Einhuellende statt Rohwerte - siehe _einhuellende_punkte().
+    # Gemessen (drei Bilanzgroessen, ganzes Jahr): rund 1800, deutlich unter
+    # den 3*8760 Punkten, die eine ungekuerzte Kurve haette.
+    jahr_ops = len(diagramme["jahr_stunden"].als_pdf_operatoren().ops)
+    assert jahr_ops < 3000
+
+    _pdf_grundpruefung(rohdaten)
+    # Gemessen: rund 185 KB fuer das ganze Bericht-PDF (7 Seiten, inkl. der
+    # bestehenden Diagramme UND Datenlogger-Charts) - hier grosszuegig auf
+    # 320 KB begrenzt, damit die Pruefung nicht bei jeder kleinen Aenderung an
+    # Text oder Layout knapp wird. Siehe diagramme-report.md fuer die
+    # eingeordneten Zahlen (auch ohne die neuen Stundendiagramme, zum
+    # Vergleich).
+    assert len(rohdaten) < 320_000
+    # Gemessen: rund 0,1 s fuer daten_fuer() + baue_pdf() zusammen auf der
+    # Entwicklungsmaschine - 10 s lassen reichlich Luft fuer eine langsamere
+    # Maschine, ohne dass die Pruefung ihren Zweck (eine Regression zu einer
+    # spuerbar langsamen Berichtserzeugung zu erkennen) verliert.
+    assert dauer < 10.0
+

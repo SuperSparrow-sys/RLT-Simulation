@@ -44,7 +44,70 @@ STATUS_LABEL = {
 # als ein Blatt Papier oder ein Tablet-Bildschirm zeigen kann.
 MAX_DIAGRAMMPUNKTE = 300
 
+# Bildspalten fuer die Jahres-/Vier-Monats-Stundendiagramme (_einhuellende_punkte)
+# - siehe dort fuer die Begruendung, warum hier Minimum UND Maximum je Spalte
+# gezeichnet werden statt gemittelt. 300 Spalten sind grob die Plot-Breite
+# dieser Diagramme in Punkt (DIAGRAMM_BREITE=500 minus Achsenrand); mehr
+# Spalten als Bildpunkte aufzuloesen braechte auf dem Papier keinen weiteren
+# Gewinn, nur mehr PDF-Operatoren.
+STUNDEN_DIAGRAMM_SPALTEN = 300
+
 STATUS_MIT_ERGEBNIS = ("fertig", "abgebrochen")
+
+
+# ---------------------------------------------------------------------------
+# Auswahl der Reihen fuer die Stundendiagramme (Jahresverlauf + Ausschnitte)
+# ---------------------------------------------------------------------------
+
+# Die drei Bilanzgroessen, die (wenn vorhanden) immer zur Auswahl stehen -
+# Farbe und Strichmuster nach Bedeutung statt nach Reihenfolge: Waerme warm
+# (rot, durchgezogen), Kaelte kalt (blau, gestrichelt), Strom neutral
+# unterscheidbar von beiden (grau, gepunktet) - dieselbe Regel wie bei den
+# drei Pfeilarten im Editor: Farbe UND Strichmuster, damit die drei Reihen
+# auch im Schwarzweissdruck und fuer Rot-Gruen-Farbenblindheit auseinander-
+# bleiben (Wärme/Kälte allein ueber Rot/Blau waeren das nicht automatisch -
+# aber zusaetzlich durchgezogen/gestrichelt schon).
+BILANZGROESSEN_STUNDEN = (
+    ("waerme", "Wärme", "kW", zeichnung.FARBE_WAERME, zeichnung.MUSTER_DURCHGEZOGEN),
+    ("kaelte", "Kälte", "kW", zeichnung.FARBE_KAELTE, zeichnung.MUSTER_GESTRICHELT),
+    ("strom", "Strom", "kW", zeichnung.FARBE_STROM, zeichnung.MUSTER_GEPUNKTET),
+)
+
+# Vorbelegte Auswahl, solange der Benutzer noch keine eigene getroffen hat -
+# genau die drei Bilanzgroessen, wie im Jahresverlauf in Monatswerten oben.
+STANDARD_AUSWAHL_STUNDEN = tuple(schluessel for schluessel, *_ in BILANZGROESSEN_STUNDEN)
+
+# Farb-/Musterpalette fuer weitere, vom Datenlogger stammende Reihen - 5
+# Farben mal 4 Strichmuster ergibt 20 unterscheidbare Kombinationen, mehr als
+# die hoechstens 10 Spalten, die ein einzelner Datenlogger fuehrt (siehe
+# core.bausteine.datenlogger.ANZAHL). _WEITERE_MUSTER faengt bewusst NICHT
+# bei "durchgezogen" an, damit die erste weitere Reihe sich im Schwarzweiss-
+# druck nicht mit einer durchgezogenen Bilanzgroesse (Waerme) verwechseln
+# laesst, obwohl beide zufaellig aehnlich hell erscheinen koennten.
+_WEITERE_FARBEN = ["#3f7d5c", "#6a4c93", "#b8860b", "#2f8f8a", "#8a5a2b"]
+_WEITERE_MUSTER = [
+    zeichnung.MUSTER_GEPUNKTET, zeichnung.MUSTER_GESTRICHELT,
+    zeichnung.MUSTER_STRICHPUNKT, zeichnung.MUSTER_DURCHGEZOGEN,
+]
+
+
+def _weitere_reihen_stil(index):
+    """Farbe und Strichmuster fuer die 'index'-te weitere (Datenlogger-)
+    Reihe - siehe _WEITERE_FARBEN/_WEITERE_MUSTER."""
+    farbe = _WEITERE_FARBEN[index % len(_WEITERE_FARBEN)]
+    muster = _WEITERE_MUSTER[(index // len(_WEITERE_FARBEN)) % len(_WEITERE_MUSTER)]
+    return farbe, muster
+
+
+def _reihen_auswaehlen(alle_reihen, schluessel):
+    """Waehlt aus 'alle_reihen' (siehe _diagramme) diejenigen aus, deren
+    Schluessel in 'schluessel' steht. schluessel=None heisst 'noch keine
+    eigene Auswahl getroffen' - dann gilt STANDARD_AUSWAHL_STUNDEN. Eine
+    (auch leere) Liste ist dagegen die ausdrueckliche Wahl des Benutzers und
+    gilt unveraendert, auch wenn sie leer ist (routes/bericht.py
+    unterscheidet beide Faelle ueber den Marker-Parameter 'auswahl')."""
+    ziel = set(STANDARD_AUSWAHL_STUNDEN) if schluessel is None else set(schluessel)
+    return [r for r in alle_reihen if r["schluessel"] in ziel]
 
 
 class BerichtNichtVerfuegbar(ValueError):
@@ -52,10 +115,17 @@ class BerichtNichtVerfuegbar(ValueError):
     Bericht braucht eine (und sei es unvollstaendige) Bilanz."""
 
 
-def daten_fuer(simulation_id):
+def daten_fuer(simulation_id, ausgewaehlte_reihen=None):
     """Alle Angaben des Berichts zu einem Simulationslauf - Kopf, Bilanz,
     Warnungen, Anlage, Diagramme (als core.zeichnung.Leinwand-Objekte, noch
-    nicht in SVG oder PDF ausgegeben)."""
+    nicht in SVG oder PDF ausgegeben).
+
+    'ausgewaehlte_reihen' steuert, welche Groessen im Jahresverlauf in
+    Stundenwerten (und seinen Vier-Monats-Ausschnitten) erscheinen - siehe
+    _reihen_auswaehlen(). None (Vorgabe) zeigt die drei Bilanzgroessen;
+    routes/bericht.py reicht hier die vom Benutzer per Auswahlformular
+    gewaehlten Schluessel durch, fuer HTML- und PDF-Fassung gleichermassen,
+    damit die Auswahl auch im serverseitig erzeugten PDF ankommt."""
     sim = ergebnisse.lade_simulation(simulation_id)
     if sim["status"] not in STATUS_MIT_ERGEBNIS:
         raise BerichtNichtVerfuegbar(
@@ -73,7 +143,7 @@ def daten_fuer(simulation_id):
     warnungen = ergebnisse.lade_warnungen(simulation_id, anzahl=8)
     baustein_warnungen = ergebnisse.lade_baustein_warnungen(simulation_id)
     karten = _karten_uebersicht(graph)
-    diagramme = _diagramme(sim, graph)
+    diagramme = _diagramme(sim, graph, ausgewaehlte_reihen)
 
     return {
         "simulation_id": simulation_id,
@@ -228,9 +298,134 @@ def _downsample_mittel(werte, ziel=MAX_DIAGRAMMPUNKTE):
     return punkte
 
 
-def _diagramme(sim, graph):
-    ergebnis = {"monat": None, "dauerlinie": None, "datenlogger": []}
+def _einhuellende_punkte(werte, spalten=STUNDEN_DIAGRAMM_SPALTEN):
+    """Minimal- und Maximalwert je Bildspalte, als ein einziger
+    zusammenhaengender Linienzug - fuer den Jahresverlauf in Stundenwerten
+    und seine Vier-Monats-Ausschnitte.
 
+    8760 Stundenwerte auf rund 300 Bildspalten sind etwa 29 Werte je Spalte;
+    wer die alle als Linie zeichnet, bekommt eine schwarze Flaeche (und ein
+    unnoetig grosses PDF). Zwei Wege sind ueblich: je Spalte mitteln (glaettet,
+    verschluckt aber genau die Lastspitzen, die den Verlauf ausmachen) oder je
+    Spalte Minimum UND Maximum verbinden (haelt die Spitzen, wird optisch
+    "gezackt" - genau das Bild, das die Vorlage zeigt). Hier also Minimum und
+    Maximum, in der Reihenfolge, in der sie innerhalb der Spalte tatsaechlich
+    auftreten (nicht immer erst Minimum), das haelt den Linienverlauf naeher
+    am tatsaechlichen zeitlichen Auf und Ab als eine feste Reihenfolge.
+
+    Ergebnis: hoechstens 2*spalten Punkte (bei STUNDEN_DIAGRAMM_SPALTEN=300
+    also 600) statt bis zu 8760 - siehe core/bericht-report.md fuer die
+    gemessenen Folgen (Anzahl Zeichenbefehle, PDF-Groesse, Dauer)."""
+    n = len(werte)
+    if n == 0:
+        return []
+    if n <= spalten:
+        return [(i / (n - 1) if n > 1 else 0.0, v) for i, v in enumerate(werte)]
+    punkte = []
+    for spalte in range(spalten):
+        start = int(spalte * n / spalten)
+        ende = max(start + 1, int((spalte + 1) * n / spalten))
+        teil = werte[start:ende]
+        x = ((start + ende - 1) / 2) / (n - 1)
+        imin = min(range(len(teil)), key=teil.__getitem__)
+        imax = max(range(len(teil)), key=teil.__getitem__)
+        if imin == imax:
+            punkte.append((x, teil[imin]))
+        elif imin < imax:
+            punkte.append((x, teil[imin]))
+            punkte.append((x, teil[imax]))
+        else:
+            punkte.append((x, teil[imax]))
+            punkte.append((x, teil[imin]))
+    return punkte
+
+
+def _monatsmarken(zeitpunkte):
+    """(Anteil, Monatskuerzel) fuer jeden Monatsanfang, der in 'zeitpunkte'
+    auftaucht - der Anteil bezieht sich auf die Laenge von 'zeitpunkte'
+    selbst, ein Ausschnitt bekommt so seine eigenen Marken statt der des
+    ganzen Jahres. Funktioniert auch ueber einen Jahreswechsel hinweg (ein
+    Lauf muss nicht am 1. Januar beginnen)."""
+    n = len(zeitpunkte)
+    if n == 0:
+        return []
+    marken = []
+    letzter_monat = None
+    for i, zeitpunkt in enumerate(zeitpunkte):
+        monatsschluessel = (zeitpunkt.year, zeitpunkt.month)
+        if monatsschluessel != letzter_monat:
+            marken.append((i / (n - 1) if n > 1 else 0.0, MONATSNAMEN[zeitpunkt.month - 1]))
+            letzter_monat = monatsschluessel
+    return marken
+
+
+def _gemeinsame_einheit(reihen):
+    """Die eine y-Achsen-Einheit, wenn alle ausgewaehlten Reihen dieselbe
+    fuehren (die drei Bilanzgroessen tun das immer: kW) - sonst leer, dann
+    traegt jede Reihe ihre Einheit stattdessen in der Legende (siehe
+    _stundendiagramm). Mehrere Einheiten auf einer Achse zu mischen waere
+    irrefuehrend; die Auswahl steht dem Benutzer aber trotzdem frei offen -
+    er sieht in der Legende, wenn er Groessen unterschiedlicher Einheit
+    kombiniert hat."""
+    einheiten = {r["einheit"] for r in reihen if r["einheit"]}
+    return einheiten.pop() if len(einheiten) == 1 else ""
+
+
+def _stundendiagramm(titel, reihen, zeitpunkte, hoehe=260):
+    gemeinsam = _gemeinsame_einheit(reihen)
+    serien = [
+        (
+            r["label"] if r["einheit"] in ("", gemeinsam) else f"{r['label']} [{r['einheit']}]",
+            r["farbe"], r["muster"], _einhuellende_punkte(r["werte"]),
+        )
+        for r in reihen
+    ]
+    return zeichnung.liniendiagramm(
+        DIAGRAMM_BREITE, hoehe, titel, serien, y_einheit=gemeinsam,
+        x_beschriftungen=_monatsmarken(zeitpunkte), legende_immer=True,
+    )
+
+
+# Die drei Ausschnitte des Jahres, zu je vier Kalendermonaten - die einzige
+# Dreiteilung, die zwoelf Monate ohne Rest deckt (4+4+4). Eine Vierteilung in
+# Quartale (3+3+3+3) waere vier statt drei Bilder gewesen, eine Zweiteilung
+# in Halbjahre (6+6) je Bild wieder fast so dicht wie das ganze Jahr - vier
+# Monate je Ausschnitt sind der Punkt, an dem ein Ausschnitt spuerbar mehr
+# zeigt als der Jahresueberblick, ohne dass es gleich vier oder mehr Bilder
+# braucht.
+_VIER_MONATS_FENSTER = [(1, 4, "Januar–April"), (5, 8, "Mai–August"), (9, 12, "September–Dezember")]
+
+
+def _vier_monats_ausschnitte(reihen, zeitpunkte):
+    """Bis zu drei Leinwaende, siehe _VIER_MONATS_FENSTER - ein Ausschnitt
+    ohne eigene Daten (ein Lauf, der nicht das volle Jahr rechnet) bleibt
+    einfach aus, statt eine leere Leinwand zu zeigen."""
+    ausschnitte = []
+    for von_monat, bis_monat, titelteil in _VIER_MONATS_FENSTER:
+        indizes = [i for i, zp in enumerate(zeitpunkte) if von_monat <= zp.month <= bis_monat]
+        if not indizes:
+            continue
+        start, ende = indizes[0], indizes[-1] + 1
+        teil_reihen = [{**r, "werte": r["werte"][start:ende]} for r in reihen]
+        ausschnitte.append(_stundendiagramm(
+            f"Ausschnitt {titelteil}", teil_reihen, zeitpunkte[start:ende], hoehe=230,
+        ))
+    return ausschnitte
+
+
+def _diagramme(sim, graph, ausgewaehlte_reihen=None):
+    ergebnis = {
+        "monat": None, "dauerlinie": None, "datenlogger": [],
+        "stunden_reihen": [], "stunden_ausgewaehlt": [],
+        "jahr_stunden": None, "vier_monats_ausschnitte": [],
+    }
+
+    stunden = speicher.lade_stunden(
+        sim["wetterdatensatz_id"], sim["von_stunde"], sim["bis_stunde"]
+    )
+    zeitpunkte = [s["zeitpunkt"] for s in stunden]
+
+    alle_reihen = []
     bilanz_karte_id = _bilanz_karte_id(graph)
     if bilanz_karte_id is not None:
         waerme = ergebnisse.lade_zeitreihe(sim["id"], bilanz_karte_id, "waerme")
@@ -242,10 +437,6 @@ def _diagramme(sim, graph):
         )
 
         if waerme or kaelte or strom:
-            stunden = speicher.lade_stunden(
-                sim["wetterdatensatz_id"], sim["von_stunde"], sim["bis_stunde"]
-            )
-            zeitpunkte = [s["zeitpunkt"] for s in stunden]
             ergebnis["monat"] = zeichnung.balkendiagramm(
                 DIAGRAMM_BREITE, 290, "Jahresverlauf in Monatswerten", MONATSNAMEN,
                 [
@@ -281,7 +472,16 @@ def _diagramme(sim, graph):
                 flaeche=True,
             )
 
-    for spalte in ergebnisse.lade_protokoll(sim["id"], graph):
+        rohwerte = {"waerme": waerme, "kaelte": kaelte, "strom": strom}
+        for schluessel, label, einheit, farbe, muster in BILANZGROESSEN_STUNDEN:
+            werte = rohwerte.get(schluessel) or []
+            if any(werte):
+                alle_reihen.append({
+                    "schluessel": schluessel, "label": label, "einheit": einheit,
+                    "gruppe": "Bilanz", "farbe": farbe, "muster": muster, "werte": werte,
+                })
+
+    for globaler_index, spalte in enumerate(ergebnisse.lade_protokoll(sim["id"], graph)):
         titel = spalte["name"] + (f" [{spalte['einheit']}]" if spalte["einheit"] else "")
         chart = zeichnung.liniendiagramm(
             DIAGRAMM_BREITE, 210, titel,
@@ -293,6 +493,26 @@ def _diagramme(sim, graph):
         ergebnis["datenlogger"].append({
             "titel": f"{spalte['karte_name']} · {spalte['name']}", "leinwand": chart,
         })
+
+        farbe, muster = _weitere_reihen_stil(globaler_index)
+        alle_reihen.append({
+            "schluessel": f"logger-{spalte['karte_id']}-{globaler_index}",
+            "label": f"{spalte['karte_name']} · {spalte['name']}",
+            "einheit": spalte["einheit"], "gruppe": "Datenlogger",
+            "farbe": farbe, "muster": muster, "werte": spalte["werte"],
+        })
+
+    ergebnis["stunden_reihen"] = [
+        {k: r[k] for k in ("schluessel", "label", "einheit", "gruppe", "farbe")}
+        for r in alle_reihen
+    ]
+    ausgewaehlt = _reihen_auswaehlen(alle_reihen, ausgewaehlte_reihen)
+    ergebnis["stunden_ausgewaehlt"] = [r["schluessel"] for r in ausgewaehlt]
+    if ausgewaehlt:
+        ergebnis["jahr_stunden"] = _stundendiagramm(
+            "Jahresverlauf in Stundenwerten", ausgewaehlt, zeitpunkte,
+        )
+        ergebnis["vier_monats_ausschnitte"] = _vier_monats_ausschnitte(ausgewaehlt, zeitpunkte)
 
     return ergebnis
 
@@ -505,6 +725,32 @@ def baue_pdf(daten) -> bytes:
         schreiber.zwischentitel("Diagramme", mindest_folgehoehe=erstes_diagramm.hoehe + 14)
         schreiber.diagramm(diagramme["monat"])
         schreiber.diagramm(diagramme["dauerlinie"])
+
+    if diagramme["stunden_reihen"]:
+        # Das PDF hat keine Auswahlkaestchen (die HTML-Fassung schon, siehe
+        # templates/bericht.html) - die getroffene Auswahl steht hier
+        # stattdessen als Text, damit auch im PDF nachvollziehbar bleibt,
+        # welche Reihen gezeigt werden. Beide Fassungen lesen dieselbe
+        # Auswahl aus derselben Anfrage (core.bericht.daten_fuer()).
+        schreiber.zwischentitel(
+            "Jahresverlauf in Stundenwerten",
+            mindest_folgehoehe=(diagramme["jahr_stunden"].hoehe + 14) if diagramme["jahr_stunden"]
+            else 14,
+        )
+        ausgewaehlte_labels = [
+            r["label"] for r in diagramme["stunden_reihen"]
+            if r["schluessel"] in diagramme["stunden_ausgewaehlt"]
+        ]
+        schreiber.absatz(
+            f"Ausgewählte Reihen: {', '.join(ausgewaehlte_labels)}."
+            if ausgewaehlte_labels else
+            "Keine Reihen ausgewählt.",
+            groesse=9, farbe=zeichnung.FARBE_TEXT_SCHWACH,
+        )
+        schreiber.diagramm(diagramme["jahr_stunden"])
+        for ausschnitt in diagramme["vier_monats_ausschnitte"]:
+            schreiber.diagramm(ausschnitt)
+
     for eintrag in diagramme["datenlogger"]:
         schreiber.diagramm(eintrag["leinwand"])
 

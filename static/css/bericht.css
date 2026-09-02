@@ -79,6 +79,58 @@ body.seite-bericht {
 .bericht-diagramm-karte svg.diagramm { display: block; width: 100%; height: auto; }
 .bericht-diagramm-titel { margin: 2px 4px 6px; font-size: 12px; color: var(--text-secondary); }
 
+/* Der Jahresverlauf in Stundenwerten bekommt die volle Breite statt der
+   Rastersspalte (min. 320px) der uebrigen Diagrammkarten - ein Jahr in
+   Stundenaufloesung braucht den Platz, um lesbar zu bleiben. */
+.bericht-diagramm-breit { max-width: none; margin: 0 0 18px; }
+
+.bericht-abschnitt h3 { font-size: 13.5px; margin: 4px 0 10px; color: var(--text-secondary); }
+
+/* Auswahl der Reihen fuer den Jahresverlauf in Stundenwerten - siehe
+   templates/bericht.html. Ein GET-Formular ohne Bauschritt: jedes Kaestchen
+   schickt sich beim Aendern selbst ab (siehe Skript am Seitenende), die
+   Auswahl steht danach in der Adresse und gilt fuer HTML wie PDF-Knopf
+   gleichermassen. */
+.bericht-reihen-auswahl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  background: var(--surface-alt);
+  border-radius: var(--radius);
+}
+.bericht-reihen-auswahl fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+.bericht-reihen-auswahl legend {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  padding: 0 8px 0 0;
+}
+.reihen-kaestchen {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.reihen-farbe {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex: none;
+}
+
 .bericht-karten { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .bericht-karte {
   padding: 8px 12px;
@@ -107,6 +159,11 @@ body.seite-bericht {
   .bericht { max-width: none; padding: 0; }
   .bericht-abschnitt { break-inside: avoid; margin-bottom: 20px; }
   .bericht-diagramm-karte { break-inside: avoid; border-color: #999; }
+  .bericht-diagramm-breit { break-inside: avoid; }
   .bericht-kopf { background: none; border: 1px solid #999; }
   a[href] { color: inherit; text-decoration: none; }
+  /* Kaestchen sind auf Papier nicht bedienbar - die Auswahl steckt schon
+     im gedruckten Diagramm selbst (Titel/Legende zeigen, was ausgewaehlt
+     wurde), das Formular waere nur totes Bedienelement. */
+  .bericht-reihen-auswahl { display: none; }
 }
