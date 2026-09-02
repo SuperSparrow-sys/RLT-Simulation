@@ -366,6 +366,11 @@ const Panel = {
   // dazu ein, etwas einzutragen und auf eine Aenderung zu warten, die nie
   // kommt. Was stattdessen gerechnet wird, sagt der Hinweis darunter, den
   // feldZeile() ohnehin anhaengt.
+  // Setzt einen EINFACHEN Wert voraus (Zahl oder Text), nicht eine Zeitreihe
+  // oder Monatswerte - alle fuenf heutigen Faelle sind Zahlen. Kaeme eine
+  // strukturierte Groesse dazu, faellt das im Test auf, der die fuenf
+  // namentlich fuehrt (tests/bausteine/test_basis.py); dann braucht dieser
+  // Renderer eine Verzweigung nach Darstellungsart wie feldEingabe().
   zeileOhneWirkung(feld, wert) {
     const zeile = document.createElement("div");
     zeile.className = "panel-zeile";
