@@ -13,12 +13,16 @@ class Monatsprofil(Baustein):
     SYMBOL = "monatsprofil.svg"
 
     PARAMETER = [
-        Param("monate", "Monate ein/aus", "", [True] * 12, darstellung=MONATSWERTE)
+        Param("monate", "Betriebsmonate", "", [True] * 12, darstellung=MONATSWERTE,
+              hinweis="Ein Schalter je Monat: eingeschaltet heißt, die Anlage darf in "
+                      "diesem Monat laufen. Damit lässt sich zum Beispiel eine "
+                      "Kühlung nur für den Sommer freigeben.")
     ]
 
     PORTS = [Port("betrieb", SIGNAL, AUSGANG, ZEITPLAN)]
 
     AUSGABEN = ["betrieb"]
+    AUSGABE_LABEL = {"betrieb": "Freigabe (1 = ein, 0 = aus)"}
 
     def berechne(self, ein, p, zustand):
         s = zustand.get("stunde") or {}

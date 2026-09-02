@@ -21,8 +21,17 @@ class EinfacherRaum(Baustein):
     SYMBOL = "einfacher_raum.svg"
 
     PARAMETER = [
-        Param("spez_transmission", "spez. Transmission", "kW/K", 0.5, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
-        Param("sollwert_stat", "Sollwert für stat. Hzg", "°C", 15.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("spez_transmission", "Wärmeverlust der Hülle je Kelvin", "kW/K", 0.5,
+              darstellung=ZAHL, dezimalstellen=2, minimum=0.0,
+              hinweis="Wie viel Wärme durch Wände, Fenster und Dach abfließt, je Grad "
+                      "Unterschied zwischen innen und außen. 0,5 kW/K heißt: Bei "
+                      "20 K Unterschied gehen 10 kW verloren."),
+        Param("sollwert_stat", "Sollwert der statischen Heizung", "°C", 15.0,
+              darstellung=ZAHL, dezimalstellen=1,
+              hinweis="Frostschutz-Untergrenze: Fällt die Raumtemperatur ohne Heizung "
+                      "darunter, meldet die Karte die fehlende Leistung am Anschluss "
+                      "„Leistung der statischen Heizung“ und hält den Raum auf "
+                      "diesem Wert."),
     ]
 
     PORTS = [
@@ -39,8 +48,16 @@ class EinfacherRaum(Baustein):
 
     AUSGABEN = ["T_Raum", "F_Raum", "T_frei", "QH_stat"]
     AUSGABE_LABEL = {
-        "T_Raum": "Raumtemperatur", "F_Raum": "Raumfeuchte",
-        "QH_stat": "stat. Heizleistung",
+        "T_Raum": "Raumtemperatur (°C)",
+        "F_Raum": "Raumfeuchte, absolut (g/kg)",
+        "T_frei": "freie Raumtemperatur ohne Heizung (°C)",
+        "QH_stat": "Leistung der statischen Heizung (kW)",
+    }
+    PORT_LABEL = {
+        "T_AU": "Außentemperatur (°C)",
+        "F_AU": "Außenfeuchte, absolut (g/kg)",
+        "waermelast": "innere Wärmelast (kW)",
+        "feuchtelast": "innere Feuchtelast (kg/h)",
     }
 
     def berechne(self, ein, p, zustand):

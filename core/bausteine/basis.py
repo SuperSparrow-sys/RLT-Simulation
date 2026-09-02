@@ -61,13 +61,22 @@ PAARWEISE_ROLLEN = (
 # bauePortliste). Ein Anschluss ohne eigene Beschriftung (kein Treffer in
 # AUSGABE_LABEL, kein gleichnamiger Parameter) faellt hierauf zurueck statt auf
 # seinen rohen, technischen Schluessel.
+# Die Signalrollen nennen ihren Wertebereich gleich mit: ein Anfaenger sieht
+# sonst "Stellgröße" und weiss nicht, ob dort 0..1, 0..100 oder eine Temperatur
+# fliesst. Alle Stellgroessen der Mappe sind auf 0..100 % geklemmt (siehe
+# p_regler.klemme, faktor, umkehrglied, maximalwert, anlagenbetrieb), Zeitplan,
+# Ferien und Betrieb sind Schalter (0/1), ein Lastgang ist ein Anteil.
 ROLLEN_LABEL = {
     ZULUFT: "Zuluft", ABLUFT: "Abluft", AUSSENLUFT: "Außenluft",
     FORTLUFT: "Fortluft", UMLUFT: "Umluft", LUFTWEG: "Luftweg",
-    STELLGROESSE: "Stellgröße", ISTWERT: "Istwert", SOLLWERT: "Sollwert",
-    MESSWERT: "Messwert", STROM: "Strom", WAERME: "Wärme", KAELTE: "Kälte",
-    WASSER: "Wasser", ZEITPLAN: "Zeitplan", FERIEN: "Ferien",
-    LASTGANG: "Lastgang", BETRIEB: "Betrieb", PROTOKOLL: "Protokoll",
+    STELLGROESSE: "Stellgröße (0–100 %)", ISTWERT: "Istwert",
+    SOLLWERT: "Sollwert", MESSWERT: "Messwert", STROM: "Strom",
+    WAERME: "Wärme", KAELTE: "Kälte", WASSER: "Wasser",
+    ZEITPLAN: "Zeitplan (1 = Freigabe, 0 = gesperrt)",
+    FERIEN: "Ferien (1 = Ferientag, 0 = normaler Tag)",
+    LASTGANG: "Lastgang (Anteil 0–1)",
+    BETRIEB: "Betrieb (1 = ein, 0 = aus)",
+    PROTOKOLL: "Protokollwert",
 }
 
 
@@ -122,6 +131,17 @@ class Param:
     Kuerzel, das Parameterfenster nicht. Damit muss niemand static/js/panel.js
     anfassen, nur weil ein neuer Kartentyp ein Auswahlfeld bekommt.
 
+    `hinweis` ist ein kurzer Erklaersatz, den das Parameterfenster unter dem
+    Eingabefeld anzeigt (static/js/panel.js, feldZeile) und den der
+    Erklaerbereich /bausteine mit auflistet. Er ist da, wo eine Beschriftung
+    allein nicht reicht: was ein Proportionalbereich bewirkt, dass ein
+    Lastgang ein ANTEIL der Nennlast ist, oder dass ein Wert die Rechnung gar
+    nicht erreicht (beleuchtung.nennbeleuchtung, sequenzregler.xp). Er steht
+    aus demselben Grund an der Karte wie `darstellung` und `auswahl`: nur die
+    Karte weiss, was fuer ihren eigenen Parameter gilt. Leer lassen, wo die
+    Beschriftung samt Einheit schon alles sagt - ein Hinweis an jedem Feld
+    liest sich niemand mehr durch.
+
     `minimum`/`maximum` tragen die physikalisch zulaessige Spanne, wenn es eine
     gibt (siehe pruefe_wert() unten) - None heisst "keine Grenze". Sie gehoeren
     an den Parameter und nicht an eine zentrale Prueffunktion, aus demselben
@@ -141,6 +161,7 @@ class Param:
     dezimalstellen: int = 1
     minimum: float | None = None
     maximum: float | None = None
+    hinweis: str = ""
 
 
 def pruefe_wert(param: "Param", wert) -> str | None:
@@ -253,6 +274,14 @@ class Baustein:
     # core.anlagen.messwerte_von(). Fehlt ein Eintrag, dient der Schluessel
     # selbst als Beschriftung.
     AUSGABE_LABEL: dict = {}
+    # Menschenlesbare Beschriftung fuer EINGANGs-Anschluesse, die weder in
+    # AUSGABE_LABEL stehen noch einen gleichnamigen Parameter haben. Ohne sie
+    # faellt der Anschluesse-Abschnitt des Parameterfensters auf die blosse
+    # Rolle zurueck, und ein Raum zeigt zehnmal "Messwert" - unbrauchbar fuer
+    # jemanden, der das Fach nicht kennt. AUSGABE_LABEL kann das nicht leisten:
+    # dort stehen ausschliesslich AUSGABEN-Schluessel, und core.ergebnisse
+    # sowie core.anlagen.messwerte_von() lesen es genau so.
+    PORT_LABEL: dict = {}
 
     @classmethod
     def vorgabeparameter(cls) -> dict:
@@ -331,6 +360,32 @@ def hole(kennung: str):
 
 def alle() -> list:
     return list(_REGISTER.values())
+
+
+def port_label(klasse, basis_schluessel: str, rolle: str) -> str:
+    """Menschenlesbare Beschriftung eines Anschlusses von `klasse`.
+
+    Vier Quellen, in dieser Reihenfolge - jede naeher an der Karte als die
+    naechste: die eigene Portbeschriftung (PORT_LABEL), die Beschriftung der
+    gleichnamigen Ausgabegroesse (AUSGABE_LABEL), das Label des gleichnamigen
+    Parameters, zuletzt die uebersetzte Rolle (ROLLEN_LABEL). Nie der rohe,
+    technische Schluessel.
+
+    `basis_schluessel` ist der Grundname ohne die laufende Nummer, die die
+    Anlage dynamischen Anschluessen anhaengt (core.graph: PortInstanz.basis) -
+    fuer eine Kartenklasse ohne Anlage ist das der Portschluessel selbst.
+    Gebraucht von core.anlagen._port_label (Parameterfenster) und
+    routes/lehre.py (Erklaerbereich); beide sollen dieselbe Beschriftung
+    zeigen.
+    """
+    for quelle in (klasse.PORT_LABEL, klasse.AUSGABE_LABEL):
+        label = quelle.get(basis_schluessel)
+        if label:
+            return label
+    feld = next((p for p in klasse.PARAMETER if p.schluessel == basis_schluessel), None)
+    if feld is not None:
+        return feld.label
+    return ROLLEN_LABEL.get(rolle, rolle)
 
 
 def uhrzeit_anzeigen(tagesanteil: float) -> str:

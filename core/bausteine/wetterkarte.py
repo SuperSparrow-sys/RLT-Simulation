@@ -33,14 +33,17 @@ class Wetterkarte(Baustein):
     ]
 
     AUSGABEN = list(FELDER)
+    # Die Einheit steht in der Beschriftung, weil diese Karte fast nur ueber
+    # ihre Anschluesse wahrgenommen wird - im Parameterfenster hat sie kein
+    # einziges Feld, an dem sonst eine Einheit haengen koennte.
     AUSGABE_LABEL = {
-        "T_AU": "Außentemperatur",
-        "F_AU": "Außenfeuchte",
-        "QH_S": "Strahlung Süd",
-        "QH_O": "Strahlung Ost",
-        "QH_W": "Strahlung West",
-        "QH_N": "Strahlung Nord",
-        "QH_H": "Strahlung Horizontal",
+        "T_AU": "Außentemperatur (°C)",
+        "F_AU": "Außenfeuchte, absolut (g/kg)",
+        "QH_S": "Sonneneinstrahlung Süd (W/m²)",
+        "QH_O": "Sonneneinstrahlung Ost (W/m²)",
+        "QH_W": "Sonneneinstrahlung West (W/m²)",
+        "QH_N": "Sonneneinstrahlung Nord (W/m²)",
+        "QH_H": "Sonneneinstrahlung waagerecht (W/m²)",
     }
 
     def berechne(self, ein, p, zustand):

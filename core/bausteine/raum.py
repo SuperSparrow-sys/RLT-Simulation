@@ -29,54 +29,125 @@ class Raum(Baustein):
     SYMBOL = "raum.svg"
 
     PARAMETER = [
-        Param("laenge_a", "Länge a", "m", 22.0, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
-        Param("laenge_b", "Länge b", "m", 33.0, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
-        Param("laenge_c", "Länge c", "m", 22.0, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
-        Param("laenge_d", "Länge d", "m", 33.0, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
-        Param("laenge_e", "Länge e", "m", 0.0, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
+        # Die vier Seiten a bis d bilden den Grundriss (im Uhrzeigersinn); ihre
+        # Himmelsrichtung ergibt sich aus 'ausrichtung' weiter unten.
+        Param("laenge_a", "Länge Seite a", "m", 22.0, darstellung=ZAHL, dezimalstellen=1, minimum=0.0,
+              hinweis="Die vier Seiten a bis d bilden den Grundriss; die Grundfläche "
+                      "wird aus den Mittelwerten (a+c)/2 mal (b+d)/2 gebildet."),
+        Param("laenge_b", "Länge Seite b", "m", 33.0, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
+        Param("laenge_c", "Länge Seite c", "m", 22.0, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
+        Param("laenge_d", "Länge Seite d", "m", 33.0, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
+        # laenge_e geht nur in den Umfang ein (dort zweifach) und damit in die
+        # Innenwandflaeche - Transmission und Fenster kennen keine Seite e.
+        Param("laenge_e", "Länge zusätzlicher Innenwände (Seite e)", "m", 0.0,
+              darstellung=ZAHL, dezimalstellen=1, minimum=0.0,
+              hinweis="Zählt nur bei der speicherwirksamen Innenwandfläche mit, und "
+                      "zwar doppelt (beide Seiten). Sie hat keinen U-Wert, kein "
+                      "Fenster und keine Wärmeverluste nach außen."),
         # aw_anteil_*/dach_anteil/boden_anteil sind Anteile einer Flaeche (siehe
         # geometrie() unten, l * a) - wie ein Prozentwert nicht ueber 1 (=100 %).
-        Param("aw_anteil_a", "Außenwand a", "-", 1.0, darstellung=ZAHL, dezimalstellen=2, minimum=0.0, maximum=1.0),
-        Param("aw_anteil_b", "Außenwand b", "-", 0.5, darstellung=ZAHL, dezimalstellen=2, minimum=0.0, maximum=1.0),
-        Param("aw_anteil_c", "Außenwand c", "-", 0.35, darstellung=ZAHL, dezimalstellen=2, minimum=0.0, maximum=1.0),
-        Param("aw_anteil_d", "Außenwand d", "-", 1.0, darstellung=ZAHL, dezimalstellen=2, minimum=0.0, maximum=1.0),
-        Param("aw_anteil_e", "Außenwand e", "-", 0.0, darstellung=ZAHL, dezimalstellen=2, minimum=0.0, maximum=1.0),
-        Param("u_wand_a", "U Wand a", "W/m²K", 1.62, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
-        Param("u_wand_b", "U Wand b", "W/m²K", 1.9, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
-        Param("u_wand_c", "U Wand c", "W/m²K", 1.9, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
-        Param("u_wand_d", "U Wand d", "W/m²K", 1.9, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
-        Param("fenster_a", "Fenster a", "m²", 0.0, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
-        Param("fenster_b", "Fenster b", "m²", 72.6, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
-        Param("fenster_c", "Fenster c", "m²", 0.0, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
-        Param("fenster_d", "Fenster d", "m²", 123.8, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
-        Param("u_fenster_a", "U Fenster a", "W/m²K", 2.5, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
-        Param("u_fenster_b", "U Fenster b", "W/m²K", 2.5, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
-        Param("u_fenster_c", "U Fenster c", "W/m²K", 2.5, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
-        Param("u_fenster_d", "U Fenster d", "W/m²K", 2.5, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
+        Param("aw_anteil_a", "Außenwandanteil Seite a", "Anteil 0–1", 1.0,
+              darstellung=ZAHL, dezimalstellen=2, minimum=0.0, maximum=1.0,
+              hinweis="Welcher Teil dieser Seite an die Außenluft grenzt: 1,0 = ganz "
+                      "außen, 0,5 = zur Hälfte an einen Nachbarraum, 0 = ganz innen."),
+        Param("aw_anteil_b", "Außenwandanteil Seite b", "Anteil 0–1", 0.5,
+              darstellung=ZAHL, dezimalstellen=2, minimum=0.0, maximum=1.0),
+        Param("aw_anteil_c", "Außenwandanteil Seite c", "Anteil 0–1", 0.35,
+              darstellung=ZAHL, dezimalstellen=2, minimum=0.0, maximum=1.0),
+        Param("aw_anteil_d", "Außenwandanteil Seite d", "Anteil 0–1", 1.0,
+              darstellung=ZAHL, dezimalstellen=2, minimum=0.0, maximum=1.0),
+        # geometrie() nimmt nur die Anteile a bis d entgegen - aw_anteil_e wird
+        # nirgends gelesen, so wie es auch die Excel-Vorlage nicht tut.
+        Param("aw_anteil_e", "Außenwandanteil Seite e - ohne Wirkung", "Anteil 0–1", 0.0,
+              darstellung=ZAHL, dezimalstellen=2, minimum=0.0, maximum=1.0,
+              hinweis="Wird nicht gerechnet: Seite e geht nur über ihre Länge in die "
+                      "Innenwandfläche ein. Wärmeverluste bilden allein die Seiten "
+                      "a bis d - so wie in der Excel-Vorlage."),
+        Param("u_wand_a", "U-Wert Wand a", "W/(m²·K)", 1.62, darstellung=ZAHL, dezimalstellen=2, minimum=0.0,
+              hinweis="Wärmedurchgang der Wand: je kleiner, desto besser gedämmt. "
+                      "Altbau ohne Dämmung rund 1,5; heutiger Neubau unter 0,3."),
+        Param("u_wand_b", "U-Wert Wand b", "W/(m²·K)", 1.9, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
+        Param("u_wand_c", "U-Wert Wand c", "W/(m²·K)", 1.9, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
+        Param("u_wand_d", "U-Wert Wand d", "W/(m²·K)", 1.9, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
+        Param("fenster_a", "Fensterfläche Seite a", "m²", 0.0, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
+        Param("fenster_b", "Fensterfläche Seite b", "m²", 72.6, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
+        Param("fenster_c", "Fensterfläche Seite c", "m²", 0.0, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
+        Param("fenster_d", "Fensterfläche Seite d", "m²", 123.8, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
+        Param("u_fenster_a", "U-Wert Fenster a", "W/(m²·K)", 2.5, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
+        Param("u_fenster_b", "U-Wert Fenster b", "W/(m²·K)", 2.5, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
+        Param("u_fenster_c", "U-Wert Fenster c", "W/(m²·K)", 2.5, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
+        Param("u_fenster_d", "U-Wert Fenster d", "W/(m²·K)", 2.5, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
         # War als "Dachanteil"/"m" beschriftet, wird aber als Winkel gerechnet
         # (math.radians() in geometrie() unten) - das war eine falsche Einheit.
-        Param("dach_laenge", "Dachneigung", "Grad", 0.0, darstellung=ZAHL, dezimalstellen=1),
-        Param("dach_anteil", "Dach Anteil", "-", 1.0, darstellung=ZAHL, dezimalstellen=2, minimum=0.0, maximum=1.0),
-        Param("u_dach", "U Dach", "W/m²K", 0.91, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
-        Param("fenster_dach", "Dachfenster", "m²", 0.0, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
-        Param("u_fenster_dach", "U Dachfenster", "W/m²K", 2.5, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
-        Param("boden_anteil", "Bodenplatte Anteil", "-", 1.0, darstellung=ZAHL, dezimalstellen=2, minimum=0.0, maximum=1.0),
-        Param("u_boden", "U Bodenplatte", "W/m²K", 0.16, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
-        Param("geschosse", "Geschosse", "-", 1.0, darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
-        Param("hoehe", "Höhe", "m", 6.15, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
-        Param("bauart", "Bauart", "Wh/(m²K)", 90.0, darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
-        Param("ausrichtung", "Ausrichtung", "Grad", 65.0, darstellung=ZAHL, dezimalstellen=1),
-        Param("waermebruecke", "Wärmebrücke", "W/(m²K)", 0.1, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
-        Param("waermeuebergang", "Wärmeüberg.", "W/m²K", 7.7, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
+        Param("dach_laenge", "Dachneigung", "Grad", 0.0, darstellung=ZAHL, dezimalstellen=1,
+              hinweis="0° ist ein Flachdach. Mit der Neigung wächst die Dachfläche: "
+                      "bei 30° sind es rund 15 % mehr als der Grundriss."),
+        Param("dach_anteil", "Anteil des Dachs nach außen", "Anteil 0–1", 1.0,
+              darstellung=ZAHL, dezimalstellen=2, minimum=0.0, maximum=1.0),
+        Param("u_dach", "U-Wert Dach", "W/(m²·K)", 0.91, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
+        Param("fenster_dach", "Fläche der Dachfenster", "m²", 0.0, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
+        Param("u_fenster_dach", "U-Wert Dachfenster", "W/(m²·K)", 2.5, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
+        Param("boden_anteil", "Anteil der Bodenplatte zum Erdreich", "Anteil 0–1", 1.0,
+              darstellung=ZAHL, dezimalstellen=2, minimum=0.0, maximum=1.0),
+        Param("u_boden", "U-Wert Bodenplatte", "W/(m²·K)", 0.16, darstellung=ZAHL, dezimalstellen=2, minimum=0.0,
+              hinweis="Hinter der Bodenplatte wird ganzjährig mit fest 10 °C "
+                      "Erdreich gerechnet, nicht mit der Außentemperatur."),
+        Param("geschosse", "Geschosse", "Anzahl", 1.0, darstellung=ZAHL, dezimalstellen=0, minimum=0.0,
+              hinweis="Wirkt allein auf die speicherwirksame Innenfläche: Jedes "
+                      "Geschoss bringt eine weitere Decke ein. Grundfläche, Volumen "
+                      "und Wärmeverluste ändern sich dadurch nicht."),
+        Param("hoehe", "Raumhöhe", "m", 6.15, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
+        Param("bauart", "Speicherfähigkeit der Innenbauteile (Bauart)", "Wh/(m²·K)", 90.0,
+              darstellung=ZAHL, dezimalstellen=0, minimum=0.0,
+              hinweis="Wie viel Wärme Wände und Decken je m² und Kelvin aufnehmen: "
+                      "rund 90 für schwere Massivbauweise, rund 30 für leichte. Je "
+                      "größer, desto langsamer wird der Raum warm - und desto länger "
+                      "hält er die Wärme."),
+        Param("ausrichtung", "Ausrichtung des Gebäudes", "Grad", 65.0, darstellung=ZAHL, dezimalstellen=1,
+              hinweis="Drehung gegen die Himmelsrichtungen: 0° heißt Seite a nach "
+                      "Norden, b nach Osten, c nach Süden, d nach Westen. 90° dreht "
+                      "jede Seite um eine Himmelsrichtung weiter; dazwischen wird die "
+                      "Einstrahlung anteilig auf beide Nachbarrichtungen verteilt."),
+        Param("waermebruecke", "Zuschlag für Wärmebrücken", "W/(m²·K)", 0.1,
+              darstellung=ZAHL, dezimalstellen=2, minimum=0.0,
+              hinweis="Pauschaler Aufschlag auf die gesamte Hüllfläche für "
+                      "Anschlüsse, Stützen und Durchdringungen."),
+        Param("waermeuebergang", "Wärmeübergang Raumluft an Innenbauteile", "W/(m²·K)", 7.7,
+              darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
         # g-Faktor und Verschattung sind Anteile durchgelassener Strahlung - wie
         # ein Prozentwert nicht ueber 1 (=100 %), siehe solargewinn() unten.
-        Param("g_faktor", "g-Faktor", "-", 0.8, darstellung=ZAHL, dezimalstellen=2, minimum=0.0, maximum=1.0),
-        Param("verschattung_1", "Verschattung 1", "-", 0.7, darstellung=ZAHL, dezimalstellen=2, minimum=0.0, maximum=1.0),
-        Param("verschattung_2", "Verschattung 2", "-", 0.9, darstellung=ZAHL, dezimalstellen=2, minimum=0.0, maximum=1.0),
-        Param("verschattung_3", "Verschattung 3", "-", 0.9, darstellung=ZAHL, dezimalstellen=2, minimum=0.0, maximum=1.0),
-        Param("verschattung_4", "Verschattung 4", "-", 1.0, darstellung=ZAHL, dezimalstellen=2, minimum=0.0, maximum=1.0),
-        Param("spez_beleuchtung", "spez. Leistung Beleuchtung", "W/m²", 2.0, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
-        Param("start_temperatur", "Starttemperatur", "°C", 20.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("g_faktor", "Energiedurchlass der Verglasung (g-Wert)", "Anteil 0–1", 0.8,
+              darstellung=ZAHL, dezimalstellen=2, minimum=0.0, maximum=1.0,
+              hinweis="Welcher Teil der auftreffenden Sonnenenergie durchs Glas in "
+                      "den Raum kommt: 0,8 = 80 % bei Einfachglas, 0,5 bis 0,6 bei "
+                      "Sonnenschutzverglasung."),
+        # verschattung_1/2 wirken auf alle Fenster, verschattung_3 nur auf die
+        # Fassade, verschattung_4 wieder auf alle (siehe solargewinn(): die
+        # Fassade bekommt v1*v2*v3*v4, das Dachfenster v1*v2*v4).
+        Param("verschattung_1", "Verschattung 1 (alle Fenster)", "Anteil 0–1", 0.7,
+              darstellung=ZAHL, dezimalstellen=2, minimum=0.0, maximum=1.0,
+              hinweis="Durchlassanteil einer Verschattung: 1,0 verschattet nicht, 0,7 "
+                      "lässt 70 % der Strahlung durch. Die vier Werte werden "
+                      "miteinander malgenommen - für Umgebung, Rahmen, Jalousie und "
+                      "Ähnliches."),
+        Param("verschattung_2", "Verschattung 2 (alle Fenster)", "Anteil 0–1", 0.9,
+              darstellung=ZAHL, dezimalstellen=2, minimum=0.0, maximum=1.0),
+        Param("verschattung_3", "Verschattung 3 (nur Fassadenfenster)", "Anteil 0–1", 0.9,
+              darstellung=ZAHL, dezimalstellen=2, minimum=0.0, maximum=1.0,
+              hinweis="Wirkt als einzige nicht auf die Dachfenster - dort steht "
+                      "stattdessen nur Verschattung 1, 2 und 4."),
+        Param("verschattung_4", "Verschattung 4 (alle Fenster)", "Anteil 0–1", 1.0,
+              darstellung=ZAHL, dezimalstellen=2, minimum=0.0, maximum=1.0),
+        Param("spez_beleuchtung", "Spezifische Beleuchtungsleistung", "W/m²", 2.0,
+              darstellung=ZAHL, dezimalstellen=1, minimum=0.0,
+              hinweis="Wird rund um die Uhr als Wärme angesetzt, ohne Zeitplan. Wer "
+                      "die Beleuchtung nur im Betrieb rechnen will, setzt diesen Wert "
+                      "auf 0 und hängt die eigene Karte „Beleuchtung“ an die "
+                      "Wärmelast."),
+        Param("start_temperatur", "Starttemperatur von Raum und Wänden", "°C", 20.0,
+              darstellung=ZAHL, dezimalstellen=1,
+              hinweis="Nur der Anfangswert der ersten gerechneten Stunde; nach ein "
+                      "paar Tagen Simulation ist sein Einfluss verschwunden."),
     ]
 
     PORTS = [
@@ -97,7 +168,28 @@ class Raum(Baustein):
     ]
 
     AUSGABEN = ["T_Raum", "F_Raum", "T_Wand", "QH_Solar", "Q_Bel", "Q_Raum"]
-    AUSGABE_LABEL = {"T_Raum": "Raumtemperatur", "F_Raum": "Raumfeuchte"}
+    AUSGABE_LABEL = {
+        "T_Raum": "Raumtemperatur (°C)",
+        "F_Raum": "Raumfeuchte, absolut (g/kg)",
+        "T_Wand": "Temperatur der Innenbauteile (°C)",
+        "QH_Solar": "Sonneneintrag durch die Fenster (kW)",
+        "Q_Bel": "Beleuchtungswärme (kW)",
+        "Q_Raum": "Wärmeinhalt der Raumluft (kWh)",
+    }
+    # Zehn Signaleingaenge, alle mit der Rolle "Messwert": ohne eigene
+    # Beschriftung stuenden im Parameterfenster zehn Zeilen "Messwert".
+    PORT_LABEL = {
+        "T_AU": "Außentemperatur (°C)",
+        "F_AU": "Außenfeuchte, absolut (g/kg)",
+        "QH_S": "Sonneneinstrahlung Süd (W/m²)",
+        "QH_O": "Sonneneinstrahlung Ost (W/m²)",
+        "QH_W": "Sonneneinstrahlung West (W/m²)",
+        "QH_N": "Sonneneinstrahlung Nord (W/m²)",
+        "QH_H": "Sonneneinstrahlung waagerecht (W/m²)",
+        "waermelast": "innere Wärmelast (kW)",
+        "feuchtelast": "innere Feuchtelast (kg/h)",
+        "QH_stat": "Leistung der statischen Heizung (kW)",
+    }
 
     # -- Geometrie -------------------------------------------------------
 

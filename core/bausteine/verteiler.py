@@ -22,7 +22,10 @@ class Verteiler(Baustein):
     SYMBOL = "verteiler.svg"
 
     PARAMETER = [
-        Param("anteile", "Anteile je Gang", "%", {}, darstellung=ANTEILE)
+        Param("anteile", "Anteile je Gang", "%", {}, darstellung=ANTEILE,
+              hinweis="Notaufteilung: Sie greift nur, wenn hinter keinem Gang ein "
+                      "Ventilator steht, der die Luftmenge selbst bestimmt. "
+                      "Normalerweise fordert jeder Gang seinen Bedarf an.")
     ]
 
     PORTS = [
@@ -31,6 +34,7 @@ class Verteiler(Baustein):
     ]
 
     AUSGABEN = ["warnung"]
+    AUSGABE_LABEL = {"warnung": "Warnung"}
 
     def __init__(self):
         # Vertrag mit dem Solver: Diese beiden Felder gehoeren NICHT zum

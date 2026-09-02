@@ -18,8 +18,10 @@ class Datenlogger(Baustein):
     SYMBOL = "datenlogger.svg"
 
     PARAMETER = [
-        Param("namen", "Spaltennamen", "", [""] * ANZAHL, darstellung=TEXTLISTE),
-        Param("einheiten", "Einheiten", "", [""] * ANZAHL, darstellung=TEXTLISTE),
+        # TEXTLISTE-Felder zeigt das Parameterfenster als gemeinsames Gitter mit
+        # der Ueberschrift "Spaltenname / Einheit" - deshalb kurze Labels.
+        Param("namen", "Spaltenname", "", [""] * ANZAHL, darstellung=TEXTLISTE),
+        Param("einheiten", "Einheit", "", [""] * ANZAHL, darstellung=TEXTLISTE),
     ]
 
     PORTS = [

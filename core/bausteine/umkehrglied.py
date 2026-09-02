@@ -26,7 +26,11 @@ class Umkehrglied(Baustein):
     # "bezug" war mit "-" beschriftet, obwohl gegen ein 0-100-Prozent-Signal
     # gespiegelt wird (siehe Docstring oben und berechne() unten).
     PARAMETER = [
-        Param("bezug", "Bezugswert", "%", 100.0, darstellung=PROZENT, dezimalstellen=1, minimum=0.0, maximum=100.0)
+        Param("bezug", "Bezugswert", "%", 100.0,
+              darstellung=PROZENT, dezimalstellen=1, minimum=0.0, maximum=100.0,
+              hinweis="Der Ausgang ist Bezugswert minus Eingang: Aus 30 % werden bei "
+                      "einem Bezugswert von 100 % wieder 70 %. So wird aus einem "
+                      "Regler, der „zufahren“ meldet, ein „auffahren“.")
     ]
 
     PORTS = [
@@ -35,6 +39,8 @@ class Umkehrglied(Baustein):
     ]
 
     AUSGABEN = ["ausgang"]
+    AUSGABE_LABEL = {"ausgang": "Ausgangssignal (0–100 %)"}
+    PORT_LABEL = {"ein": "Eingangssignal (0–100 %)"}
 
     def berechne(self, ein, p, zustand):
         wert = p["bezug"] - float(ein.get("ein", 0.0))

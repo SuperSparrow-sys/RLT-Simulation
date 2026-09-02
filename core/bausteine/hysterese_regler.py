@@ -18,14 +18,22 @@ class HystereseRegler(Baustein):
     SYMBOL = "hysterese_regler.svg"
 
     PARAMETER = [
-        Param("hysterese", "Hysterese", "-", 0.1, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
-        Param("sollwert", "Sollwert", "-", 0.0, darstellung=ZAHL, dezimalstellen=2),
+        Param("hysterese", "Schaltdifferenz (Hysterese)", "Einheit des Istwerts", 0.1,
+              darstellung=ZAHL, dezimalstellen=2, minimum=0.0,
+              hinweis="Der Ausgang springt erst auf 100 %, wenn der Istwert um die "
+                      "halbe Schaltdifferenz ÜBER dem Sollwert liegt, und zurück auf "
+                      "0 %, wenn er ebenso weit darunter liegt. Dazwischen bleibt er, "
+                      "wie er war - das verhindert ständiges Ein- und Ausschalten."),
+        Param("sollwert", "Sollwert", "Einheit des Istwerts", 0.0,
+              darstellung=ZAHL, dezimalstellen=2),
         # Anlage!AB56: Beim Waescherregler steht hier eine feste Zahl, und der
         # Sollwert kommt als Raumfeuchte von aussen. Befeuchtet wird, wenn der Raum
         # trockener ist als diese Zahl. Der Baustein ist dimensionsneutral - je
-        # nachdem, was hier angeschlossen wird, ist es eine Temperatur oder eine
-        # Feuchte; die Einheit bleibt deshalb bewusst "-".
-        Param("istwert", "Istwert (fest)", "-", 0.0, darstellung=ZAHL, dezimalstellen=2),
+        # nachdem, was hier angeschlossen wird, ist es eine Temperatur (°C) oder
+        # eine Feuchte (g/kg). Statt eines nichtssagenden "-" nennt die Einheit
+        # deshalb ihren Bezug: "Einheit des Istwerts".
+        Param("istwert", "Istwert (fest)", "Einheit des Istwerts", 0.0,
+              darstellung=ZAHL, dezimalstellen=2),
     ]
 
     PORTS = [
@@ -35,6 +43,7 @@ class HystereseRegler(Baustein):
     ]
 
     AUSGABEN = ["ausgang"]
+    AUSGABE_LABEL = {"ausgang": "Schaltausgang (0 oder 100 %)"}
 
     def berechne(self, ein, p, zustand):
         # Ist der Sollwert-Port nicht belegt, gilt der eingestellte Parameter.

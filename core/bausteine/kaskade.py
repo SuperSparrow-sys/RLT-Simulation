@@ -23,13 +23,33 @@ class RaumZuluftKaskade(Baustein):
     SYMBOL = "kaskade.svg"
 
     PARAMETER = [
-        Param("T_Raum_min", "min. T_Raum", "°C", 22.0, darstellung=ZAHL, dezimalstellen=1),
-        Param("T_AU_min", "bei T_AU", "°C", 20.0, darstellung=ZAHL, dezimalstellen=1),
-        Param("T_Raum_max", "max. T_Raum", "°C", 28.0, darstellung=ZAHL, dezimalstellen=1),
-        Param("T_AU_max", "bei T_AU", "°C", 32.0, darstellung=ZAHL, dezimalstellen=1),
-        Param("T_ZU_min", "min. T_ZU", "°C", 16.0, darstellung=ZAHL, dezimalstellen=1),
-        Param("T_ZU_max", "max. T_ZU", "°C", 25.0, darstellung=ZAHL, dezimalstellen=1),
-        Param("xp", "Xp", "-", 5.0, darstellung=ZAHL, dezimalstellen=1),
+        # "bei T_AU" stand zweimal wortgleich an zwei verschiedenen Parametern -
+        # im Parameterfenster waren die beiden Zeilen nicht zu unterscheiden.
+        Param("T_Raum_min", "Unterer Raumsollwert", "°C", 22.0,
+              darstellung=ZAHL, dezimalstellen=1,
+              hinweis="Gilt an kalten Tagen. Zwischen den beiden Außentemperaturen "
+                      "unten wandert der Raumsollwert geradlinig vom unteren zum "
+                      "oberen Wert - im Sommer darf es drinnen wärmer sein."),
+        Param("T_AU_min", "Unterer Raumsollwert gilt bis Außentemperatur", "°C", 20.0,
+              darstellung=ZAHL, dezimalstellen=1),
+        Param("T_Raum_max", "Oberer Raumsollwert", "°C", 28.0,
+              darstellung=ZAHL, dezimalstellen=1),
+        Param("T_AU_max", "Oberer Raumsollwert gilt ab Außentemperatur", "°C", 32.0,
+              darstellung=ZAHL, dezimalstellen=1),
+        Param("T_ZU_min", "Tiefste erlaubte Zulufttemperatur", "°C", 16.0,
+              darstellung=ZAHL, dezimalstellen=1,
+              hinweis="Zuluftbegrenzung mit Vorrang: Verlässt die Zuluft dieses "
+                      "Fenster, regelt die Kaskade zuerst sie zurück und lässt den "
+                      "Raumsollwert so lange außer Acht - sonst zöge es im Raum."),
+        Param("T_ZU_max", "Höchste erlaubte Zulufttemperatur", "°C", 25.0,
+              darstellung=ZAHL, dezimalstellen=1),
+        # Anlage!Q140 teilt fest durch 3 - wie beim Sequenzregler geht die
+        # Xp-Zelle des Blocks in die Formel nicht ein.
+        Param("xp", "Proportionalbereich (Xp) - ohne Wirkung", "K", 5.0,
+              darstellung=ZAHL, dezimalstellen=1,
+              hinweis="Wird nicht gerechnet: Die Karte bildet die Regelabweichung wie "
+                      "die Excel-Vorlage mit einem festen Teiler (Abweichung ÷ 3 K je "
+                      "Durchgang). Ein anderer Wert ändert das Ergebnis nicht."),
     ]
 
     PORTS = [
@@ -48,7 +68,20 @@ class RaumZuluftKaskade(Baustein):
         "sollwert", "waermer_3", "waermer_2", "waermer_1",
         "kaelter_1", "kaelter_2", "e",
     ]
-    AUSGABE_LABEL = {"sollwert": "gleitender Raumsollwert"}
+    AUSGABE_LABEL = {
+        "sollwert": "gleitender Raumsollwert (°C)",
+        "waermer_1": "Heizen Stufe 1 - öffnet zuerst (0–100 %)",
+        "waermer_2": "Heizen Stufe 2 (0–100 %)",
+        "waermer_3": "Heizen Stufe 3 - öffnet zuletzt (0–100 %)",
+        "kaelter_1": "Kühlen Stufe 1 - öffnet zuerst (0–100 %)",
+        "kaelter_2": "Kühlen Stufe 2 - öffnet zuletzt (0–100 %)",
+        "e": "Regelabweichung (−300 bis +200)",
+    }
+    PORT_LABEL = {
+        "T_AU": "Außentemperatur (°C)",
+        "T_Raum": "Raumtemperatur (°C)",
+        "T_ZU": "Zulufttemperatur (°C)",
+    }
 
     def gleitender_sollwert(self, T_AU, p):
         if T_AU < p["T_AU_min"]:

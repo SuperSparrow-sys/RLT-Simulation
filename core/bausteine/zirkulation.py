@@ -14,9 +14,15 @@ class Zirkulation(Baustein):
     SYMBOL = "zirkulation.svg"
 
     PARAMETER = [
-        Param("volumenstrom", "Zirkulation", "m³/h", 1.5, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
-        Param("spreizung", "Zirk. VL-RL", "K", 5.0, darstellung=ZAHL, dezimalstellen=1),
-        Param("P_pumpe", "Zirk_PU", "kW", 0.04, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
+        Param("volumenstrom", "Umgewälzter Wasserstrom", "m³/h", 1.5,
+              darstellung=ZAHL, dezimalstellen=1, minimum=0.0,
+              hinweis="Die Zirkulationsleitung hält das Warmwasser in Bewegung, damit "
+                      "an jeder Zapfstelle sofort warmes Wasser ankommt. Der Verlust "
+                      "wird mit 75 % der rechnerischen Leistung angesetzt."),
+        Param("spreizung", "Abkühlung zwischen Vorlauf und Rücklauf", "K", 5.0,
+              darstellung=ZAHL, dezimalstellen=1),
+        Param("P_pumpe", "Leistung der Zirkulationspumpe", "kW", 0.04,
+              darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
     ]
 
     PORTS = [
@@ -26,6 +32,10 @@ class Zirkulation(Baustein):
     ]
 
     AUSGABEN = ["QH", "PE"]
+    AUSGABE_LABEL = {
+        "QH": "Wärmeverlust der Leitung (kW)",
+        "PE": "elektrische Leistung der Pumpe (kW)",
+    }
 
     def berechne(self, ein, p, zustand):
         betrieb = float(ein.get("betrieb", 0.0))

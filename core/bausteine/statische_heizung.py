@@ -17,7 +17,12 @@ class StatischeHeizung(Baustein):
     GRUPPE = "Räume"
     SYMBOL = "statische_heizung.svg"
 
-    PARAMETER = [Param("QH_nenn", "QH_nenn", "kW", 0.0, darstellung=ZAHL, dezimalstellen=1, minimum=0.0)]
+    PARAMETER = [
+        Param("QH_nenn", "Nennheizleistung (QH_nenn)", "kW", 0.0,
+              darstellung=ZAHL, dezimalstellen=1, minimum=0.0,
+              hinweis="Obergrenze: Fordert der Raum mehr, gibt die Heizung trotzdem "
+                      "nur diese Leistung ab. 0 heißt, sie heizt gar nicht.")
+    ]
 
     PORTS = [
         # Der Anschluss heisst wie die Groesse, die er aufnimmt. Ein namenloser
@@ -28,6 +33,8 @@ class StatischeHeizung(Baustein):
     ]
 
     AUSGABEN = ["QH"]
+    AUSGABE_LABEL = {"QH": "abgegebene Heizleistung (kW)"}
+    PORT_LABEL = {"QH_stat": "vom Raum geforderte Heizleistung (kW)"}
 
     def berechne(self, ein, p, zustand):
         gefordert = float(ein.get("QH_stat", 0.0))

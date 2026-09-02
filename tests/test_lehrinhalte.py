@@ -134,3 +134,29 @@ def test_name_projekt_stimmt_mit_core_anlagen_lehrmaterial_konstante_ueberein():
     der beiden Stellen trifft und die Startseite die Beispielanlagen dann
     wieder zwischen die eigenen Projekte des Benutzers mischt."""
     assert anlagen.NAME_PROJEKT_LEHRMATERIAL == beispielanlagen.NAME_PROJEKT
+
+
+def test_erklaerbereich_zeigt_lesbare_anschluesse_und_die_hinweise_der_karten(app):
+    """Der Erklärbereich soll dieselben Beschriftungen zeigen wie das
+    Parameterfenster - vorher stand hier der rohe Schlüssel ("QH_S – Signal,
+    Eingang"), den nur versteht, wer die Excel-Vorlage kennt. Und der
+    Erklärsatz eines Parameters (Param.hinweis) gehört auf beide Seiten,
+    damit sie nicht auseinanderlaufen."""
+    with app.test_client() as klient:
+        antwort = klient.get("/api/lehre/bausteine")
+    assert antwort.status_code == 200
+    eintraege = {e["kennung"]: e for e in antwort.get_json()}
+
+    raum = eintraege["raum"]
+    anschluesse = {p["schluessel"]: p["label"] for p in raum["ports"]}
+    assert anschluesse["QH_S"] == "Sonneneinstrahlung Süd (W/m²)"
+    assert anschluesse["T_Raum"] == "Raumtemperatur (°C)"
+    for port in raum["ports"]:
+        assert port["label"] and port["label"] != port["schluessel"]
+
+    lastgang = next(
+        p for p in eintraege["tageslastprofil"]["parameter"]
+        if p["schluessel"] == "lastgang_1"
+    )
+    assert lastgang["einheit"] == "Anteil 0–1"
+    assert "Nennlast" in lastgang["hinweis"]

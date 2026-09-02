@@ -19,6 +19,10 @@ function zeigeFehler(nachricht) {
 const ART_LABEL = { luft: "Luft", signal: "Signal" };
 const RICHTUNG_LABEL = { ein: "Eingang", aus: "Ausgang" };
 
+/* port.label kommt von der Karte selbst (core.bausteine.basis.port_label) -
+   dieselbe Beschriftung wie im Parameterfenster des Editors. Vorher stand hier
+   der rohe Schluessel ("QH_S – Signal, Eingang"), den nur versteht, wer die
+   Excel-Vorlage kennt. */
 function anschlussZeile(port) {
   const li = document.createElement("li");
   const punkt = document.createElement("span");
@@ -26,14 +30,24 @@ function anschlussZeile(port) {
   li.appendChild(punkt);
   const art = ART_LABEL[port.art] || port.art;
   const richtung = RICHTUNG_LABEL[port.richtung] || port.richtung;
-  li.appendChild(document.createTextNode(`${port.schluessel} – ${art}, ${richtung}`));
+  li.appendChild(
+    document.createTextNode(`${port.label || port.schluessel} – ${art}, ${richtung}`)
+  );
   return li;
 }
 
 function parameterZeile(feld) {
   const li = document.createElement("li");
   const einheit = feld.einheit && feld.einheit !== "-" ? ` (${feld.einheit})` : "";
-  li.textContent = `${feld.label}${einheit}`;
+  li.appendChild(document.createTextNode(`${feld.label}${einheit}`));
+  /* Der Erklaersatz der Karte (Param.hinweis) - dieselbe Quelle wie im
+     Parameterfenster, damit beide Orte nicht auseinanderlaufen. */
+  if (feld.hinweis) {
+    const hinweis = document.createElement("span");
+    hinweis.className = "baustein-parameter-hinweis";
+    hinweis.textContent = feld.hinweis;
+    li.appendChild(hinweis);
+  }
   return li;
 }
 

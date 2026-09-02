@@ -24,14 +24,30 @@ class Bilanz(Baustein):
     SYMBOL = "bilanz.svg"
 
     PARAMETER = [
-        Param("preis_strom_ht", "Strom HT", "EUR/MWh", 150.0, darstellung=ZAHL, dezimalstellen=2),
-        Param("preis_strom_nt", "Strom NT", "EUR/MWh", 150.0, darstellung=ZAHL, dezimalstellen=2),
-        Param("preis_strom_leistung", "Strom Leist.", "EUR/kW/a", 0.0, darstellung=ZAHL, dezimalstellen=2),
-        Param("preis_waerme", "Wärme", "EUR/MWh", 50.0, darstellung=ZAHL, dezimalstellen=2),
-        Param("preis_kaelte", "Kälte", "EUR/MWh", 50.0, darstellung=ZAHL, dezimalstellen=2),
-        Param("preis_wasser", "Wasser", "EUR/m³", 4.0, darstellung=ZAHL, dezimalstellen=2),
-        Param("ht_von", "HT von", "", 7.0 / 24.0, darstellung=UHRZEIT),
-        Param("ht_bis", "HT bis", "", 20.0 / 24.0, darstellung=UHRZEIT),
+        Param("preis_strom_ht", "Strompreis Hochtarif", "EUR/MWh", 150.0,
+              darstellung=ZAHL, dezimalstellen=2,
+              hinweis="Arbeitspreis je Megawattstunde. 150 EUR/MWh sind 15 Cent je "
+                      "Kilowattstunde."),
+        Param("preis_strom_nt", "Strompreis Niedertarif", "EUR/MWh", 150.0,
+              darstellung=ZAHL, dezimalstellen=2),
+        # core/ergebnisse.py, BILANZ: die Kostenbilanz kennt nur die fuenf
+        # Arbeitspreise. Der Leistungspreis stand schon in der Mappe und bleibt
+        # als Notiz erhalten, wird aber nirgends verrechnet.
+        Param("preis_strom_leistung", "Strom-Leistungspreis - ohne Wirkung",
+              "EUR/(kW·a)", 0.0, darstellung=ZAHL, dezimalstellen=2,
+              hinweis="Wird nicht gerechnet: In die Kostenbilanz gehen nur die "
+                      "Arbeitspreise für Strom, Wärme, Kälte und Wasser ein - keine "
+                      "Leistungs- oder Grundpreise."),
+        Param("preis_waerme", "Wärmepreis", "EUR/MWh", 50.0,
+              darstellung=ZAHL, dezimalstellen=2),
+        Param("preis_kaelte", "Kältepreis", "EUR/MWh", 50.0,
+              darstellung=ZAHL, dezimalstellen=2),
+        Param("preis_wasser", "Wasserpreis", "EUR/m³", 4.0,
+              darstellung=ZAHL, dezimalstellen=2),
+        Param("ht_von", "Hochtarif von", "", 7.0 / 24.0, darstellung=UHRZEIT,
+              hinweis="Der Hochtarif gilt nur montags bis freitags zwischen diesen "
+                      "beiden Uhrzeiten; alles andere zählt als Niedertarif."),
+        Param("ht_bis", "Hochtarif bis", "", 20.0 / 24.0, darstellung=UHRZEIT),
     ]
 
     PORTS = [
@@ -43,7 +59,23 @@ class Bilanz(Baustein):
     ]
 
     AUSGABEN = ["strom_ht", "strom_nt", "waerme", "kaelte", "wasser", "hochtarif"]
-    AUSGABE_LABEL = {"hochtarif": "Hochtarif aktiv"}
+    # Die Eingaenge nehmen LEISTUNGEN auf (kW bzw. l/h), die AUSGABEN darunter
+    # sind die daraus gebildeten Stundenmengen (kWh bzw. l) - ohne eigene
+    # Portbeschriftung stuende an einem Eingang "Wärme (kWh)".
+    PORT_LABEL = {
+        "strom": "elektrische Leistung (kW)",
+        "waerme": "Wärmeleistung (kW)",
+        "kaelte": "Kälteleistung (kW)",
+        "wasser": "Wasserverbrauch (l/h)",
+    }
+    AUSGABE_LABEL = {
+        "hochtarif": "Hochtarif aktiv (1 = ja, 0 = nein)",
+        "strom_ht": "Strom im Hochtarif (kWh)",
+        "strom_nt": "Strom im Niedertarif (kWh)",
+        "waerme": "Wärme (kWh)",
+        "kaelte": "Kälte (kWh)",
+        "wasser": "Wasser (l)",
+    }
 
     def _summe(self, ein, praefix):
         return sum(

@@ -21,27 +21,44 @@ class Ventilator(Baustein):
 
     PARAMETER = [
         Param(
-            "rolle", "Zuluft/Abluft", "-", "zuluft",
+            "rolle", "Einbau im Zuluft- oder Abluftstrang", "-", "zuluft",
             auswahl=(wahl("zuluft", "Zuluft"), wahl("abluft", "Abluft")),
             darstellung=AUSWAHL,
         ),
-        Param("V_max", "V_max", "m³/h", 8200.0, darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
-        Param("dp_max", "dp_max", "Pa", 1400.0, darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
-        Param("dp_konst", "dp_konst", "Pa", 1400.0, darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
-        Param("PE_max", "PE_max", "kW", 4.9, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
+        Param("V_max", "Volumenstrom bei 100 % (V_max)", "m³/h", 8200.0,
+              darstellung=ZAHL, dezimalstellen=0, minimum=0.0,
+              hinweis="Der Ventilator bestimmt als einzige Karte die Luftmenge der "
+                      "ganzen Anlage. Bei 60 % Stellgröße fördert er 60 % davon."),
+        Param("dp_max", "Druckerhöhung bei 100 % (dp_max)", "Pa", 1400.0,
+              darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
+        Param("dp_konst", "Gleichbleibender Druckanteil (dp_konst)", "Pa", 1400.0,
+              darstellung=ZAHL, dezimalstellen=0, minimum=0.0,
+              hinweis="Der Teil der Druckerhöhung, der bei jeder Drehzahl anliegt "
+                      "(Druckregelung im Kanal). Gleich dp_max heißt: konstanter "
+                      "Druck; 0 heißt: der Druck fällt im Quadrat mit der Drehzahl."),
+        Param("PE_max", "Elektrische Leistung bei 100 % (PE_max)", "kW", 4.9,
+              darstellung=ZAHL, dezimalstellen=1, minimum=0.0,
+              hinweis="Aus V_max, dp_max und diesem Wert bildet die Karte den "
+                      "Wirkungsgrad des Ventilators."),
         Param(
-            "regelart", "FU/DD/-", "-", "F",
+            "regelart", "Art der Drehzahlregelung", "-", "F",
             auswahl=(
                 wahl("F", "Frequenzumrichter (F)"),
                 wahl("D", "Drallregler (D)"),
                 wahl("-", "ungeregelt (-)"),
             ),
             darstellung=AUSWAHL,
+            hinweis="Ungeregelt fördert der Ventilator immer die volle Luftmenge und "
+                    "nimmt immer die volle Leistung auf - die Stellgröße wirkt dann "
+                    "nicht.",
         ),
         # Wirkt nur, solange der Anschluss 'stellgroesse' unverbunden ist - das
         # Parameterfenster zeigt das anhand der Verbindungsauskunft aus
         # core.anlagen.als_json() an (siehe dortiges 'ueberschrieben_von').
-        Param("stellgroesse", "Stellgröße (fest)", "%", 100.0, darstellung=PROZENT, dezimalstellen=1, minimum=0.0, maximum=100.0),
+        Param("stellgroesse", "Stellgröße (fest)", "%", 100.0,
+              darstellung=PROZENT, dezimalstellen=1, minimum=0.0, maximum=100.0,
+              hinweis="Gilt nur, solange am Anschluss „Stellgröße“ kein Pfeil hängt. "
+                      "Sobald einer ankommt, zählt dessen Wert."),
     ]
 
     PORTS = [
@@ -53,7 +70,17 @@ class Ventilator(Baustein):
     ]
 
     AUSGABEN = ["T_aus", "F_aus", "PE", "dp", "V"]
-    AUSGABE_LABEL = {"T_aus": "Austrittstemperatur"}
+    # Ohne diesen Eintrag heisst der Anschluss wie sein gleichnamiger
+    # Parameter ("Stellgröße (fest)") - der Zusatz gilt aber dem Feld im
+    # Fenster, nicht dem Anschluss.
+    PORT_LABEL = {"stellgroesse": "Stellgröße (0–100 %)"}
+    AUSGABE_LABEL = {
+        "T_aus": "Austrittstemperatur (°C)",
+        "F_aus": "Austrittsfeuchte, absolut (g/kg)",
+        "PE": "elektrische Leistung (kW)",
+        "dp": "Druckerhöhung (Pa)",
+        "V": "geförderter Volumenstrom (m³/h)",
+    }
 
     @classmethod
     def ports_fuer(cls, p):

@@ -20,11 +20,24 @@ class Waermerueckgewinnung(Baustein):
     SYMBOL = "wrg.svg"
 
     PARAMETER = [
-        Param("V_nenn", "V_nenn", "m³/h", 12200.0, darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
-        Param("dp_WRG_nenn", "dp_WRG_nenn", "Pa", 170.0, darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
-        Param("dp_Bypass_nenn", "dp_Byp_nenn", "Pa", 50.0, darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
-        Param("rueckwaermzahl", "Rückwärmzahl", "%", 81.0, darstellung=PROZENT, dezimalstellen=1, minimum=0.0, maximum=100.0),
-        Param("rueckfeuchtzahl", "Rückfeuchtzahl", "%", 0.0, darstellung=PROZENT, dezimalstellen=1, minimum=0.0, maximum=100.0),
+        Param("V_nenn", "Nennvolumenstrom (V_nenn)", "m³/h", 12200.0,
+              darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
+        Param("dp_WRG_nenn", "Nenndruckverlust Wärmetauscher (dp_WRG_nenn)", "Pa", 170.0,
+              darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
+        Param("dp_Bypass_nenn", "Nenndruckverlust Bypass (dp_Byp_nenn)", "Pa", 50.0,
+              darstellung=ZAHL, dezimalstellen=0, minimum=0.0,
+              hinweis="Gilt für den Weg an der Wärmerückgewinnung vorbei; er ist "
+                      "meist deutlich kleiner als der durch den Tauscher."),
+        Param("rueckwaermzahl", "Rückwärmzahl (Temperatur-Wirkungsgrad)", "%", 81.0,
+              darstellung=PROZENT, dezimalstellen=1, minimum=0.0, maximum=100.0,
+              hinweis="Wie viel des Temperaturunterschieds zwischen Abluft und "
+                      "Außenluft auf die Zuluft übergeht. Beispiel: bei 80 %, 22 °C "
+                      "Abluft und 0 °C Außenluft kommt die Zuluft mit rund 18 °C an."),
+        Param("rueckfeuchtzahl", "Rückfeuchtzahl (Feuchte-Wirkungsgrad)", "%", 0.0,
+              darstellung=PROZENT, dezimalstellen=1, minimum=0.0, maximum=100.0,
+              hinweis="Nur Bauarten mit Feuchteübertragung (z. B. Rotationstauscher) "
+                      "haben hier einen Wert; Plattentauscher und Kreislaufverbund "
+                      "bleiben bei 0."),
     ]
 
     PORTS = [
@@ -46,8 +59,20 @@ class Waermerueckgewinnung(Baustein):
 
     AUSGABEN = ["T_ZU", "F_ZU", "T_FO", "F_FO", "Q_WRG", "dp_ZU", "dp_AB"]
     AUSGABE_LABEL = {
-        "Q_WRG": "rückgewonnene Leistung",
-        "T_ZU": "Zulufttemperatur",
+        "Q_WRG": "rückgewonnene Leistung (kW)",
+        "T_ZU": "Zulufttemperatur nach WRG (°C)",
+        "F_ZU": "Zuluftfeuchte, absolut (g/kg)",
+        "T_FO": "Fortlufttemperatur (°C)",
+        "F_FO": "Fortluftfeuchte, absolut (g/kg)",
+        "dp_ZU": "Druckverlust Zuluftseite (Pa)",
+        "dp_AB": "Druckverlust Abluftseite (Pa)",
+    }
+    # Zwei Stellgroessen an einer Karte: ohne eigene Beschriftung stuende im
+    # Parameterfenster zweimal "Stellgröße", auseinandergehalten nur durch eine
+    # laufende Nummer.
+    PORT_LABEL = {
+        "stellgroesse": "Stellgröße Wärmerückgewinnung (0–100 %)",
+        "stellgroesse_bypass": "Stellgröße Bypass (0–100 %)",
     }
 
     def berechne(self, ein, p, zustand):

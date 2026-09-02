@@ -20,10 +20,21 @@ class Kuehler(Baustein):
     SYMBOL = "kuehler.svg"
 
     PARAMETER = [
-        Param("V_nenn", "V_nenn", "m³/h", 8200.0, darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
-        Param("dp_nenn", "dp_nenn", "Pa", 240.0, darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
-        Param("QK_nenn", "QK_nenn", "kW", 63.0, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
-        Param("T_KW_mittel", "T_KW_mittel", "°C", 6.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("V_nenn", "Nennvolumenstrom (V_nenn)", "m³/h", 8200.0,
+              darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
+        Param("dp_nenn", "Druckverlust bei Nennvolumenstrom (dp_nenn)", "Pa", 240.0,
+              darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
+        Param("QK_nenn", "Nennkälteleistung (QK_nenn)", "kW", 63.0,
+              darstellung=ZAHL, dezimalstellen=1, minimum=0.0,
+              hinweis="Dient nur als Warngrenze: Braucht der Kühler mehr, meldet die "
+                      "Karte „Kühlleistung zu niedrig“. Begrenzt wird die gerechnete "
+                      "Leistung dadurch nicht."),
+        Param("T_KW_mittel", "Mittlere Kaltwassertemperatur (T_KW_mittel)", "°C", 6.0,
+              darstellung=ZAHL, dezimalstellen=1,
+              hinweis="Bestimmt, wie kalt die Luft überhaupt werden kann. Die "
+                      "Oberfläche des Kühlers wird mit Kaltwassertemperatur plus 15 % "
+                      "des Abstands zur eintretenden Luft gerechnet; unter deren "
+                      "Taupunkt fällt Wasser aus und die Luft wird entfeuchtet."),
     ]
 
     PORTS = [
@@ -35,7 +46,13 @@ class Kuehler(Baustein):
     ]
 
     AUSGABEN = ["T_aus", "F_aus", "QK", "dp", "warnung"]
-    AUSGABE_LABEL = {"T_aus": "Austrittstemperatur"}
+    AUSGABE_LABEL = {
+        "T_aus": "Austrittstemperatur (°C)",
+        "F_aus": "Austrittsfeuchte, absolut (g/kg)",
+        "QK": "Kälteleistung (kW)",
+        "dp": "Druckverlust (Pa)",
+        "warnung": "Warnung",
+    }
 
     def oberflaechentemperatur(self, T_ein, p):
         return p["T_KW_mittel"] + 0.15 * (T_ein - p["T_KW_mittel"])

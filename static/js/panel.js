@@ -139,9 +139,26 @@ const Panel = {
     if (textlisten.length) panel.appendChild(this.zeileTextlisten(karte, textlisten));
   },
 
+  // Ein Parameter samt seinem Erklaersatz. Der Hinweis kommt von der Karte
+  // (core/bausteine/basis.py: Param.hinweis) und steht unter dem Eingabefeld -
+  // hier und nicht in den einzelnen Renderern, damit er unabhaengig von der
+  // Darstellungsart immer an derselben Stelle erscheint.
+  feldZeile(karte, feld) {
+    const zeile = this.feldEingabe(karte, feld);
+    if (!feld.hinweis) return zeile;
+    // In die Zeile hinein, nicht um sie herum: .panel-zeile ist eine
+    // Flex-Spalte mit 4px Abstand, der Hinweis rueckt damit direkt unter das
+    // Eingabefeld und noch vor dessen Abstand zum naechsten Parameter.
+    const hinweis = document.createElement("p");
+    hinweis.className = "panel-hinweis";
+    hinweis.textContent = feld.hinweis;
+    zeile.appendChild(hinweis);
+    return zeile;
+  },
+
   // Verteilt jeden Parameter an GENAU einen Renderer, allein anhand seiner
   // Darstellungsangabe - keine Fallunterscheidung nach Kartentyp.
-  feldZeile(karte, feld) {
+  feldEingabe(karte, feld) {
     const wert = karte.parameter[feld.schluessel];
     if (feld.ueberschrieben_von) return this.zeileUeberschrieben(feld);
     switch (feld.darstellung) {
@@ -549,7 +566,13 @@ const Panel = {
 
       const beschriftung = document.createElement("span");
       beschriftung.className = "panel-anteil-ziel";
-      beschriftung.textContent = this.zielBeschriftung(ziel.id) || ziel.schluessel;
+      // Noch unverbundene Gaenge zeigten ihren rohen Schluessel ("luft_aus_3").
+      // Stattdessen die Beschriftung des Anschlusses samt laufender Nummer -
+      // dieselbe Schreibweise wie im Abschnitt "Anschlüsse" unten.
+      const nummer = (ziel.schluessel.match(/_(\d+)$/) || [])[1];
+      const eigenname = nummer ? `${ziel.label} ${nummer}` : ziel.label;
+      beschriftung.textContent =
+        this.zielBeschriftung(ziel.id) || `${eigenname} – nicht verbunden`;
       zeile.appendChild(beschriftung);
 
       const wrapper = document.createElement("div");
@@ -682,8 +705,9 @@ const Panel = {
   // sollwert_2 zum zweiten Regelkreis - siehe core/bausteine/p_regler.py).
   // Ports ohne Nummer (die meisten Regler haben nur einen Kreis) bilden eine
   // einzelne, unbetitelte Gruppe. Die Ueberschrift einer nummerierten Gruppe
-  // kommt vom zugehoerigen Xp-Parameter ("Xp Regler 1 (schnell)" ->
-  // "Regler 1 (schnell)") - existiert der nicht, faellt sie auf
+  // kommt vom zugehoerigen Xp-Parameter, dem der Groessenname vorne
+  // abgeschnitten wird ("Xp (Proportionalbereich) Regler 1 (schnell)" ->
+  // "Regler 1 (schnell)") - existiert er nicht, faellt sie auf
   // "Regelkreis <Nummer>" zurueck. Rein strukturell, kein Kartentyp-Name im
   // Code.
   ermittleRegelkreise(karte) {
@@ -701,7 +725,9 @@ const Panel = {
         let titel = null;
         if (nummer) {
           const xp = karte.felder.find((f) => f.schluessel === `xp_${nummer}`);
-          titel = xp ? xp.label.replace(/^Xp\s*/i, "") : `Regelkreis ${nummer}`;
+          titel = xp
+            ? xp.label.replace(/^Xp\s*(\([^)]*\)\s*)?/i, "")
+            : `Regelkreis ${nummer}`;
         }
         gruppen.set(schluesselGruppe, { titel, eintraege: [] });
       }
@@ -761,10 +787,13 @@ const Panel = {
     bezeichnung.className = "panel-regeleingang-label";
     if (feld) {
       bezeichnung.textContent = feld.label.replace(/\s*\(fest\)\s*$/i, "");
-    } else if (port.schluessel === port.rolle) {
-      bezeichnung.textContent = basisName;
+    } else if (port.label && port.label !== basisName) {
+      // Der Anschluss traegt eine eigene Beschriftung von seiner Karte
+      // (core.bausteine.basis.port_label) - frueher stand hier stattdessen der
+      // rohe Schluessel, also "Istwert (T_Raum)" statt "Istwert: Raumtemperatur".
+      bezeichnung.textContent = `${basisName}: ${port.label}`;
     } else {
-      bezeichnung.textContent = `${basisName} (${port.schluessel})`;
+      bezeichnung.textContent = basisName;
     }
     zeile.appendChild(bezeichnung);
 

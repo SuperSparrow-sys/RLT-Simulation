@@ -22,6 +22,14 @@ class Aussenluft(Baustein):
     ]
 
     AUSGABEN = ["T_AU", "F_AU", "V"]
+    # Beschriftet zugleich die beiden Eingaenge T_AU/F_AU (core.bausteine.basis
+    # .port_label) - ohne sie stuenden im Parameterfenster zwei Zeilen
+    # "Messwert", und niemand saehe, welche die Temperatur ist.
+    AUSGABE_LABEL = {
+        "T_AU": "Außentemperatur (°C)",
+        "F_AU": "Außenfeuchte, absolut (g/kg)",
+        "V": "angesaugter Volumenstrom (m³/h)",
+    }
 
     def berechne(self, ein, p, zustand):
         T = float(ein.get("T_AU", 0.0))

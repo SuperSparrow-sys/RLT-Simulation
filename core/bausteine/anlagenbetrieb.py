@@ -30,6 +30,11 @@ class Anlagenbetrieb(Baustein):
     ]
 
     AUSGABEN = ["betrieb", "stellgrad"]
+    AUSGABE_LABEL = {
+        "betrieb": "Betrieb (1 = ein, 0 = aus)",
+        "stellgrad": "Stellgrad (0–100 %)",
+    }
+    PORT_LABEL = {"tagesprofil": "Tageslastgang (Anteil 0–1)"}
 
     def berechne(self, ein, p, zustand):
         # Mehrere Zeitplaene wirken wie hintereinandergeschaltete Schalter: die

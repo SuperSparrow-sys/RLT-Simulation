@@ -5,6 +5,13 @@ from core.bausteine.basis import (
 )
 
 
+# Die 24 Zahlen sind ANTEILE, keine Prozentwerte und keine Leistungen - ohne
+# Einheit stand dort nur "0,4" und niemand konnte wissen, dass das 40 % der
+# Nennlast sind. Die Einheit sagt es an jedem der drei Felder, der ausfuehrliche
+# Hinweis nur am ersten.
+ANTEIL = "Anteil 0–1"
+
+
 @registriere
 class Tageslastprofil(Baustein):
     KENNUNG = "tageslastprofil"
@@ -13,9 +20,12 @@ class Tageslastprofil(Baustein):
     SYMBOL = "tageslastprofil.svg"
 
     PARAMETER = [
-        Param("lastgang_1", "Lastgang 1", "-", [1.0] * 24, darstellung=ZEITREIHE),
-        Param("lastgang_2", "Lastgang 2", "-", [0.0] * 24, darstellung=ZEITREIHE),
-        Param("lastgang_3", "Lastgang 3", "-", [0.0] * 24, darstellung=ZEITREIHE),
+        Param("lastgang_1", "Lastgang 1", ANTEIL, [1.0] * 24, darstellung=ZEITREIHE,
+              hinweis="Ein Wert je Stunde des Tages, als Anteil der Nennlast: 1,0 ist "
+                      "voller Betrieb, 0,4 sind 40 %, 0 ist aus. Die Karte "
+                      "„Anlagenbetrieb“ macht daraus den Stellgrad in Prozent."),
+        Param("lastgang_2", "Lastgang 2", ANTEIL, [0.0] * 24, darstellung=ZEITREIHE),
+        Param("lastgang_3", "Lastgang 3", ANTEIL, [0.0] * 24, darstellung=ZEITREIHE),
     ]
 
     PORTS = [
@@ -25,6 +35,11 @@ class Tageslastprofil(Baustein):
     ]
 
     AUSGABEN = ["lastgang_1", "lastgang_2", "lastgang_3"]
+    AUSGABE_LABEL = {
+        "lastgang_1": "Lastgang 1 (Anteil 0–1)",
+        "lastgang_2": "Lastgang 2 (Anteil 0–1)",
+        "lastgang_3": "Lastgang 3 (Anteil 0–1)",
+    }
 
     def berechne(self, ein, p, zustand):
         s = zustand.get("stunde") or {}

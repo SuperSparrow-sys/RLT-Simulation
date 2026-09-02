@@ -364,3 +364,166 @@ def test_auswahlwerte_stimmen_mit_dem_erlaubten_bereich_der_berechnung_ueberein(
     assert werte(Luftwaescher, "pumpenart") == {"V", "F", "H"}
     assert werte(Ventilator, "regelart") == {"F", "D", "-"}
     assert werte(Ventilator, "rolle") == {"zuluft", "abluft"}
+
+
+# -- Verstaendliche Beschriftungen -----------------------------------------
+#
+# Ziel des Programms ist, dass jemand ohne Vorkenntnisse damit eine
+# Lueftungsanlage auslegen kann. Die Karten stammen aber aus einer
+# Excel-Mappe und trugen deren Kuerzel (V_nenn, QH_max, Xp, T_KW_mittel) und
+# teils gar keine Einheit. Die folgenden Tests halten fest, was dabei
+# herausgekommen ist - inhaltlich, nicht als Wortlautprotokoll.
+
+
+def test_jeder_parameter_nennt_seine_einheit_oder_sagt_dimensionslos():
+    """Ein leeres Einheitenfeld laesst offen, ob 0,4 nun 0,4 % oder 40 % sind -
+    genau daran ist das Tageslastprofil aufgefallen. Zulaessig leer bleibt die
+    Einheit nur dort, wo die Darstellungsart sie selbst mitbringt: eine Uhrzeit
+    (HH:MM), Monatsschalter, Zeitraeume und freie Textfelder. Auswahlfelder
+    tragen weiter den Platzhalter "-", den das Fenster ausblendet."""
+    from core.bausteine import lade_alle
+
+    lade_alle()
+    ohne_eigene_einheit = {
+        basis.UHRZEIT, basis.MONATSWERTE, basis.ZEITRAEUME, basis.TEXTLISTE,
+    }
+    for klasse in basis.alle():
+        for p in klasse.PARAMETER:
+            if p.darstellung in ohne_eigene_einheit:
+                continue
+            if p.darstellung == basis.AUSWAHL:
+                assert p.einheit == "-", f"{klasse.KENNUNG}.{p.schluessel}"
+                continue
+            assert p.einheit and p.einheit != "-", (
+                f"{klasse.KENNUNG}.{p.schluessel} hat keine Einheit"
+            )
+
+
+def test_lastgang_ist_als_anteil_gekennzeichnet():
+    """Der Anlass der ganzen Durchsicht: 72 Felder mit Werten wie 0,4 und 1,0,
+    ohne jede Einheit. Dass das Anteile der Nennlast sind, muss dranstehen."""
+    from core.bausteine.tageslastprofil import Tageslastprofil
+
+    for schluessel in ("lastgang_1", "lastgang_2", "lastgang_3"):
+        feld = next(p for p in Tageslastprofil.PARAMETER if p.schluessel == schluessel)
+        assert feld.einheit == "Anteil 0–1"
+    erster = next(p for p in Tageslastprofil.PARAMETER if p.schluessel == "lastgang_1")
+    assert "Nennlast" in erster.hinweis
+
+
+def test_keine_beschriftung_ist_nur_ein_kuerzel_aus_der_mappe():
+    """Die Kuerzel duerfen als Gedaechtnisstuetze in Klammern stehenbleiben,
+    aber nie allein die ganze Beschriftung sein."""
+    from core.bausteine import lade_alle
+
+    lade_alle()
+    kuerzel = {
+        "V_nenn", "V_max", "dp_nenn", "dp_max", "dp_konst", "dp_WRG_nenn",
+        "dp_Byp_nenn", "QH_max", "QH_nenn", "QK_nenn", "T_KW_mittel", "PE_max",
+        "Xp", "WWB", "Nennbel.", "Zirk_PU", "Zirk. VL-RL", "Speichervol.",
+        "sp. Leistung", "max. Bef.Leist", "Dampftemp.", "min. T_Raum",
+        "max. T_Raum", "bei T_AU", "min. T_ZU", "max. T_ZU", "Strom Leist.",
+        "HT von", "HT bis", "Ventil/FU/HD", "FU/DD/-", "E-/Fremddampf",
+        "Wärmeüberg.", "Nennbel", "Strom HT", "Strom NT",
+    }
+    treffer = [
+        f"{klasse.KENNUNG}.{p.schluessel}: {p.label!r}"
+        for klasse in basis.alle()
+        for p in klasse.PARAMETER
+        if p.label in kuerzel
+    ]
+    assert treffer == []
+
+
+def test_gleichartige_anschluesse_einer_karte_sind_unterscheidbar():
+    """Ein Raum hat zehn Signaleingaenge mit der Rolle 'Messwert'. Ohne eigene
+    Beschriftung stuenden im Parameterfenster zehn gleichlautende Zeilen, und
+    niemand koennte den Pfeil fuer die Aussentemperatur von dem fuer die
+    Suedstrahlung unterscheiden. Ausgenommen sind Anschluesse, deren
+    Unterscheidung ohnehin eine laufende Nummer ist: dynamische Gruppen
+    (dynamisch=True) und durchnummerierte Anschluesse wie die zehn Spalten des
+    Datenloggers - das Parameterfenster haengt dort die Nummer aus dem
+    Schluessel an (static/js/panel.js, bauePortliste)."""
+    import re
+
+    from core.bausteine import lade_alle
+
+    lade_alle()
+    for klasse in basis.alle():
+        gesehen = {}
+        for port in klasse.PORTS:
+            if port.dynamisch or re.search(r"_\d+$", port.schluessel):
+                continue
+            label = basis.port_label(klasse, port.schluessel, port.rolle)
+            assert label != port.schluessel, (
+                f"{klasse.KENNUNG}.{port.schluessel} zeigt seinen rohen Schlüssel"
+            )
+            schluessel = (port.richtung, port.art, label)
+            assert schluessel not in gesehen, (
+                f"{klasse.KENNUNG}: {port.schluessel} und {gesehen.get(schluessel)} "
+                f"heißen beide „{label}“"
+            )
+            gesehen[schluessel] = port.schluessel
+
+
+def test_parameter_ohne_wirkung_sind_als_solche_beschriftet():
+    """Fuenf Parameter stehen an ihrer Karte, gehen aber in keine Formel ein -
+    sie stammen aus der Excel-Mappe, die sie ebenfalls nur danebenstellt.
+    Solange sie da sind, muss die Beschriftung sagen, dass ein Drehen an ihnen
+    nichts bewirkt; sonst sucht ein Anfaenger den Fehler bei sich.
+
+    * beleuchtung.nennbeleuchtung  - Anlage!AK134 rechnet nur mit AK132*AH115
+    * raum.aw_anteil_e             - geometrie() kennt nur die Seiten a bis d
+    * sequenzregler.xp             - Anlage!T140 teilt fest durch 10
+    * kaskade.xp                   - Anlage!Q140 teilt fest durch 3
+    * bilanz.preis_strom_leistung  - core.ergebnisse.BILANZ kennt ihn nicht
+    """
+    from core.bausteine import lade_alle
+
+    lade_alle()
+    ohne_wirkung = [
+        ("beleuchtung", "nennbeleuchtung"),
+        ("raum", "aw_anteil_e"),
+        ("sequenzregler", "xp"),
+        ("kaskade", "xp"),
+        ("bilanz", "preis_strom_leistung"),
+    ]
+    for kennung, schluessel in ohne_wirkung:
+        feld = next(
+            p for p in basis.hole(kennung).PARAMETER if p.schluessel == schluessel
+        )
+        assert "ohne Wirkung" in feld.label, f"{kennung}.{schluessel}"
+        assert "Wird nicht gerechnet" in feld.hinweis, f"{kennung}.{schluessel}"
+
+
+def test_hinweise_sind_kurze_saetze_und_nicht_ueberall():
+    """Der Hinweis traegt nur, solange er die Ausnahme bleibt: stuende an jedem
+    der 136 Parameter einer, laese ihn niemand mehr. Und er gehoert unter ein
+    Eingabefeld, nicht in einen Absatz."""
+    from core.bausteine import lade_alle
+
+    lade_alle()
+    alle = [p for klasse in basis.alle() for p in klasse.PARAMETER]
+    mit_hinweis = [p for p in alle if p.hinweis]
+    assert 0 < len(mit_hinweis) < len(alle) / 2
+    for p in mit_hinweis:
+        assert len(p.hinweis) <= 320, f"{p.schluessel}: {len(p.hinweis)} Zeichen"
+
+
+def test_port_label_zieht_die_karte_der_rolle_vor():
+    """Die Reihenfolge der Quellen - erst was die Karte selbst sagt, zuletzt
+    die allgemeine Rolle."""
+    from core.bausteine import lade_alle
+
+    lade_alle()
+    raum = basis.hole("raum")
+    # PORT_LABEL vor der Rolle
+    assert basis.port_label(raum, "QH_S", basis.MESSWERT) == "Sonneneinstrahlung Süd (W/m²)"
+    # AUSGABE_LABEL, wo kein PORT_LABEL steht
+    assert basis.port_label(raum, "T_Raum", basis.MESSWERT) == "Raumtemperatur (°C)"
+    # gleichnamiger Parameter
+    hysterese = basis.hole("hysterese_regler")
+    assert basis.port_label(hysterese, "istwert", basis.ISTWERT) == "Istwert (fest)"
+    # zuletzt die Rolle
+    ventilator = basis.hole("ventilator")
+    assert basis.port_label(ventilator, "luft_ein", basis.ZULUFT) == "Zuluft"

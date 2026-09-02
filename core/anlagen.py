@@ -529,23 +529,14 @@ def _port_label(karte, port):
 
     Fuer den Anschluesse-Abschnitt des Parameterfensters (static/js/panel.js,
     bauePortliste), der bisher nur den rohen Schluessel samt Rolle zeigte
-    (z.B. 'ausgang_2 · stellgroesse'). Reicht dieselben Beschriftungsquellen
-    weiter, die 'Regelt auf' schon benutzt - zuerst AUSGABE_LABEL (siehe
-    _messwert_label), dann ein gleichnamiger Parameter (dessen Label die Karte
-    ohnehin schon fuer das Eingabefeld traegt), zuletzt die uebersetzte Rolle
-    (basis.ROLLEN_LABEL). Kein Kartentyp muss dafuer selbst etwas deklarieren;
-    Mehrdeutigkeiten zwischen gleichartigen Anschluessen (mehrere Stellgroessen,
-    mehrere Protokollspalten) loest das Parameterfenster selbst ueber die
-    laufende Nummer im Schluessel auf.
+    (z.B. 'ausgang_2 · stellgroesse'). Die Reihenfolge der Quellen steht in
+    core.bausteine.basis.port_label - dort und nicht hier, weil der
+    Erklaerbereich (routes/lehre.py) fuer eine Kartenklasse ohne Anlage
+    dieselbe Beschriftung zeigen soll. Mehrdeutigkeiten zwischen gleichartigen
+    Anschluessen (mehrere Stellgroessen, mehrere Protokollspalten) loest das
+    Parameterfenster selbst ueber die laufende Nummer im Schluessel auf.
     """
-    klasse = basis.hole(karte.typ)
-    label = getattr(klasse, "AUSGABE_LABEL", {}).get(port.basis)
-    if label is not None:
-        return label
-    feld = next((p for p in klasse.PARAMETER if p.schluessel == port.basis), None)
-    if feld is not None:
-        return feld.label
-    return basis.ROLLEN_LABEL.get(port.rolle, port.rolle)
+    return basis.port_label(basis.hole(karte.typ), port.basis, port.rolle)
 
 
 def _ueberschreibung(karte, feld, nach_verbindung, g):
@@ -621,6 +612,7 @@ def als_json(anlage_id):
                         "einheit": f.einheit, "auswahl": list(f.auswahl),
                         "darstellung": f.darstellung,
                         "dezimalstellen": f.dezimalstellen,
+                        "hinweis": f.hinweis,
                         "ueberschrieben_von": _ueberschreibung(
                             karte, f, nach_verbindung, g
                         ),

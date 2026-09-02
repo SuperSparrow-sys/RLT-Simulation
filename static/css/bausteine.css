@@ -160,6 +160,16 @@
   color: var(--text-secondary);
   line-height: 1.7;
 }
+/* Der Erklaersatz eines Parameters (core/bausteine/basis.py: Param.hinweis) -
+   eigene Zeile unter der Beschriftung, kleiner und blasser, damit die Liste
+   der Parameter selbst auf einen Blick lesbar bleibt. */
+.baustein-parameter-hinweis {
+  display: block;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+  margin: 0 0 6px;
+}
 .baustein-anschluss-art {
   display: inline-block;
   width: 7px;

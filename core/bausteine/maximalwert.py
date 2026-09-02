@@ -34,6 +34,8 @@ class Maximalwert(Baustein):
     ]
 
     AUSGABEN = ["ausgang"]
+    AUSGABE_LABEL = {"ausgang": "größter Eingangswert (0–100 %)"}
+    PORT_LABEL = {"ein": "Eingangssignal (0–100 %)"}
 
     def berechne(self, ein, p, zustand):
         werte = [

@@ -42,13 +42,17 @@ def bausteine_liste():
                     {
                         "schluessel": p.schluessel, "label": p.label,
                         "einheit": p.einheit, "auswahl": list(p.auswahl),
+                        "hinweis": p.hinweis,
                     }
                     for p in klasse.PARAMETER
                 ],
+                # Dieselbe Beschriftung wie im Parameterfenster des Editors
+                # (core.anlagen._port_label) - beide fragen die Karte selbst.
                 "ports": [
                     {
                         "schluessel": p.schluessel, "art": p.art,
                         "richtung": p.richtung, "rolle": p.rolle,
+                        "label": basis.port_label(klasse, p.schluessel, p.rolle),
                     }
                     for p in klasse.PORTS
                 ],

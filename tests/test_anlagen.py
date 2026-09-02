@@ -477,21 +477,37 @@ def test_ports_tragen_eine_lesbare_beschriftung(app):
         anlage = anlagen.anlage_anlegen(projekt, "A")
         erhitzer = anlagen.karte_anlegen(anlage, "erhitzer", 0.0, 0.0)
         bilanz = anlagen.karte_anlegen(anlage, "bilanz", 0.0, 0.0)
+        wrg = anlagen.karte_anlegen(anlage, "wrg", 0.0, 0.0)
         daten = anlagen.als_json(anlage)
 
     erhitzer_karte = next(k for k in daten["karten"] if k["id"] == erhitzer)
-    # Kein AUSGABE_LABEL und kein gleichnamiger Parameter -> uebersetzte Rolle.
+    # Kein PORT_LABEL, kein AUSGABE_LABEL, kein gleichnamiger Parameter
+    # -> uebersetzte Rolle.
     luft_ein = next(p for p in erhitzer_karte["ports"] if p["schluessel"] == "luft_ein")
     assert luft_ein["label"] == "Zuluft"
-    # AUSGABE_LABEL greift, wo vorhanden.
+    # Die Rolle nennt ihren Wertebereich mit (basis.ROLLEN_LABEL) - "Stellgröße"
+    # allein sagt nicht, ob dort 0..1 oder 0..100 fliesst.
+    stellgroesse = next(
+        p for p in erhitzer_karte["ports"] if p["schluessel"] == "stellgroesse"
+    )
+    assert stellgroesse["label"] == "Stellgröße (0–100 %)"
+    # AUSGABE_LABEL greift, wo vorhanden - samt Einheit.
     t_aus = next(p for p in erhitzer_karte["ports"] if p["schluessel"] == "T_aus")
-    assert t_aus["label"] == "Austrittstemperatur"
+    assert t_aus["label"] == "Austrittstemperatur (°C)"
 
     # 'hochtarif' hat kein passendes Wort in der uebersetzten Rolle
     # (rolle=messwert) - AUSGABE_LABEL traegt die eigentliche Bedeutung.
     bilanz_karte = next(k for k in daten["karten"] if k["id"] == bilanz)
     hochtarif = next(p for p in bilanz_karte["ports"] if p["schluessel"] == "hochtarif")
-    assert hochtarif["label"] == "Hochtarif aktiv"
+    assert hochtarif["label"] == "Hochtarif aktiv (1 = ja, 0 = nein)"
+
+    # PORT_LABEL: zwei gleichrollige Eingaenge derselben Karte, die sonst beide
+    # nur "Stellgröße" hiessen und im Fenster nur durch eine laufende Nummer
+    # auseinanderzuhalten waeren.
+    wrg_karte = next(k for k in daten["karten"] if k["id"] == wrg)
+    labels = {p["schluessel"]: p["label"] for p in wrg_karte["ports"]}
+    assert labels["stellgroesse"] == "Stellgröße Wärmerückgewinnung (0–100 %)"
+    assert labels["stellgroesse_bypass"] == "Stellgröße Bypass (0–100 %)"
 
 
 def test_felder_ohne_gleichnamigen_eingang_sind_nicht_ueberschreibbar(app):
@@ -537,7 +553,7 @@ def test_fester_wert_zeigt_ueberschreibung_durch_verbindung_an(app):
         "von_karte_id": raum,
         "von_karte_name": "Raum",
         "von_schluessel": "T_Raum",
-        "von_label": "Raumtemperatur",
+        "von_label": "Raumtemperatur (°C)",
         "pfeil_id": verbindung["id"],
     }
 
@@ -572,7 +588,7 @@ def test_messwerte_von_listet_alle_messwertausgaenge(app):
         "karte_name": "Raum",
         "karte_typ": "raum",
         "schluessel": "T_Raum",
-        "label": "Raumtemperatur",
+        "label": "Raumtemperatur (°C)",
     }
 
 
@@ -866,3 +882,27 @@ def test_api_verbindung_anlegen_ohne_pflichtfeld_meldet_400(app):
     klient = app.test_client()
     antwort = klient.post("/api/verbindungen", json={"anlage_id": 1})
     assert antwort.status_code == 400
+
+
+def test_felder_reichen_den_hinweis_der_karte_durch(app):
+    """Param.hinweis ist die Erklärung, die das Parameterfenster unter dem
+    Eingabefeld zeigt (static/js/panel.js, feldZeile). Sie steht an der Karte
+    und muss deshalb in der Auskunft über die Anlage ankommen - genau wie
+    Darstellungsart, Auswahl und Einheit."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        profil = anlagen.karte_anlegen(anlage, "tageslastprofil", 0.0, 0.0)
+        erhitzer = anlagen.karte_anlegen(anlage, "erhitzer", 0.0, 0.0)
+        daten = anlagen.als_json(anlage)
+
+    profil_karte = next(k for k in daten["karten"] if k["id"] == profil)
+    lastgang = next(f for f in profil_karte["felder"] if f["schluessel"] == "lastgang_1")
+    assert lastgang["einheit"] == "Anteil 0–1"
+    assert "Nennlast" in lastgang["hinweis"]
+
+    # Ein Parameter ohne eigenen Hinweis liefert einen leeren Text, kein None -
+    # das Fenster prüft nur auf "leer".
+    erhitzer_karte = next(k for k in daten["karten"] if k["id"] == erhitzer)
+    v_nenn = next(f for f in erhitzer_karte["felder"] if f["schluessel"] == "V_nenn")
+    assert v_nenn["hinweis"] == ""

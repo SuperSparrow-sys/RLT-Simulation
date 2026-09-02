@@ -21,11 +21,17 @@ class Ferien(Baustein):
     GRUPPE = "Zeit und Betrieb"
     SYMBOL = "ferien.svg"
 
-    PARAMETER = [Param("zeitraeume", "Zeiträume", "", [], darstellung=ZEITRAEUME)]
+    PARAMETER = [
+        Param("zeitraeume", "Ferien- und Sondertage", "", [], darstellung=ZEITRAEUME,
+              hinweis="Tag und Monat ohne Jahr - jeder Zeitraum gilt in jedem "
+                      "Wetterjahr. Ein Zeitraum über den Jahreswechsel ist erlaubt "
+                      "(z. B. 27.12. bis 06.01.).")
+    ]
 
     PORTS = [Port("ferien", SIGNAL, AUSGANG, FERIEN)]
 
     AUSGABEN = ["ferien"]
+    AUSGABE_LABEL = {"ferien": "Ferientag (1 = ja, 0 = nein)"}
 
     def berechne(self, ein, p, zustand):
         s = zustand.get("stunde") or {}

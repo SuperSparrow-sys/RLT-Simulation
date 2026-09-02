@@ -18,9 +18,17 @@ class Wochenzeitplan(Baustein):
     GRUPPE = "Zeit und Betrieb"
     SYMBOL = "wochenzeitplan.svg"
 
+    # Der Hinweis haengt nur am ersten Feld: an allen 14 wiederholt waere er
+    # eine Wand aus Text, die niemand mehr liest.
     PARAMETER = [
         Param(f"{grenze}_{tag}", f"{tag.capitalize()} {grenze}", "",
-              5.0 / 24.0 if grenze == "von" else 22.0 / 24.0, darstellung=UHRZEIT)
+              5.0 / 24.0 if grenze == "von" else 22.0 / 24.0, darstellung=UHRZEIT,
+              hinweis=(
+                  "Zwischen „von“ und „bis“ gibt der Zeitplan die Anlage frei (1), "
+                  "sonst sperrt er sie (0). Ist „von“ nicht kleiner als „bis“, bleibt "
+                  "der ganze Tag aus - so schaltet man ein Wochenende ab."
+                  if (tag, grenze) == (TAGE[0], "von") else ""
+              ))
         for tag in TAGE
         for grenze in ("von", "bis")
     ]
@@ -28,6 +36,7 @@ class Wochenzeitplan(Baustein):
     PORTS = [Port("betrieb", SIGNAL, AUSGANG, ZEITPLAN)]
 
     AUSGABEN = ["betrieb"]
+    AUSGABE_LABEL = {"betrieb": "Freigabe (1 = ein, 0 = aus)"}
 
     def berechne(self, ein, p, zustand):
         s = zustand.get("stunde") or {}

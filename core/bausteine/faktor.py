@@ -18,7 +18,13 @@ class Faktor(Baustein):
     GRUPPE = "Regelung"
     SYMBOL = "faktor.svg"
 
-    PARAMETER = [Param("faktor", "Faktor", "-", 1.0, darstellung=ZAHL, dezimalstellen=2)]
+    PARAMETER = [
+        Param("faktor", "Faktor", "dimensionslos", 1.0,
+              darstellung=ZAHL, dezimalstellen=2,
+              hinweis="Das Eingangssignal wird damit malgenommen, das Ergebnis auf "
+                      "0 bis 100 % begrenzt. 0,5 heißt: Der Ausgang folgt dem "
+                      "Eingang mit halbem Ausschlag.")
+    ]
 
     PORTS = [
         Port("ein", SIGNAL, EINGANG, STELLGROESSE),
@@ -26,6 +32,8 @@ class Faktor(Baustein):
     ]
 
     AUSGABEN = ["ausgang"]
+    AUSGABE_LABEL = {"ausgang": "Ausgangssignal (0–100 %)"}
+    PORT_LABEL = {"ein": "Eingangssignal (0–100 %)"}
 
     def berechne(self, ein, p, zustand):
         wert = float(ein.get("ein", 0.0)) * p["faktor"]

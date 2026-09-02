@@ -24,6 +24,11 @@ class Sammler(Baustein):
     ]
 
     AUSGABEN = ["T_aus", "F_aus", "V"]
+    AUSGABE_LABEL = {
+        "T_aus": "Mischtemperatur (°C)",
+        "F_aus": "Mischfeuchte, absolut (g/kg)",
+        "V": "gesammelter Volumenstrom (m³/h)",
+    }
 
     def berechne(self, ein, p, zustand):
         # Nur ueber die eigenen Eingaenge sammeln. Der Solver legt auch die

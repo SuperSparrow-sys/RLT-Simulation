@@ -49,14 +49,15 @@ ERKLAERUNGEN = {
     "erhitzer": {
         "beschreibung": (
             "Erwärmt einen Luftstrom mit einer Heizleistung, die über die "
-            "Stellgröße zwischen 0 und der Höchstleistung QH_max vorgegeben "
-            "wird. Er sitzt zwischen zwei Luftanschlüssen im Zuluftstrang und "
+            "Stellgröße zwischen 0 und der höchsten Heizleistung (QH_max) "
+            "vorgegeben wird. Er sitzt zwischen zwei Luftanschlüssen im Zuluftstrang und "
             "braucht eine Stellgröße - meist von einem Regler, sonst bleibt "
             "er kalt."
         ),
         "hinweis": (
-            "V_nenn und dp_nenn bestimmen nur den Druckverlust, nicht die "
-            "Heizleistung; die folgt allein aus Stellgröße mal QH_max."
+            "Nennvolumenstrom und Nenndruckverlust bestimmen nur den "
+            "Druckverlust, nicht die Heizleistung; die folgt allein aus "
+            "Stellgröße mal höchster Heizleistung."
         ),
     },
     "kuehler": {
@@ -64,11 +65,14 @@ ERKLAERUNGEN = {
             "Kühlt einen Luftstrom ab und entfeuchtet ihn nebenbei, sobald "
             "die rechnerische Oberflächentemperatur unter dem Taupunkt der "
             "Luft liegt. Die Kühlleistung folgt wie beim Erhitzer einer "
-            "Stellgröße von 0 bis 100 Prozent; T_KW_mittel ist die mittlere "
-            "Kaltwassertemperatur, die die tiefste erreichbare "
-            "Austrittstemperatur begrenzt."
+            "Stellgröße von 0 bis 100 Prozent. Die mittlere "
+            "Kaltwassertemperatur begrenzt dabei, wie kalt die Luft "
+            "überhaupt werden kann."
         ),
-        "hinweis": "Überschreitet die geforderte Leistung QK_nenn, meldet die Karte eine Warnung.",
+        "hinweis": (
+            "Überschreitet die geforderte Leistung die Nennkälteleistung, meldet "
+            "die Karte eine Warnung - begrenzt wird sie dadurch aber nicht."
+        ),
     },
     "wrg": {
         "beschreibung": (
@@ -204,8 +208,10 @@ ERKLAERUNGEN = {
         "beschreibung": (
             "Leitet aus einer Regelabweichung fünf gestaffelte Ausgänge ab - "
             "drei Heiz- und zwei Kühlstufen -, die nacheinander öffnen, je "
-            "größer die Abweichung wird. oberer_sw und unterer_sw spannen "
-            "die neutrale Zone auf, in der nichts geregelt wird."
+            "größer die Abweichung wird. Der obere und der untere Sollwert "
+            "spannen die neutrale Zone auf, in der nichts geregelt wird. Der "
+            "Proportionalbereich Xp dieser Karte geht - wie in der "
+            "Excel-Vorlage - in keine Formel ein."
         ),
     },
     "hysterese_regler": {

@@ -37,9 +37,21 @@ class Sequenzregler(Baustein):
     SYMBOL = "sequenzregler.svg"
 
     PARAMETER = [
-        Param("oberer_sw", "oberer Sollwert", "°C", 24.0, darstellung=ZAHL, dezimalstellen=1),
-        Param("unterer_sw", "unterer Sollwert", "°C", 20.0, darstellung=ZAHL, dezimalstellen=1),
-        Param("xp", "Xp", "-", 5.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("oberer_sw", "Oberer Sollwert - darüber wird gekühlt", "°C", 24.0,
+              darstellung=ZAHL, dezimalstellen=1),
+        Param("unterer_sw", "Unterer Sollwert - darunter wird geheizt", "°C", 20.0,
+              darstellung=ZAHL, dezimalstellen=1,
+              hinweis="Zwischen unterem und oberem Sollwert liegt die Totzone: Dort "
+                      "bleibt die Regelabweichung 0 und alle fünf Stufen sind zu."),
+        # Anlage!T140 teilt fest durch 10 - die Xp-Zelle des Blocks geht in die
+        # Formel gar nicht ein. Der Wert bleibt als Parameter stehen (er steht so
+        # in der Mappe und in gespeicherten Anlagen), aber die Beschriftung muss
+        # sagen, dass an ihm zu drehen nichts bewirkt.
+        Param("xp", "Proportionalbereich (Xp) - ohne Wirkung", "K", 5.0,
+              darstellung=ZAHL, dezimalstellen=1,
+              hinweis="Wird nicht gerechnet: Die Karte bildet die Regelabweichung wie "
+                      "die Excel-Vorlage mit einem festen Teiler (Abweichung ÷ 10 K "
+                      "je Durchgang). Ein anderer Wert ändert das Ergebnis nicht."),
     ]
 
     PORTS = [
@@ -52,6 +64,18 @@ class Sequenzregler(Baustein):
     ]
 
     AUSGABEN = ["waermer_3", "waermer_2", "waermer_1", "kaelter_1", "kaelter_2", "e"]
+    # Die Nummern sind die Reihenfolge des Aufziehens, nicht die Groesse der
+    # Stufe: waermer_1 oeffnet als erstes (e < 0), waermer_3 erst ganz zuletzt
+    # (e < -200). Ohne diese Beschriftung stuenden im Parameterfenster fuenf
+    # Zeilen "Stellgröße", nur durch eine laufende Nummer unterschieden.
+    AUSGABE_LABEL = {
+        "waermer_1": "Heizen Stufe 1 - öffnet zuerst (0–100 %)",
+        "waermer_2": "Heizen Stufe 2 (0–100 %)",
+        "waermer_3": "Heizen Stufe 3 - öffnet zuletzt (0–100 %)",
+        "kaelter_1": "Kühlen Stufe 1 - öffnet zuerst (0–100 %)",
+        "kaelter_2": "Kühlen Stufe 2 - öffnet zuletzt (0–100 %)",
+        "e": "Regelabweichung (−300 bis +200)",
+    }
 
     def berechne(self, ein, p, zustand):
         istwert = float(ein.get("istwert", 0.0))

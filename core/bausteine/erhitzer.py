@@ -14,9 +14,17 @@ class Erhitzer(Baustein):
     SYMBOL = "erhitzer.svg"
 
     PARAMETER = [
-        Param("V_nenn", "V_nenn", "m³/h", 8200.0, darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
-        Param("dp_nenn", "dp_nenn", "Pa", 240.0, darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
-        Param("QH_max", "QH_max", "kW", 101.0, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
+        Param("V_nenn", "Nennvolumenstrom (V_nenn)", "m³/h", 8200.0,
+              darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
+        Param("dp_nenn", "Druckverlust bei Nennvolumenstrom (dp_nenn)", "Pa", 240.0,
+              darstellung=ZAHL, dezimalstellen=0, minimum=0.0,
+              hinweis="Bei anderen Luftmengen wächst der Druckverlust im Quadrat: "
+                      "halbe Luftmenge, ein Viertel Druckverlust. Auf die "
+                      "Heizleistung hat er keinen Einfluss."),
+        Param("QH_max", "Höchste Heizleistung (QH_max)", "kW", 101.0,
+              darstellung=ZAHL, dezimalstellen=1, minimum=0.0,
+              hinweis="Die Leistung folgt geradlinig der Stellgröße: 100 % ergeben "
+                      "diesen Wert, 40 % ergeben 40 % davon."),
     ]
 
     PORTS = [
@@ -28,7 +36,12 @@ class Erhitzer(Baustein):
     ]
 
     AUSGABEN = ["T_aus", "F_aus", "QH", "dp"]
-    AUSGABE_LABEL = {"T_aus": "Austrittstemperatur"}
+    AUSGABE_LABEL = {
+        "T_aus": "Austrittstemperatur (°C)",
+        "F_aus": "Austrittsfeuchte, absolut (g/kg)",
+        "QH": "Heizleistung (kW)",
+        "dp": "Druckverlust (Pa)",
+    }
 
     def berechne(self, ein, p, zustand):
         luft = ein.get("luft_ein", Luft())

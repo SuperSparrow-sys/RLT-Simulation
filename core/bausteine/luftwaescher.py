@@ -22,11 +22,19 @@ class Luftwaescher(Baustein):
     SYMBOL = "luftwaescher.svg"
 
     PARAMETER = [
-        Param("V_nenn", "V_nenn", "m³/h", 8200.0, darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
-        Param("dp_nenn", "dp_nenn", "Pa", 50.0, darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
-        Param("absalzverlust", "Absalzverlust", "%", 10.0, darstellung=PROZENT, dezimalstellen=1, minimum=0.0, maximum=100.0),
+        Param("V_nenn", "Nennvolumenstrom (V_nenn)", "m³/h", 8200.0,
+              darstellung=ZAHL, dezimalstellen=0, minimum=0.0,
+              hinweis="Bestimmt zugleich die Pumpenleistung - der Wäscher wird auf "
+                      "diese Luftmenge ausgelegt."),
+        Param("dp_nenn", "Druckverlust bei Nennvolumenstrom (dp_nenn)", "Pa", 50.0,
+              darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
+        Param("absalzverlust", "Absalzverlust", "%", 10.0,
+              darstellung=PROZENT, dezimalstellen=1, minimum=0.0, maximum=100.0,
+              hinweis="Zusätzliches Wasser, das abgeschlämmt wird, damit sich keine "
+                      "Salze aufkonzentrieren. 10 % heißt: Verbraucht werden 110 % "
+                      "des Wassers, das tatsächlich verdunstet."),
         Param(
-            "pumpenart", "Ventil/FU/HD", "-", "H",
+            "pumpenart", "Art der Pumpenregelung", "-", "H",
             auswahl=(
                 wahl("V", "Ventil (V)"),
                 wahl("F", "Frequenzumrichter (F)"),
@@ -46,7 +54,13 @@ class Luftwaescher(Baustein):
     ]
 
     AUSGABEN = ["T_aus", "F_aus", "PE_Pumpe", "wasser", "dp"]
-    AUSGABE_LABEL = {"T_aus": "Austrittstemperatur"}
+    AUSGABE_LABEL = {
+        "T_aus": "Austrittstemperatur (°C)",
+        "F_aus": "Austrittsfeuchte, absolut (g/kg)",
+        "PE_Pumpe": "elektrische Leistung der Pumpe (kW)",
+        "wasser": "Wasserverbrauch (l/h)",
+        "dp": "Druckverlust (Pa)",
+    }
 
     def berechne(self, ein, p, zustand):
         luft = ein.get("luft_ein", Luft())

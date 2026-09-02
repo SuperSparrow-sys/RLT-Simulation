@@ -21,11 +21,20 @@ class Dampfbefeuchter(Baustein):
     SYMBOL = "dampfbefeuchter.svg"
 
     PARAMETER = [
-        Param("dampftemperatur", "Dampftemp.", "°C", 180.0, darstellung=ZAHL, dezimalstellen=1),
-        Param("absalzverlust", "Absalzverlust", "%", 10.0, darstellung=PROZENT, dezimalstellen=1, minimum=0.0, maximum=100.0),
-        Param("max_leistung", "max. Bef.Leist", "kg/h", 32.0, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
+        Param("dampftemperatur", "Temperatur des Fremddampfs", "°C", 180.0,
+              darstellung=ZAHL, dezimalstellen=1,
+              hinweis="Wirkt nur bei Fremddampf. Für Elektrodampf rechnet die Karte "
+                      "mit einer festen Dampfenthalpie von 2676 kJ/kg."),
+        Param("absalzverlust", "Absalzverlust", "%", 10.0,
+              darstellung=PROZENT, dezimalstellen=1, minimum=0.0, maximum=100.0,
+              hinweis="Zusätzliches Wasser, das der Verdampfer abschlämmt. Wirkt nur "
+                      "bei Elektrodampf; Fremddampf wird ohne Aufschlag gerechnet."),
+        Param("max_leistung", "Höchste Befeuchtungsleistung", "kg/h", 32.0,
+              darstellung=ZAHL, dezimalstellen=1, minimum=0.0,
+              hinweis="Dampfmenge bei 100 % Stellgröße. Wie viel g/kg das in der Luft "
+                      "ausmacht, hängt vom Volumenstrom ab."),
         Param(
-            "dampfart", "E-/Fremddampf", "-", "E",
+            "dampfart", "Herkunft des Dampfs", "-", "E",
             auswahl=(wahl("E", "Elektrisch (E)"), wahl("F", "Fremddampf (F)")),
             darstellung=AUSWAHL,
         ),
@@ -41,7 +50,13 @@ class Dampfbefeuchter(Baustein):
     ]
 
     AUSGABEN = ["T_aus", "F_aus", "QH", "wasser", "warnung"]
-    AUSGABE_LABEL = {"T_aus": "Austrittstemperatur"}
+    AUSGABE_LABEL = {
+        "T_aus": "Austrittstemperatur (°C)",
+        "F_aus": "Austrittsfeuchte, absolut (g/kg)",
+        "QH": "Wärmeleistung für den Dampf (kW)",
+        "wasser": "Wasserverbrauch (kg/h)",
+        "warnung": "Warnung",
+    }
 
     def dampfenthalpie(self, p):
         if str(p["dampfart"]).upper() == "E":

@@ -34,17 +34,33 @@ class PRegler(Baustein):
         # Der Regler wird fuer ganz verschiedene Groessen eingesetzt - Temperatur
         # beim Vor-/Nacherhitzer, Feuchte beim Entfeuchtungsregler (siehe
         # core/vorlagen/ax_sim_2_1.py: sollwert_2=9.0 fuer den Entfeuchtungsregler
-        # ist ein Feuchtewert, keine Temperatur). Die Einheit bleibt deshalb
-        # durchgehend "-"; welche Groesse gemeint ist, sagt der Anschluss, der
-        # hier tatsaechlich haengt.
-        Param("xp_1", "Xp Regler 1 (schnell)", "-", 5.0, darstellung=ZAHL, dezimalstellen=1),
-        Param("xp_2", "Xp Regler 2 (träge)", "-", 10.0, darstellung=ZAHL, dezimalstellen=1),
-        Param("sollwert_1", "Sollwert 1", "-", 0.0, darstellung=ZAHL, dezimalstellen=1),
-        Param("sollwert_2", "Sollwert 2", "-", 20.0, darstellung=ZAHL, dezimalstellen=1),
+        # ist ein Feuchtewert, keine Temperatur). Deshalb steht als Einheit
+        # durchgehend "Einheit des Istwerts" statt eines nichtssagenden "-";
+        # welche Groesse gemeint ist, sagt der Anschluss, der hier haengt.
+        #
+        # Der Anfang "Xp " der beiden Bandbreiten-Labels ist zugleich die
+        # Ueberschrift der Regelkreise im Parameterfenster (static/js/panel.js,
+        # ermittleRegelkreise schneidet ihn samt Klammerzusatz ab und zeigt den
+        # Rest als "Regler 1 (schnell)").
+        Param("xp_1", "Xp (Proportionalbereich) Regler 1 (schnell)",
+              "Einheit des Istwerts", 5.0, darstellung=ZAHL, dezimalstellen=1,
+              hinweis="Um wie viel der Istwert vom Sollwert abweichen muss, damit der "
+                      "Ausgang je Rechendurchgang um volle 100 % nachgeführt wird. "
+                      "Kleiner Wert = kräftigere, schnellere Regelung."),
+        Param("xp_2", "Xp (Proportionalbereich) Regler 2 (träge)",
+              "Einheit des Istwerts", 10.0, darstellung=ZAHL, dezimalstellen=1,
+              hinweis="Wie Regler 1, nur mit größerer Bandbreite und damit ruhigerem "
+                      "Verhalten."),
+        Param("sollwert_1", "Sollwert 1", "Einheit des Istwerts", 0.0,
+              darstellung=ZAHL, dezimalstellen=1),
+        Param("sollwert_2", "Sollwert 2", "Einheit des Istwerts", 20.0,
+              darstellung=ZAHL, dezimalstellen=1),
         # Anlage!S71 usw.: Bei manchen Reglern steht der Istwert als feste Zahl
         # daneben, waehrend der Sollwert von aussen kommt (umgekehrte Zuordnung).
-        Param("istwert_1", "Istwert 1 (fest)", "-", 0.0, darstellung=ZAHL, dezimalstellen=1),
-        Param("istwert_2", "Istwert 2 (fest)", "-", 0.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("istwert_1", "Istwert 1 (fest)", "Einheit des Istwerts", 0.0,
+              darstellung=ZAHL, dezimalstellen=1),
+        Param("istwert_2", "Istwert 2 (fest)", "Einheit des Istwerts", 0.0,
+              darstellung=ZAHL, dezimalstellen=1),
     ]
 
     PORTS = [
@@ -61,6 +77,10 @@ class PRegler(Baustein):
     ]
 
     AUSGABEN = ["ausgang_1", "ausgang_2"]
+    AUSGABE_LABEL = {
+        "ausgang_1": "Stellgröße Regler 1 (0–100 %)",
+        "ausgang_2": "Stellgröße Regler 2 (0–100 %)",
+    }
 
     def _stufe(self, y_alt, sollwert, istwert, xp):
         if not xp:

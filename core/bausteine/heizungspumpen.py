@@ -14,9 +14,15 @@ class Heizungspumpen(Baustein):
     SYMBOL = "heizungspumpen.svg"
 
     PARAMETER = [
-        Param("P_allgemein", "Allgemein", "kW", 0.0, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
-        Param("P_wwb", "WWB", "kW", 0.0, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
-        Param("P_kessel", "Kessel", "kW", 0.0, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
+        Param("P_allgemein", "Pumpen der Heizkreise", "kW", 0.0,
+              darstellung=ZAHL, dezimalstellen=2, minimum=0.0,
+              hinweis="Zählt in jeder Betriebsstunde voll mit; die beiden Pumpen "
+                      "darunter jeweils nur zur Hälfte, weil sie im Mittel nur die "
+                      "halbe Zeit laufen."),
+        Param("P_wwb", "Pumpe der Warmwasserbereitung", "kW", 0.0,
+              darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
+        Param("P_kessel", "Kesselkreispumpe", "kW", 0.0,
+              darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
     ]
 
     PORTS = [
@@ -25,6 +31,7 @@ class Heizungspumpen(Baustein):
     ]
 
     AUSGABEN = ["PE"]
+    AUSGABE_LABEL = {"PE": "elektrische Leistung (kW)"}
 
     def berechne(self, ein, p, zustand):
         betrieb = float(ein.get("betrieb", 0.0))
