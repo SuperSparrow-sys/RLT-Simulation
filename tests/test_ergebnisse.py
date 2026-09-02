@@ -80,6 +80,54 @@ def test_bilanz_wird_mit_preisen_gespeichert(app):
     assert zeilen["wasser"]["kosten"] == pytest.approx(0.4)
 
 
+def test_baustein_warnungen_werden_nach_karte_und_wortlaut_gruppiert(app):
+    """Bausteine wie core/bausteine/kuehler.py, verteiler.py und
+    dampfbefeuchter.py schreiben Warntexte unter dem Schluessel 'warnung' in
+    ihre Ausgabe - _ergebnisse_einfuegen() gruppiert sie je Karte und
+    Wortlaut mit Anzahl und einer Stichprobe der betroffenen Stunden, statt
+    sie wie jeden anderen nicht-numerischen Wert stillschweigend zu
+    verwerfen (core/ergebnisse.py:132)."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = ax_sim_2_1.baue(projekt, "A")
+        wetter = wetter_anlegen(4)
+        graph = anlagen.lade_graph(anlage)
+        lauf = solver.Lauf(
+            stunden=[
+                {1: {"warnung": "Kuehlleistung zu niedrig"}},
+                {1: {"warnung": "Kuehlleistung zu niedrig"}, 2: {"warnung": "Uebersaettigung"}},
+                {1: {"warnung": ""}},
+                {1: {"T_aus": 20.0}},
+            ],
+            bilanz={"strom_ht": 0.0, "strom_nt": 0.0, "waerme": 0.0,
+                    "kaelte": 0.0, "wasser": 0.0},
+            warnungen=[],
+        )
+        sim = ergebnisse.speichere(anlage, wetter, 0, 4, lauf, graph, dauer=0.1)
+        liste = ergebnisse.lade_baustein_warnungen(sim)
+
+    liste = {(w["karte_id"], w["text"]): w for w in liste}
+    assert liste[(1, "Kuehlleistung zu niedrig")]["anzahl"] == 2
+    assert liste[(1, "Kuehlleistung zu niedrig")]["beispiele"] == [1, 2]
+    assert liste[(2, "Uebersaettigung")]["anzahl"] == 1
+
+
+def test_baustein_warnungen_leer_wenn_keine_auftreten(app):
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = ax_sim_2_1.baue(projekt, "A")
+        wetter = wetter_anlegen(1)
+        graph = anlagen.lade_graph(anlage)
+        lauf = solver.Lauf(
+            stunden=[{1: {"T_aus": 20.0}}],
+            bilanz={"strom_ht": 0.0, "strom_nt": 0.0, "waerme": 0.0,
+                    "kaelte": 0.0, "wasser": 0.0},
+            warnungen=[],
+        )
+        sim = ergebnisse.speichere(anlage, wetter, 0, 1, lauf, graph, dauer=0.1)
+        assert ergebnisse.lade_baustein_warnungen(sim) == []
+
+
 def test_lauf_im_hintergrund_meldet_fortschritt_und_endet(app):
     with app.app_context():
         projekt = anlagen.projekt_anlegen("P")
@@ -146,6 +194,29 @@ def test_api_startet_und_liefert_den_stand(app):
             break
         time.sleep(0.05)
     assert stand["status"] == "fertig", stand.get("fehler")
+
+
+def test_api_simulation_starten_nicht_numerisches_von_meldet_400(app):
+    """Vorher liess int("abc") die Anfrage mit 500 abbrechen - ein
+    Eingabefehler, keine Ausnahme des Programms (siehe routes/simulation.py)."""
+    klient = app.test_client()
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = ax_sim_2_1.baue(projekt, "A")
+        wetter = wetter_anlegen(24)
+
+    antwort = klient.post(
+        "/api/simulation",
+        json={"anlage_id": anlage, "wetterdatensatz_id": wetter, "von": "abc"},
+    )
+    assert antwort.status_code == 400
+    assert antwort.get_json()["fehler"]
+
+
+def test_api_simulation_starten_ohne_anlage_id_meldet_400(app):
+    klient = app.test_client()
+    antwort = klient.post("/api/simulation", json={"wetterdatensatz_id": 1})
+    assert antwort.status_code == 400
 
 
 def test_api_abbrechen_stoppt_den_lauf(app, monkeypatch):
@@ -217,8 +288,68 @@ def test_api_liefert_die_bilanz(app):
 
     groessen = {z["groesse"] for z in daten["bilanz"]}
     assert groessen == {"strom_ht", "strom_nt", "waerme", "kaelte", "wasser"}
-    assert len(daten["reihen"]) > 0
-    assert {"karte_id", "karte_name", "groesse", "einheit"} <= daten["reihen"][0].keys()
+    # Diese Vorlage steuert im Januar tatsaechlich einen Kuehler an, der dabei
+    # ausserhalb seines Einsatzbereichs liegt (siehe kuehler.py) - die API
+    # liefert das als gruppierte Warnung mit, statt es zu verschweigen.
+    assert daten["baustein_warnungen"]
+    eintrag = daten["baustein_warnungen"][0]
+    assert {"karte_id", "karte_name", "text", "anzahl", "beispiele"} <= eintrag.keys()
+
+    # Diese Vorlage hat einen bestueckten Datenlogger - das Protokoll liefert
+    # seine benannten Spalten mit voller Stundenreihe.
+    protokoll_antwort = klient.get(f"/api/simulation/{stand['simulation_id']}/protokoll")
+    assert protokoll_antwort.status_code == 200
+    spalten = protokoll_antwort.get_json()["spalten"]
+    assert spalten
+    for spalte in spalten:
+        assert {"karte_id", "karte_name", "name", "einheit", "werte"} <= spalte.keys()
+        assert spalte["name"]
+        assert len(spalte["werte"]) == 24
+
+
+def test_api_protokoll_unbekannte_simulation_meldet_404(app):
+    klient = app.test_client()
+    antwort = klient.get("/api/simulation/9999/protokoll")
+    assert antwort.status_code == 404
+
+
+def test_protokoll_liefert_die_benannten_datenlogger_spalten(app):
+    """Nur benannte Anschluesse eines Datenloggers erscheinen als Spalte, mit
+    dem vergebenen Namen und der eingetragenen Einheit - genau das Versprechen
+    aus templates/bausteine.html ('Den Datenlogger einbauen')."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage_id = anlagen.anlage_anlegen(projekt, "A")
+        logger_id = anlagen.karte_anlegen(anlage_id, "datenlogger", 0.0, 0.0)
+        namen = [""] * 10
+        einheiten = [""] * 10
+        namen[0] = "Außentemperatur"
+        einheiten[0] = "°C"
+        anlagen.karte_aendern(
+            logger_id, parameter={"namen": namen, "einheiten": einheiten}
+        )
+        wetter = wetter_anlegen(3)
+        graph = anlagen.lade_graph(anlage_id)
+        lauf = solver.Lauf(
+            stunden=[
+                {logger_id: {"wert_1": 1.0}},
+                {logger_id: {"wert_1": 2.0}},
+                {logger_id: {"wert_1": 3.0}},
+            ],
+            bilanz={"strom_ht": 0.0, "strom_nt": 0.0, "waerme": 0.0,
+                    "kaelte": 0.0, "wasser": 0.0},
+            warnungen=[],
+        )
+        sim = ergebnisse.speichere(anlage_id, wetter, 0, 3, lauf, graph, dauer=0.1)
+
+    klient = app.test_client()
+    antwort = klient.get(f"/api/simulation/{sim}/protokoll")
+    assert antwort.status_code == 200
+    spalten = antwort.get_json()["spalten"]
+    assert len(spalten) == 1
+    assert spalten[0]["name"] == "Außentemperatur"
+    assert spalten[0]["einheit"] == "°C"
+    assert spalten[0]["werte"] == [1.0, 2.0, 3.0]
 
 
 def test_zeile_entsteht_beim_start_nicht_erst_beim_abschluss(app, monkeypatch):

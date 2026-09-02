@@ -474,6 +474,9 @@ const Simulation = {
 
     const warnungen = daten.warnungen || { anzahl: 0, beispiele: [] };
     const warnhinweisHtml = this._warnhinweisHtml(warnungen);
+    const bausteinWarnhinweisHtml = this._bausteinWarnhinweisHtml(
+      daten.baustein_warnungen || []
+    );
 
     const fenster = document.createElement("div");
     fenster.className = "dialog-huelle";
@@ -489,12 +492,15 @@ const Simulation = {
                      <td class="zahl">${summe.toFixed(2)} EUR</td></tr></tfoot>
         </table>
         ${warnhinweisHtml}
+        ${bausteinWarnhinweisHtml}
         <div class="dialog-knoepfe">
+          <button id="btn-protokoll">Stundenprotokoll</button>
           <button class="knopf-haupt" id="btn-schliessen">Schließen</button>
         </div>
       </div>`;
     document.body.appendChild(fenster);
     fenster.querySelector("#btn-schliessen").onclick = () => fenster.remove();
+    fenster.querySelector("#btn-protokoll").onclick = () => this._zeigeProtokoll(simulationId);
 
     const mehrKnopf = fenster.querySelector("#btn-warn-beispiele");
     if (mehrKnopf) {
@@ -504,6 +510,68 @@ const Simulation = {
         mehrKnopf.textContent = liste.hidden ? "Beispiele ansehen" : "Beispiele verbergen";
       };
     }
+  },
+
+  /** Das Stundenprotokoll der am Datenlogger angeschlossenen Werte - ein
+   * eigener Abruf statt Teil von zeigeBilanz(): bei einem Jahreslauf mehrere
+   * Megabyte gross, und die meisten Anlagen haben ueberhaupt keinen
+   * bestueckten Datenlogger (siehe routes/simulation.py, protokoll()). Wird
+   * daher nur geladen, wenn tatsaechlich danach gefragt wird. */
+  async _zeigeProtokoll(simulationId) {
+    let antwort;
+    try {
+      antwort = await fetch(`/api/simulation/${simulationId}/protokoll`);
+    } catch {
+      zeigeFehler("Stundenprotokoll konnte nicht geladen werden.");
+      return;
+    }
+    if (!antwort.ok) {
+      zeigeFehler("Stundenprotokoll konnte nicht geladen werden.");
+      return;
+    }
+    const { spalten } = await antwort.json();
+    if (!spalten.length) {
+      zeigeFehler(
+        "Kein Datenlogger mit benannten Anschlüssen in dieser Anlage – " +
+          "siehe Erklärbereich „Bausteine“, Abschnitt „Den Datenlogger einbauen“."
+      );
+      return;
+    }
+
+    const stundenzahl = spalten[0].werte.length;
+    const kopfzellen = spalten
+      .map(
+        (s) =>
+          `<th>${htmlSicher(s.name)}${s.einheit ? ` [${htmlSicher(s.einheit)}]` : ""}</th>`
+      )
+      .join("");
+    const zeilen = [];
+    for (let stunde = 0; stunde < stundenzahl; stunde++) {
+      const zellen = spalten
+        .map((s) => `<td>${s.werte[stunde].toFixed(2)}</td>`)
+        .join("");
+      zeilen.push(`<tr><td>${stunde + 1}</td>${zellen}</tr>`);
+    }
+
+    const fenster = document.createElement("div");
+    fenster.className = "dialog-huelle";
+    fenster.innerHTML = `
+      <div class="dialog dialog-breit">
+        <h2>Stundenprotokoll</h2>
+        <p class="protokoll-hinweis">${stundenzahl} Stunden · ${spalten.length}
+          Spalte${spalten.length === 1 ? "" : "n"} vom Datenlogger.</p>
+        <div class="protokoll-huelle">
+          <table class="protokoll">
+            <thead><tr><th>Stunde</th>${kopfzellen}</tr></thead>
+            <tbody>${zeilen.join("")}</tbody>
+          </table>
+        </div>
+        <div class="dialog-knoepfe">
+          <button class="knopf-haupt" id="btn-schliessen">Schließen</button>
+        </div>
+      </div>`;
+    document.body.appendChild(fenster);
+    fenster.querySelector("#btn-schliessen").onclick = () => fenster.remove();
   },
 
   _warnhinweisHtml(warnungen) {
@@ -519,6 +587,30 @@ const Simulation = {
           <button type="button" class="warn-mehr" id="btn-warn-beispiele">Beispiele ansehen</button>
         </p>
         <ul class="warn-beispiele" id="warn-beispiele" hidden>${beispiele}</ul>
+      </div>`;
+  },
+
+  /** Warntexte, die Bausteine waehrend der Rechnung in ihre Ausgabe
+   * geschrieben haben (z.B. ein unterdimensionierter Kuehler) - anders als bei
+   * den Konvergenzwarnungen des Solvers sind das schon je Karte und Wortlaut
+   * gruppierte Eintraege (core.ergebnisse.lade_baustein_warnungen), nie mehr
+   * als eine Handvoll Zeilen, darum ohne Einklapp-Knopf direkt sichtbar. */
+  _bausteinWarnhinweisHtml(liste) {
+    if (!liste.length) {
+      return '<p class="warnhinweis warnhinweis-ok">Keine Warnungen aus Bausteinen.</p>';
+    }
+    const zeilen = liste
+      .map((w) => {
+        const beispiele = (w.beispiele || []).map((s) => `Stunde ${s}`).join(", ");
+        const stundenwort = w.anzahl === 1 ? "Stunde" : "Stunden";
+        return `<li><strong>${htmlSicher(w.karte_name)}</strong>: ${htmlSicher(w.text)}
+          — ${w.anzahl} ${stundenwort} (z.B. ${beispiele})</li>`;
+      })
+      .join("");
+    return `
+      <div class="warnhinweis">
+        <p>Warnungen aus Bausteinen</p>
+        <ul class="warn-beispiele">${zeilen}</ul>
       </div>`;
   },
 };

@@ -105,7 +105,8 @@ CREATE TABLE IF NOT EXISTS simulation (
     fortschritt        INTEGER NOT NULL DEFAULT 0,
     gestartet_am       TEXT NOT NULL DEFAULT (datetime('now')),
     dauer_s            REAL NOT NULL DEFAULT 0,
-    warnungen          TEXT NOT NULL DEFAULT '[]'
+    warnungen          TEXT NOT NULL DEFAULT '[]',
+    baustein_warnungen TEXT NOT NULL DEFAULT '[]'
 );
 
 CREATE TABLE IF NOT EXISTS zeitreihe (
@@ -216,6 +217,11 @@ def _migriere(db):
     if "fortschritt" not in spalten:
         db.execute(
             "ALTER TABLE simulation ADD COLUMN fortschritt INTEGER NOT NULL DEFAULT 0"
+        )
+    if "baustein_warnungen" not in spalten:
+        db.execute(
+            "ALTER TABLE simulation ADD COLUMN baustein_warnungen TEXT NOT NULL "
+            "DEFAULT '[]'"
         )
 
 

@@ -167,7 +167,7 @@ def test_init_db_migriert_eine_datenbank_im_alten_zustand(tmp_path, monkeypatch)
         pfeil_spalten = {r[1] for r in db.execute("PRAGMA table_info(pfeil)")}
         sim_spalten = {r[1] for r in db.execute("PRAGMA table_info(simulation)")}
         assert "mehrdeutig" in pfeil_spalten
-        assert {"kennung", "fortschritt"} <= sim_spalten
+        assert {"kennung", "fortschritt", "baustein_warnungen"} <= sim_spalten
 
         indizes = {
             r["name"]

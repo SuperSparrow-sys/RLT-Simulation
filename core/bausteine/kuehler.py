@@ -34,7 +34,7 @@ class Kuehler(Baustein):
         Port("QK", SIGNAL, AUSGANG, KAELTE),
     ]
 
-    AUSGABEN = ["T_aus", "F_aus", "QK", "dp"]
+    AUSGABEN = ["T_aus", "F_aus", "QK", "dp", "warnung"]
     AUSGABE_LABEL = {"T_aus": "Austrittstemperatur"}
 
     def oberflaechentemperatur(self, T_ein, p):

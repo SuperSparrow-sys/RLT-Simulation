@@ -122,21 +122,50 @@ def speichere(anlage_id, wetterdatensatz_id, von, bis, lauf, graph, dauer, statu
 
 
 def _ergebnisse_einfuegen(db, simulation_id, lauf, graph):
-    """Zeitreihen und Bilanz einer Zeile schreiben - gemeinsam von speichere()
-    und abschliesse() genutzt, ohne selbst zu committen."""
-    # Alle vorkommenden Groessen einsammeln
+    """Zeitreihen, Bilanz und Bausteinwarnungen einer Zeile schreiben -
+    gemeinsam von speichere() und abschliesse() genutzt, ohne selbst zu
+    committen."""
+
+    def _name(karte_id):
+        karte = graph.karten.get(karte_id)
+        return karte.name if karte is not None else ""
+
+    # Alle vorkommenden Groessen einsammeln, und nebenbei die Warntexte, die
+    # manche Bausteine unter dem Schluessel 'warnung' in ihre Ausgabe
+    # schreiben (z.B. ein unterdimensionierter Kuehler, siehe
+    # core/bausteine/kuehler.py) - gruppiert nach Karte und Wortlaut, mit den
+    # Stunden, in denen sie auftraten.
     reihen = {}
+    warnstunden = {}
     for nummer, stunde in enumerate(lauf.stunden):
         for karte_id, werte in stunde.items():
+            text = werte.get("warnung")
+            if text:
+                warnstunden.setdefault((karte_id, text), []).append(nummer + 1)
             for groesse, wert in werte.items():
                 if isinstance(wert, Luft) or not isinstance(wert, (int, float)):
                     continue
                 reihen.setdefault((karte_id, groesse), [0.0] * len(lauf.stunden))
                 reihen[(karte_id, groesse)][nummer] = float(wert)
 
-    def _name(karte_id):
-        karte = graph.karten.get(karte_id)
-        return karte.name if karte is not None else ""
+    if warnstunden:
+        baustein_warnungen = sorted(
+            (
+                {
+                    "karte_id": karte_id,
+                    "karte_name": _name(karte_id),
+                    "text": text,
+                    "anzahl": len(stunden),
+                    "beispiele": _stichprobe(stunden, 5),
+                }
+                for (karte_id, text), stunden in warnstunden.items()
+            ),
+            key=lambda eintrag: (-eintrag["anzahl"], eintrag["karte_name"], eintrag["text"]),
+        )
+        db.execute(
+            "UPDATE simulation SET baustein_warnungen = ? WHERE id = ?",
+            (json.dumps(baustein_warnungen, ensure_ascii=False), simulation_id),
+        )
 
     db.executemany(
         "INSERT INTO zeitreihe (simulation_id, karte_id, karte_name, groesse, werte) "
@@ -222,17 +251,50 @@ def lade_zeitreihe(simulation_id, karte_id, groesse):
     return _aus_blob(zeile["werte"]) if zeile else []
 
 
-def reihen(simulation_id):
+def simulation_anlage_id(simulation_id):
+    """Die Anlage, zu der ein Simulationslauf gehoert - fuer Aufrufer, die aus
+    einer simulation_id zuerst den aktuellen Anlagengraph laden muessen
+    (siehe lade_protokoll() und routes/simulation.py:protokoll())."""
     db = get_db()
-    return [
-        {"karte_id": z["karte_id"], "karte_name": z["karte_name"],
-         "groesse": z["groesse"], "einheit": z["einheit"]}
-        for z in db.execute(
-            "SELECT karte_id, karte_name, groesse, einheit FROM zeitreihe "
-            "WHERE simulation_id = ? ORDER BY karte_name, groesse",
-            (simulation_id,),
-        )
-    ]
+    zeile = db.execute(
+        "SELECT anlage_id FROM simulation WHERE id = ?", (simulation_id,)
+    ).fetchone()
+    if zeile is None:
+        raise KeyError(f"Simulationslauf {simulation_id} gibt es nicht")
+    return zeile["anlage_id"]
+
+
+def lade_protokoll(simulation_id, graph):
+    """Das Stundenprotokoll der am Datenlogger angeschlossenen Werte.
+
+    Die 'zeitreihe'-Tabelle traegt die Ausgabe JEDER Karte, aber nur der
+    Datenlogger ist die Stelle, an der eine Anlage auswaehlt, was sie davon
+    im Protokoll sehen will: ein Anschluss zaehlt erst, sobald er im
+    Parameterfenster einen Namen bekommen hat (core/bausteine/datenlogger.py,
+    Baustein.spalten()) - genau das verspricht der Erklaertext in
+    templates/bausteine.html. Namen und Einheiten kommen deshalb live aus dem
+    aktuellen Anlagengraph statt aus der Zeitreihe selbst - wird eine Spalte
+    nach dem Lauf umbenannt, zeigt ein spaeter geoeffnetes Protokoll den
+    neuen Namen, nicht den zur Laufzeit gueltigen. Das ist ein bewusster
+    Kompromiss: eine dritte Stelle, die Spaltennamen einfriert, haette diese
+    Funktion nur unwesentlich richtiger und dafuer eine weitere Spalte in der
+    Datenbank gebraucht.
+    """
+    spalten = []
+    for karte in graph.karten.values():
+        if karte.typ != "datenlogger":
+            continue
+        for schluessel, name, einheit in karte.baustein.spalten(karte.parameter):
+            werte = lade_zeitreihe(simulation_id, karte.id, schluessel)
+            if not werte:
+                continue
+            spalten.append(
+                {
+                    "karte_id": karte.id, "karte_name": karte.name,
+                    "name": name, "einheit": einheit, "werte": werte,
+                }
+            )
+    return spalten
 
 
 def letzte_werte(simulation_id):
@@ -281,6 +343,22 @@ def lade_warnungen(simulation_id, anzahl=5):
     ).fetchone()
     alle = json.loads(zeile["warnungen"]) if zeile else []
     return {"anzahl": len(alle), "beispiele": _stichprobe(alle, anzahl)}
+
+
+def lade_baustein_warnungen(simulation_id):
+    """Warnungen, die Bausteine waehrend der Rechnung in ihre Ausgabe
+    geschrieben haben (z.B. 'Kuehlleistung zu niedrig'), gruppiert nach Karte
+    und Wortlaut - eine Zeile je Kombination, mit Anzahl und einer Stichprobe
+    der betroffenen Stunden. Siehe _ergebnisse_einfuegen(), das die Gruppen
+    beim Speichern des Laufs bildet; analog zu lade_warnungen() fuer die
+    Konvergenzwarnungen des Solvers."""
+    db = get_db()
+    zeile = db.execute(
+        "SELECT baustein_warnungen FROM simulation WHERE id = ?", (simulation_id,)
+    ).fetchone()
+    if not zeile or not zeile["baustein_warnungen"]:
+        return []
+    return json.loads(zeile["baustein_warnungen"])
 
 
 def simulationen_von(anlage_id):
