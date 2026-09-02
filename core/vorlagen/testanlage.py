@@ -195,34 +195,34 @@ def baue(projekt_id, name=NAME):
         )
 
     # -- Quellen ----------------------------------------------------------
-    wetter = karte("wetter", 40, 40, "Wetterdaten")
-    aussenluft = karte("aussenluft", 40, 200, "Außenluft")
+    wetter = karte("wetter", 40, 20, "Wetterdaten")
+    aussenluft = karte("aussenluft", 40, 170, "Außenluft")
 
     # -- Luftbehandlung -----------------------------------------------------
     mischkammer = karte(
-        "mischkammer", 220, 200, "Mischkammer",
+        "mischkammer", 260, 170, "Mischkammer",
         max_umluft=60.0,
     )
     erhitzer = karte(
-        "erhitzer", 400, 200, "Erhitzer",
+        "erhitzer", 480, 170, "Erhitzer",
         V_nenn=5000.0, dp_nenn=150.0, QH_max=90.0,
     )
     kuehler = karte(
-        "kuehler", 580, 200, "Kühler",
+        "kuehler", 920, 170, "Kühler",
         V_nenn=5000.0, dp_nenn=180.0, QK_nenn=70.0, T_KW_mittel=7.0,
     )
     befeuchter = karte(
-        "dampfbefeuchter", 760, 200, "Dampfbefeuchter",
+        "dampfbefeuchter", 1140, 170, "Dampfbefeuchter",
         dampftemperatur=180.0, absalzverlust=10.0, max_leistung=45.0, dampfart="E",
     )
     zuluft = karte(
-        "ventilator", 940, 200, "Zuluftventilator",
+        "ventilator", 1360, 170, "Zuluftventilator",
         rolle="zuluft", V_max=5000.0, dp_max=850.0, dp_konst=650.0,
         PE_max=2.2, regelart="F", stellgroesse=100.0,
     )
 
     raum = karte(
-        "raum", 1140, 260, "Technikhalle",
+        "raum", 1580, 170, "Technikhalle",
         laenge_a=25.0, laenge_b=20.0, laenge_c=25.0, laenge_d=20.0, laenge_e=0.0,
         aw_anteil_a=1.0, aw_anteil_b=1.0, aw_anteil_c=1.0, aw_anteil_d=1.0,
         u_wand_a=0.24, u_wand_b=0.24, u_wand_c=0.24, u_wand_d=0.24,
@@ -242,15 +242,15 @@ def baue(projekt_id, name=NAME):
     )
 
     abluft = karte(
-        "ventilator", 1140, 480, "Abluftventilator",
+        "ventilator", 1580, 470, "Abluftventilator",
         rolle="abluft", V_max=5000.0, dp_max=650.0, dp_konst=450.0,
         PE_max=1.8, regelart="F", stellgroesse=100.0,
     )
     verteiler = karte(
-        "verteiler", 940, 480, "Verteiler Abluft",
+        "verteiler", 1360, 620, "Verteiler Abluft",
         anteile={"luft_aus_1": 60.0, "luft_aus_2": 40.0},
     )
-    fortluft = karte("fortluft", 40, 560, "Fortluft")
+    fortluft = karte("fortluft", 40, 620, "Fortluft")
 
     # Nachtluftabsenkung statt Abschalten (siehe Docstring, "Zur Konvergenz",
     # Fund 2): tageslastprofil.lastgang_1 (0,2 nachts / 1,0 tags / 0,3 abends)
@@ -271,15 +271,15 @@ def baue(projekt_id, name=NAME):
     # Fuer die Kopplung selbst waere jeder Wert > 0 gleich gut geeignet:
     # raum.berechne() prueft nur "Volumenstrom > 0", nicht seine Hoehe.
     nachtluft = karte(
-        "faktor", 940, 340, "Nachtluft-Grundlast", faktor=25.0,
+        "faktor", 1360, 320, "Nachtluft-Grundlast", faktor=25.0,
     )
     ventilatorstellung = karte(
-        "maximalwert", 940, 260, "Ventilatorstellung",
+        "maximalwert", 1360, 470, "Ventilatorstellung",
     )
 
     # -- Regelung -------------------------------------------------------
     kaskade = karte(
-        "kaskade", 400, 20, "Raum-/Zuluft-Kaskade",
+        "kaskade", 480, 20, "Raum-/Zuluft-Kaskade",
         T_Raum_min=20.0, T_AU_min=15.0, T_Raum_max=26.0, T_AU_max=30.0,
         T_ZU_min=15.0, T_ZU_max=26.0, xp=5.0,
     )
@@ -289,7 +289,7 @@ def baue(projekt_id, name=NAME):
     # Docstring, "Zur Konvergenz", Fund 1). T_Raum wirkt dagegen ueber
     # statische_heizung.QH_stat unmittelbar auf sich selbst zurueck.
     frostregler = karte(
-        "sequenzregler", 1140, 20, "Frostschutzregler",
+        "sequenzregler", 1580, 20, "Frostschutzregler",
         oberer_sw=50.0, unterer_sw=17.0, xp=5.0,
     )
     # xp_2 klein und der Befeuchter kraeftig genug ausgelegt, damit der
@@ -298,7 +298,7 @@ def baue(projekt_id, name=NAME):
     # Durchgaenge tatsaechlich einschwingt statt nur langsam heranzukriechen
     # (siehe Docstring, "Zur Konvergenz").
     feuchteregler = karte(
-        "p_regler", 760, 20, "Feuchteregler",
+        "p_regler", 1140, 20, "Feuchteregler",
         xp_1=5.0, xp_2=0.7, sollwert_2=6.0,
     )
     # Kuehlerschutz (Vorwaermung): verhindert, dass der Kuehler Luft
@@ -321,21 +321,21 @@ def baue(projekt_id, name=NAME):
     # gross der Abstand tatsaechlich sein muesste (z. B. aus xp_2 und der
     # Regelguete hergeleitet) - siehe Bericht.
     kuehlerschutz = karte(
-        "p_regler", 580, 20, "Kühlerschutz (Vorwärmung)",
+        "p_regler", 920, 20, "Kühlerschutz (Vorwärmung)",
         xp_1=5.0, xp_2=1.0, sollwert_2=9.0,
     )
     erhitzerstellung = karte(
-        "maximalwert", 490, 20, "Erhitzerstellung",
+        "maximalwert", 700, 20, "Erhitzerstellung",
     )
     statische_heizung = karte(
-        "statische_heizung", 1340, 100, "Statische Heizung (Frostschutz)",
+        "statische_heizung", 1800, 20, "Statische Heizung (Frostschutz)",
         QH_nenn=8.0,
     )
-    enthalpie = karte("enthalpierechner", 1340, 260, "Raumluftzustand")
+    enthalpie = karte("enthalpierechner", 1800, 170, "Raumluftzustand")
 
     # -- Zeit und Betrieb -------------------------------------------------
     zeitplan = karte(
-        "wochenzeitplan", 40, 700, "Wochenzeitplan",
+        "wochenzeitplan", 40, 770, "Wochenzeitplan",
         von_montag=6.0 / 24.0, bis_montag=20.0 / 24.0,
         von_dienstag=6.0 / 24.0, bis_dienstag=20.0 / 24.0,
         von_mittwoch=6.0 / 24.0, bis_mittwoch=20.0 / 24.0,
@@ -345,48 +345,48 @@ def baue(projekt_id, name=NAME):
         von_sonntag=0.0, bis_sonntag=0.0,
     )
     ferien = karte(
-        "ferien", 220, 700, "Betriebsferien",
+        "ferien", 260, 770, "Betriebsferien",
         zeitraeume=[
             {"name": "Weihnachten", "von": "23.12.", "bis": "02.01."},
             {"name": "Ostern", "von": "29.03.", "bis": "02.04."},
         ],
     )
     monate = karte(
-        "monatsprofil", 400, 700, "Werksferien August",
+        "monatsprofil", 480, 770, "Werksferien August",
         monate=[True, True, True, True, True, True, True, False, True, True, True, True],
     )
     tagesprofil = karte(
-        "tageslastprofil", 580, 700, "Tageslastprofil",
+        "tageslastprofil", 920, 770, "Tageslastprofil",
         lastgang_1=[0.2] * 6 + [1.0] * 10 + [0.3] * 8,
     )
-    betrieb = karte("anlagenbetrieb", 760, 700, "Anlagenbetrieb")
+    betrieb = karte("anlagenbetrieb", 1140, 770, "Anlagenbetrieb")
 
     # -- Verbraucher --------------------------------------------------------
     beleuchtung = karte(
-        "beleuchtung", 1540, 480, "Beleuchtung",
+        "beleuchtung", 2020, 470, "Beleuchtung",
         spez_leistung=10.0, grundflaeche=500.0, nennbeleuchtung=300.0,
     )
     pumpen = karte(
-        "heizungspumpen", 1540, 560, "Heizungspumpen",
+        "heizungspumpen", 2020, 620, "Heizungspumpen",
         P_allgemein=0.25, P_wwb=0.15, P_kessel=0.35,
     )
     warmwasser = karte(
-        "warmwasser", 1540, 640, "Warmwasserbereitung",
+        "warmwasser", 2020, 770, "Warmwasserbereitung",
         speichervolumen=300.0, verbrauch=120.0, sollwert=55.0,
     )
     zirkulation = karte(
-        "zirkulation", 1540, 720, "Zirkulation",
+        "zirkulation", 2020, 920, "Zirkulation",
         volumenstrom=0.6, spreizung=5.0, P_pumpe=0.025,
     )
 
     bilanz = karte(
-        "bilanz", 1760, 400, "Energiepreise und Bilanz",
+        "bilanz", 2240, 320, "Energiepreise und Bilanz",
         preis_strom_ht=260.0, preis_strom_nt=200.0, preis_strom_leistung=0.0,
         preis_waerme=85.0, preis_kaelte=85.0, preis_wasser=4.2,
         ht_von=6.0 / 24.0, ht_bis=19.0 / 24.0,
     )
     logger = karte(
-        "datenlogger", 1760, 120, "Datenlogger",
+        "datenlogger", 2240, 20, "Datenlogger",
         namen=[
             "T Raum", "F Raum", "Sollwert Raum", "T Zuluft",
             "Enthalpie Raum", "rel. Feuchte Raum",
