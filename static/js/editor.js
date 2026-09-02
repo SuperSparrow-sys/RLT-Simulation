@@ -1135,6 +1135,61 @@ if (window.visualViewport) {
   aktualisiereAppHoehe();
 }
 
+/* Verhindert, dass sich die GANZE SEITE mit einer Kneifgeste aufziehen laesst
+   (siehe Bericht: das ist der Weg, der nach der Wisch-Sperre oben als
+   einziger uebrig blieb - Safari verschiebt eine gezoomte Seite ueber den
+   visuellen Ausschnitt, den weder overflow:hidden noch touch-action
+   erreichen). gesturestart/-change/-end sind WebKit-eigene, nicht
+   standardisierte Ereignisse (Chromium/Firefox kennen den Typ nicht - die
+   addEventListener()-Aufrufe unten binden dort folgenlos nichts an
+   Vorhandenes, kein Fehler). Sie sind der von Apple selbst dokumentierte,
+   verlaessliche Weg, das Aufziehen zu unterbinden, auch dort, wo
+   touch-action aus bekannten WebKit-Eigenheiten nicht zuverlaessig
+   durchkommt (siehe die Kommentare bei .palette/.legende-inhalt/... in
+   style.css - die schliessen die Luecken zusaetzlich, nicht ersatzweise).
+
+   NUR bei Beruehrung, NIE am Schreibtisch: matchMedia() wird bei jedem
+   Ereignis frisch geprueft, nicht einmalig gespeichert - ein externer
+   Bildschirm/Eingabewechsel waehrend der Sitzung soll sich sofort
+   auswirken. Ohne diese Bedingung traefe preventDefault() auch die
+   Kneifgeste auf dem Trackpad im Desktop-Safari, die als
+   Zugaenglichkeitsfunktion (groessere Schrift fuer schwache Augen)
+   unangetastet bleiben MUSS - deshalb hier ausdruecklich NICHT einfach
+   "jedes gesturestart verhindern". */
+function nurBeiBeruehrungVerhindern(ereignis) {
+  if (!window.matchMedia("(pointer: coarse)").matches) return;
+  ereignis.preventDefault();
+}
+document.addEventListener("gesturestart", nurBeiBeruehrungVerhindern, { passive: false });
+document.addEventListener("gesturechange", nurBeiBeruehrungVerhindern, { passive: false });
+document.addEventListener("gestureend", nurBeiBeruehrungVerhindern, { passive: false });
+
+/* Doppeltippen zoomt in Safari ebenfalls (unabhaengig von der Kneifgeste) -
+   derselbe zweite Weg wie oben, nur ueber zwei schnell aufeinanderfolgende
+   Beruehrungen statt zwei gleichzeitiger. touch-action:none/pan-y (siehe
+   style.css) unterdrueckt das in WebKit zwar meist schon mit, aber nicht
+   nachweislich ueberall - dieselbe Vorsicht wie beim Ueberscrollen selbst
+   (siehe Bericht: "verlass dich nicht auf einen einzelnen Mechanismus").
+   Verhindert nur den ZWEITEN touchend innerhalb von 300ms an (ungefaehr)
+   derselben Stelle - ein echter Doppeltipp auf eine Karte (zum Auswaehlen)
+   bleibt unversehrt: preventDefault() auf touchend unterbindet die
+   Standardaktion des Ereignisses (das native Zoomen), nicht die
+   Maus-Ersatzereignisse (click/dblclick), ueber die z.B. das Loeschen
+   eines Pfeils per Doppeltipp liefe (siehe pfeile.js, dblclick). */
+let _letzteBeruehrungEnde = { zeit: 0, x: 0, y: 0 };
+document.addEventListener("touchend", (e) => {
+  if (!window.matchMedia("(pointer: coarse)").matches) return;
+  const beruehrung = e.changedTouches && e.changedTouches[0];
+  if (!beruehrung) return;
+  const jetzt = Date.now();
+  const { zeit, x, y } = _letzteBeruehrungEnde;
+  const nah = Math.hypot(beruehrung.clientX - x, beruehrung.clientY - y) < 40;
+  if (jetzt - zeit <= 300 && nah) {
+    e.preventDefault();
+  }
+  _letzteBeruehrungEnde = { zeit: jetzt, x: beruehrung.clientX, y: beruehrung.clientY };
+}, { passive: false });
+
 window.addEventListener("DOMContentLoaded", async () => {
   Editor.bindeLeinwand();
   panelLeeren();

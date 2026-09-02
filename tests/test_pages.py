@@ -316,3 +316,60 @@ def test_alle_scrollbaren_flaechen_haben_overscroll_behavior_contain(app):
         if "overscroll-behavior: contain" not in block:
             fehlend.append(block.strip().splitlines()[-1])
     assert not fehlend, f"Scrollflaeche(n) ohne overscroll-behavior:contain: {fehlend}"
+
+
+def test_editor_js_verhindert_webkit_gesten_nur_bei_beruehrung(app):
+    """gesturestart/-change/-end sind der von Safari selbst dokumentierte
+    Weg, das Aufziehen der ganzen Seite zu unterbinden (siehe Bericht) -
+    MUSS auf "pointer: coarse" begrenzt sein, sonst traefe es auch das
+    Trackpad-Kneifen im Desktop-Safari (Zugaenglichkeit: Zoomen fuer
+    schwache Augen muss dort erhalten bleiben)."""
+    klient = app.test_client()
+    js = klient.get("/static/js/editor.js").get_data(as_text=True)
+    for typ in ("gesturestart", "gesturechange", "gestureend"):
+        assert f'"{typ}"' in js
+    funktion = js[js.index("function nurBeiBeruehrungVerhindern("):]
+    funktion = funktion[: funktion.index("\n}") + 2]
+    assert 'window.matchMedia("(pointer: coarse)")' in funktion
+    assert "ereignis.preventDefault()" in funktion
+
+
+def test_editor_html_hat_maximum_scale_nur_als_zweite_sicherung(app):
+    """maximum-scale/user-scalable wirken nur auf mobile Browser ausserhalb
+    von iOS Safari (das ignoriert es seit iOS 10 absichtlich) - eine zweite,
+    nicht die tragende Sicherung. Nur auf der Editorseite: Startseite und
+    Bausteine sollen sich weiterhin mit zwei Fingern aufziehen lassen."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("Referenz")
+        anlage = ax_sim_2_1.baue(projekt, "AX_SIM 2.1")
+
+    klient = app.test_client()
+    editor_html = klient.get(f"/anlage/{anlage}").get_data(as_text=True)
+    assert "maximum-scale=1" in editor_html
+    assert "user-scalable=no" in editor_html
+
+    for pfad in ("/", "/bausteine", "/anlage/9999"):
+        html = klient.get(pfad).get_data(as_text=True)
+        assert "maximum-scale" not in html
+        assert "user-scalable" not in html
+
+
+def test_style_css_schliesst_touch_action_luecken_fuer_die_kneifgeste(app):
+    """touch-action:pan-y/none auf jeder Flaeche, ueber der sich die Seite
+    sonst noch mit zwei Fingern haette aufziehen lassen (siehe Bericht,
+    "der zweite Weg") - Minikarte, Legende-Aufklappmenue, sowie (nur auf der
+    Editorseite, ueber body.seite-editor abgegrenzt) Dialoge und
+    Fehlerleiste, die auch auf anderen, nicht festgesetzten Seiten
+    vorkommen."""
+    klient = app.test_client()
+    css = klient.get("/static/css/style.css").get_data(as_text=True)
+
+    for selektor in (".minikarte-huelle {", ".legende-inhalt {"):
+        block = css[css.index(selektor):]
+        block = block[: block.index("}") + 1]
+        assert "touch-action: none;" in block
+
+    abgegrenzt = css[css.index("body.seite-editor .dialog-huelle,"):]
+    abgegrenzt = abgegrenzt[: abgegrenzt.index("}") + 1]
+    assert ".fehlermeldung" in abgegrenzt
+    assert "touch-action: none;" in abgegrenzt

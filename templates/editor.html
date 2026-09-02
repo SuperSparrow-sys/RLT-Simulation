@@ -2,7 +2,16 @@
 <html lang="de" class="seite-editor">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- maximum-scale/user-scalable: nur eine ZWEITE Sicherung fuer Browser
+       ausserhalb von iOS Safari - Safari selbst ignoriert das seit iOS 10
+       absichtlich (Zoomen bleibt dort als Zugaenglichkeitsfunktion
+       erhalten), verlassen wird sich hier nicht darauf (siehe
+       gesturestart-Sperre in editor.js, der eigentliche Weg). Wirkt nur auf
+       mobile Browser im Viewport-Meta-Modus, an einem Schreibtischbrowser
+       aendert diese Zeile nichts - Strg +/- und Strg+Mausrad bleiben dort
+       unberuehrt. Nur in dieser Vorlage: Startseite/Bausteine sollen sich
+       weiterhin mit zwei Fingern aufziehen lassen. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
   <title>RLT-Simulation</title>
   <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
