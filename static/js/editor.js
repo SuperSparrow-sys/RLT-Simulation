@@ -1195,18 +1195,6 @@ const Editor = {
     return { minX, minY, maxX, maxY };
   },
 
-  /* Passt Zoomstufe und Bildausschnitt so an, dass alle Karten sichtbar sind
-     - die ausdrueckliche Uebersicht ueber den Knopf "Einpassen" (siehe
-     bindeEreignisse() weiter unten). Bei vielen Karten faellt der Zoom dabei
-     so weit, dass Namen klein und teils nur noch als Farbkante erkennbar
-     sind (siehe DETAIL_ZOOM_SCHWELLE) - das ist hier in Ordnung: eine
-     Uebersicht sucht man in, statt in ihr zu lesen. Anders als frueher
-     oeffnet der Editor eine Anlage NICHT mehr in dieser Ansicht (siehe
-     startAnsicht() weiter unten und laden() oben) - bei 36 Karten war die
-     Uebersicht so weit herausgezoomt, dass an ihr nichts mehr zu lesen war,
-     ohne die Gegenskalierung, die das beheben sollte, wiederum Namen ueber
-     die Nachbarkarte hinauslaufen liess (siehe Task "Ueberlappende Karten
-     im gezeichneten Bild"). */
   /* Die Zoomstufe, bei der die ganze Anlage samt Rand in die Leinwand passt.
      Getrennt von einpassen(), weil startAnsicht() dieselbe Zahl braucht, um
      zu entscheiden, ob eine Einpassung ueberhaupt sinnvoll ist - nicht um
@@ -1220,6 +1208,19 @@ const Editor = {
     return Math.min(kasten.width / inhaltBreite, kasten.height / inhaltHoehe, 1);
   },
 
+  /* Passt Zoomstufe und Bildausschnitt so an, dass alle Karten sichtbar sind
+     - die ausdrueckliche Uebersicht ueber den Knopf "Einpassen" (siehe
+     bindeEreignisse() weiter unten). Bei vielen Karten faellt der Zoom dabei
+     so weit, dass Namen klein und teils nur noch als Farbkante erkennbar
+     sind (siehe DETAIL_ZOOM_SCHWELLE) - das ist hier in Ordnung: eine
+     Uebersicht sucht man in, statt in ihr zu lesen. Beim OEFFNEN einer
+     Anlage waehlt startAnsicht() (weiter unten, gerufen von laden() oben)
+     zwischen dieser Ansicht und einem Ausschnitt: eine grosse Vorlage
+     bekommt sie nicht mehr - bei 36 Karten war die
+     Uebersicht so weit herausgezoomt, dass an ihr nichts mehr zu lesen war,
+     ohne die Gegenskalierung, die das beheben sollte, wiederum Namen ueber
+     die Nachbarkarte hinauslaufen liess (siehe Task "Ueberlappende Karten
+     im gezeichneten Bild"). */
   einpassen() {
     const huelle = this.kartenHuelle();
     const leinwand = document.getElementById("leinwand");
