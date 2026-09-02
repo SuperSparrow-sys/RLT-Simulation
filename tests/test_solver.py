@@ -184,6 +184,91 @@ def test_raum_erfaehrt_seine_abluftmenge_vom_abluftventilator():
     assert lauf.stunden[0][4]["abluft_aus_1"].V == pytest.approx(4500.0)
 
 
+def _gedrosselte_anlage(stellung_zuluft, stellung_abluft, v_max=8000.0):
+    """Aussenluft -> Zuluftventilator -> einfacher Raum -> Abluftventilator."""
+    karten = {
+        1: karte(1, "wetter"),
+        2: karte(2, "aussenluft"),
+        3: karte(3, "ventilator", {
+            "rolle": "zuluft", "V_max": v_max, "PE_max": 4.9, "regelart": "F",
+            "stellgroesse": stellung_zuluft,
+        }),
+        4: karte(4, "einfacher_raum",
+                 {"spez_transmission": 0.5, "sollwert_stat": 15.0}),
+        5: karte(5, "ventilator", {
+            "rolle": "abluft", "V_max": v_max, "PE_max": 3.3, "regelart": "F",
+            "stellgroesse": stellung_abluft,
+        }),
+        6: karte(6, "fortluft"),
+    }
+    return karten, verbinde(
+        karten,
+        [
+            (1, "T_AU", 2, "T_AU"),
+            (1, "F_AU", 2, "F_AU"),
+            (2, "luft_aus", 3, "luft_ein"),
+            (3, "luft_aus", 4, "zuluft_ein_1"),
+            (1, "T_AU", 4, "T_AU"),
+            (1, "F_AU", 4, "F_AU"),
+            (4, "abluft_aus_1", 5, "luft_ein"),
+            (5, "luft_aus", 6, "luft_ein"),
+        ],
+    )
+
+
+def test_raum_sieht_zu_und_abluft_im_selben_massstab():
+    """Anlage!AH32 = Y20 und AH33 = M42/2 - beide Seiten sind GESTELLTE Stroeme.
+
+    Befund vor dieser Pruefung: Die Zuluft kam gestellt beim Raum an (aus dem
+    Vorwaertslauf), die Abluft dagegen mit dem Nennwert (aus dem
+    Rueckwaertslauf, der die Stellgroesse noch nicht kennt). Bei 30 Prozent sah
+    der Raum 2400 m³/h Zuluft gegen 8000 m³/h Abluft, erfand daraus eine
+    Infiltration und rechnete eine deutlich zu hohe statische Heizleistung.
+    """
+    karten, g = _gedrosselte_anlage(30.0, 30.0)
+    lauf = solver.Solver(g).starte(wetterstunden(2, t_au=0.0))
+    raum = lauf.stunden[-1][4]
+
+    assert raum["V_zuluft_ein_1"] == pytest.approx(2400.0)
+    assert raum["V_abluft_aus_1"] == pytest.approx(2400.0)
+    # Kein Zuschlag aus einer erfundenen Infiltration: das Bezugsvolumen des
+    # Raums ist die Zuluftmenge, nicht die groessere Nennabluftmenge.
+    assert raum["bezugsvolumen"] == pytest.approx(2400.0)
+
+
+def test_gedrosselter_raum_sieht_keine_infiltration():
+    """Gleiche Stellung auf beiden Seiten heisst: kein Nachstroemen von aussen.
+
+    Gegenprobe ist derselbe Raum bei voll aufgedrehten Ventilatoren. Auf ein
+    Viertel der Luftmenge gedrosselt muss der Raum bei 0 °C aussen deutlich
+    weniger statische Heizleistung brauchen als bei voller Menge - genau das
+    ging verloren, als die Nennabluft eine Infiltration vortaeuschte: die
+    Drosselung brachte dann 43,9 kW statt 42,9 kW, also gar keine Entlastung.
+    """
+    _, gedrosselt = _gedrosselte_anlage(30.0, 30.0)
+    _, voll = _gedrosselte_anlage(100.0, 100.0)
+
+    a = solver.Solver(gedrosselt).starte(wetterstunden(2, t_au=0.0)).stunden[-1][4]
+    b = solver.Solver(voll).starte(wetterstunden(2, t_au=0.0)).stunden[-1][4]
+
+    assert a["QH_stat"] < 0.6 * b["QH_stat"]
+    assert a["T_frei"] > b["T_frei"]
+
+
+def test_bauteile_vor_dem_ventilator_bleiben_auf_dem_nennstrom():
+    """Anlage!S13 = S9 = V9 = Y9 - vor dem Ventilator gilt der Nennstrom.
+
+    Die Gegenprobe zur vorigen Pruefung: der Sprung der Luftmenge AM Ventilator
+    ist der Mappe getreu und darf nicht mitkorrigiert werden.
+    """
+    karten, g = _gedrosselte_anlage(30.0, 30.0)
+    lauf = solver.Solver(g).starte(wetterstunden(2, t_au=0.0))
+
+    assert lauf.stunden[-1][2]["V"] == pytest.approx(8000.0)   # Aussenluft
+    assert lauf.stunden[-1][3]["V_ein"] == pytest.approx(8000.0)  # Ventilatoreintritt
+    assert lauf.stunden[-1][3]["V"] == pytest.approx(2400.0)      # Ventilatoraustritt
+
+
 def test_zustandsgroessen_werden_zur_naechsten_stunde_fortgeschrieben():
     karten = {1: karte(1, "raum", {"start_temperatur": 20.0, "spez_beleuchtung": 0.0})}
     g = graph.Anlagengraph(karten=karten, verbindungen=[])

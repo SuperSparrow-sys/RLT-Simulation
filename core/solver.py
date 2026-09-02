@@ -13,6 +13,11 @@ Je Stunde laufen zwei Durchgaenge:
    Durchgang wiederholt, bis sich keine Groesse mehr um mehr als MAX_AENDERUNG
    aendert. Das entspricht Application.Iteration in der Excel.
 
+   Zu Beginn jedes Durchgangs wird der Rueckwaertslauf ein zweites Mal
+   gerechnet, diesmal mit den bereits bekannten Stellgroessen. Nur so sieht ein
+   Raum seine Abluft im selben Massstab wie seine Zuluft; die ausfuehrliche
+   Begruendung steht bei Solver._aktualisiere_gestellte_abnahme().
+
 Danach werden die Speichergroessen auf die naechste Stunde uebertragen - die
 Entsprechung des VBA-Unterprogramms Speicher().
 """
@@ -37,12 +42,92 @@ class Solver:
     def __init__(self, anlagengraph):
         self.graph = anlagengraph
         self.reihenfolge = anlagengraph.reihenfolge()
+        # Nennabnahme je Luftausgang - einmal je Lauf aus dem Rueckwaertslauf.
         self.abnahme = {}
+        # Gestellte Abnahme je Luftausgang - je Iteration neu, siehe
+        # _aktualisiere_gestellte_abnahme(). Vor dem ersten Vorwaertsdurchgang
+        # leer, dann greift die Nennabnahme als Startwert.
+        self.gestellte_abnahme = {}
+        self._letzte_stellwerte = None
+        self._baue_luftindex()
 
     # -- Rueckwaertslauf --------------------------------------------------
 
+    def _baue_luftindex(self):
+        """Bereitet die Topologie des Luftwegs einmal auf.
+
+        Der Rueckwaertslauf laeuft nicht mehr nur einmal je Lauf, sondern auch
+        innerhalb des Vorwaertslaufs (siehe _aktualisiere_gestellte_abnahme). In seiner
+        urspruenglichen Form kostete jeder Durchgang Karten x Ports x
+        Verbindungen; mit diesem Index ist er linear in der Zahl der Luftports.
+        """
+        ziele = {}
+        for v in self.graph.verbindungen:
+            ziele.setdefault(v.von_port.id, []).append(v.nach_port.id)
+
+        self._luftausgaenge = {}   # karte_id -> [(schluessel, port_id, ziel-port-ids)]
+        self._portnummern = {}     # karte_id -> {schluessel: port_id}
+        for karte_id, karte in self.graph.karten.items():
+            self._portnummern[karte_id] = {p.schluessel: p.id for p in karte.ports}
+            self._luftausgaenge[karte_id] = [
+                (p.schluessel, p.id, tuple(ziele.get(p.id, ())))
+                for p in karte.ports
+                if p.art == basis.LUFT and p.richtung == basis.AUSGANG
+            ]
+
+        # Karten, die im Vorwaertslauf einen anderen Bedarf melden als im
+        # Nenn-Rueckwaertslauf (heute nur der Ventilator).
+        self._karten_mit_stellwert = [
+            karte_id for karte_id, karte in self.graph.karten.items()
+            if hasattr(karte.baustein, "bedarf_gestellt")
+        ]
+
+    def _rueckwaerts(self, ausgaben=None, topologie_merken=False):
+        """Ein Rueckwaertsdurchgang vom Ende des Luftwegs zu den Quellen.
+
+        Ohne 'ausgaben' meldet jede Karte ihren Nennbedarf ('bedarf'); mit
+        'ausgaben' darf sie stattdessen den gestellten Bedarf melden
+        ('bedarf_gestellt'), der die Stellgroesse des laufenden Vorwaertslaufs
+        kennt. Liefert (gefordert je Lufteingang, Abnahme je Luftausgang).
+        """
+        gefordert = {}  # port_id -> m³/h
+        abnahme = {}    # port_id eines Luftausgangs -> m³/h
+
+        for karte_id in reversed(self.reihenfolge):
+            karte = self.graph.karten[karte_id]
+            aus_bedarf = {}
+            for schluessel, port_id, zielports in self._luftausgaenge[karte_id]:
+                menge = float(sum(gefordert.get(z, 0.0) for z in zielports))
+                aus_bedarf[schluessel] = menge
+                abnahme[port_id] = menge
+
+            hook = None
+            if ausgaben is not None:
+                hook = getattr(karte.baustein, "bedarf_gestellt", None)
+            if hook is None:
+                eigener = karte.baustein.bedarf(aus_bedarf, karte.parameter)
+            else:
+                eigener = hook(
+                    aus_bedarf, karte.parameter, ausgaben.get(karte_id, {})
+                )
+
+            nummern = self._portnummern[karte_id]
+            for schluessel, menge in eigener.items():
+                if schluessel in nummern:
+                    gefordert[nummern[schluessel]] = menge
+
+            # Verteiler braucht die Aufteilung im Vorwaertslauf. Sie gehoert zur
+            # Topologie und wird nur im Nenn-Durchgang gesetzt.
+            if topologie_merken and hasattr(karte.baustein, "bedarf_je_abgang"):
+                karte.baustein.abgaenge = [
+                    schluessel for schluessel, _, _ in self._luftausgaenge[karte_id]
+                ]
+                karte.baustein.bedarf_je_abgang = dict(aus_bedarf)
+
+        return gefordert, abnahme
+
     def _volumenstroeme(self):
-        """Ermittelt je Lufteingang den geforderten Volumenstrom.
+        """Ermittelt je Lufteingang den geforderten Nenn-Volumenstrom.
 
         Nebenbei wird in self.abnahme festgehalten, wieviel an jedem Luftausgang
         stromabwaerts abgenommen wird. Der Raum braucht das: seine Abluftmengen
@@ -50,37 +135,48 @@ class Solver:
         (Anlage!AH33 und AH35 lesen beide aus M42, dem Volumenstrom des
         Abluftventilators).
         """
-        gefordert = {}  # port_id -> m³/h
-        self.abnahme = {}  # port_id eines Luftausgangs -> m³/h
-
-        for karte_id in reversed(self.reihenfolge):
-            karte = self.graph.karten[karte_id]
-            aus_bedarf = {}
-            for port in karte.ports:
-                if port.art != basis.LUFT or port.richtung != basis.AUSGANG:
-                    continue
-                menge = 0.0
-                for v in self.graph.verbindungen:
-                    if v.von_port.id == port.id:
-                        menge += gefordert.get(v.nach_port.id, 0.0)
-                aus_bedarf[port.schluessel] = menge
-                self.abnahme[port.id] = menge
-
-            eigener = karte.baustein.bedarf(aus_bedarf, karte.parameter)
-            for schluessel, menge in eigener.items():
-                for port in karte.ports:
-                    if port.schluessel == schluessel:
-                        gefordert[port.id] = menge
-
-            # Verteiler braucht die Aufteilung im Vorwaertslauf
-            if hasattr(karte.baustein, "bedarf_je_abgang"):
-                karte.baustein.abgaenge = [
-                    p.schluessel for p in karte.ports
-                    if p.art == basis.LUFT and p.richtung == basis.AUSGANG
-                ]
-                karte.baustein.bedarf_je_abgang = dict(aus_bedarf)
-
+        gefordert, self.abnahme = self._rueckwaerts(topologie_merken=True)
         return gefordert
+
+    def _aktualisiere_gestellte_abnahme(self, ausgaben):
+        """Aktualisiert self.gestellte_abnahme aus dem laufenden Vorwaertslauf.
+
+        WARUM ES DIESEN ZWEITEN RUECKWAERTSLAUF GIBT
+        --------------------------------------------
+        Die Mappe reicht an einer Stelle einen Volumenstrom entgegen der
+        Luftrichtung durch: der Raum liest seine Abluftmengen beim
+        Abluftventilator ab (AH33 = AH35 = M42/2), und M42 ist der GESTELLTE
+        Strom M38/100*M31 - genau wie seine Zuluft AH32 = Y20 und AH34 = Y42
+        gestellte Stroeme sind. Beide Seiten der Raumbilanz stehen dort also im
+        selben Massstab.
+
+        Der Nenn-Rueckwaertslauf kann das nicht liefern: er laeuft einmal je Lauf
+        und damit vor jedem Vorwaertslauf, kennt die Stellgroesse also noch gar
+        nicht. Er meldete dem Raum deshalb V_max statt u/100*V_max - der Raum sah
+        gestellte Zuluft gegen Nennabluft, erfand aus der Differenz eine
+        Infiltration und rechnete zu viel Heizlast.
+
+        Der Nennbedarf bleibt trotzdem stehen, denn er ist an seiner Stelle
+        richtig: die Bauteile VOR dem Ventilator legt die Mappe auf den Nennstrom
+        aus (S13 = S9 = V9 = Y9, AB13 = AB9 = Y9), und die Aussenluftkarte liefert
+        ebenfalls den Nennstrom. Dass die Luftmenge ueber den Ventilator springt,
+        ist der Mappe getreu. Es gibt also zwei Groessen, nicht eine: die
+        Nennabnahme (self.abnahme, fuer die Aussenluft und die Aufteilung im
+        Verteiler) und die gestellte Abnahme (hier, fuer alles, was eine Karte
+        ueber ihren eigenen Luftausgang erfaehrt).
+
+        Der zweite Durchgang liegt in der Iterationsschleife des Vorwaertslaufs,
+        weil die Stellgroesse erst dort entsteht. Das ist kein Kunstgriff,
+        sondern dieselbe Rueckkopplung, die die Mappe ueber
+        Application.Iteration aufloest: AH33 haengt an M42, M42 an M38, M38 am
+        Regler, der Regler an der Raumtemperatur. Im ersten Durchgang liegt noch
+        nichts vor; dann gilt der Nennstrom als Startwert, wie bisher.
+        """
+        stellwerte = [ausgaben.get(k) for k in self._karten_mit_stellwert]
+        if stellwerte == self._letzte_stellwerte:
+            return  # nichts Neues - der Durchgang wuerde dasselbe ergeben
+        self._letzte_stellwerte = stellwerte
+        _, self.gestellte_abnahme = self._rueckwaerts(ausgaben=ausgaben)
 
     # -- Vorwaertslauf ----------------------------------------------------
 
@@ -92,9 +188,17 @@ class Solver:
         # der Raum dagegen liest daraus, wie viele Abluftstraenge er hat und wie
         # gross sie sind. Karten mit dynamischen Lufteingaengen muessen deshalb
         # ueber das Praefix ihres EINGANGS sammeln, nicht ueber alle Luftwerte.
+        #
+        # Massgeblich ist die GESTELLTE Abnahme (AH33 = M42/2), damit der Raum
+        # Zu- und Abluft im selben Massstab sieht; solange sie noch nicht
+        # vorliegt - im ersten Durchgang einer Stunde - gilt die Nennabnahme als
+        # Startwert. Begruendung siehe _aktualisiere_gestellte_abnahme().
         for port in karte.ports:
             if port.art == basis.LUFT and port.richtung == basis.AUSGANG:
-                ein[port.schluessel] = Luft(V=self.abnahme.get(port.id, 0.0))
+                menge = self.gestellte_abnahme.get(port.id)
+                if menge is None:
+                    menge = self.abnahme.get(port.id, 0.0)
+                ein[port.schluessel] = Luft(V=menge)
 
         for port in karte.ports:
             if port.richtung != basis.EINGANG:
@@ -149,6 +253,9 @@ class Solver:
             vorher = {k: dict(v) for k, v in ausgaben.items()}
             neue_zustaende = {}
 
+            # Gestellte Volumenstroeme aus dem vorigen Durchgang nachziehen.
+            self._aktualisiere_gestellte_abnahme(ausgaben)
+
             for karte_id in self.reihenfolge:
                 karte = self.graph.karten[karte_id]
                 ein = self._eingaenge(karte, ausgaben, gefordert)
@@ -164,6 +271,11 @@ class Solver:
                 # aus dem Rueckwaertslauf bereit; ihn ein zweites Mal aus den
                 # Verbindungen aufzusummieren waere dieselbe Regel zweimal
                 # geschrieben, und die beiden koennten auseinanderlaufen.
+                #
+                # Hier gilt bewusst die NENNabnahme, nicht die gestellte: die
+                # Mappe legt die Bauteile vor dem Ventilator auf den Nennstrom
+                # aus (S13 = S9 = V9 = Y9). Der Sprung der Luftmenge am
+                # Ventilator ist der Mappe getreu.
                 if karte.typ == "aussenluft":
                     ausgang = next(
                         p for p in karte.ports

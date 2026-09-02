@@ -119,4 +119,26 @@ class Ventilator(Baustein):
         )
 
     def bedarf(self, aus_bedarf, p):
+        """Nennbedarf fuer alles, was VOR dem Ventilator liegt.
+
+        Die Mappe legt Kuehler, Erhitzer und Luftwaescher auf den Nennstrom aus
+        (S13 = S9 = V9 = Y9, AB13 = AB9 = Y9). Dass die Luftmenge am Ventilator
+        auf den gestellten Strom springt, ist ihr getreu und bleibt so.
+        """
         return {"luft_ein": p["V_max"]}
+
+    def bedarf_gestellt(self, aus_bedarf, p, werte):
+        """Gestellter Bedarf - Anlage!Y20, Y42 und M42.
+
+        Y20 = IF(Y12=""; Y9; Y16/100*Y9), also genau das, was volumenstrom()
+        rechnet und berechne() als "V" ausgibt. Wer den Ventilator entgegen der
+        Luftrichtung abliest - der Raum liest ueber AH33 = M42/2 seine
+        Abluftmenge beim Abluftventilator ab -, muss diesen Wert sehen und nicht
+        den Nennstrom. Der Solver ruft das im Vorwaertslauf; vor dem ersten
+        Durchgang steht noch kein "V" bereit, dann gilt der Nennstrom als
+        Startwert der Iteration.
+        """
+        V = werte.get("V")
+        if V is None:
+            return {"luft_ein": p["V_max"]}
+        return {"luft_ein": float(V)}
