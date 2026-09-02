@@ -103,6 +103,64 @@ Laufs. Auf der Startseite gibt es zwei Wege, einen zu bekommen:
 
 Beide Wege landen in derselben Liste auf der Startseite.
 
+## Ergebnisse eines Laufs
+
+Nach einem Simulationslauf zeigt der Editor die Jahresbilanz. Von dort und aus der
+Liste früherer Läufe führen drei Wege weiter:
+
+- **Bericht** (`/anlage/<id>/lauf/<sim>/bericht`) - Kopfdaten, Jahresbilanz mit
+  Kosten, Diagramme und die Warnungen des Laufs. Welche Reihen in den Diagrammen
+  erscheinen, wird auf der Seite selbst gewählt; die Auswahl steht in der Adresse
+  und gilt auch für das PDF.
+- **PDF** - dieselbe Gliederung, dieselben Diagramme. Ohne Fremdbibliothek
+  erzeugt: `core/zeichnung.py` sammelt abstrakte Zeichenbefehle, aus denen
+  `als_svg()` das HTML und `core/pdf.py` das PDF speist. Deshalb sehen beide
+  Fassungen gleich aus, statt zweimal geschrieben zu sein.
+- **Stundenwerte** als `.csv` und `.xlsx` - eine Zeile je Stunde mit den
+  Bilanzgrößen und allen Spalten, die am Datenlogger benannt sind. Die CSV-Datei
+  ist so geschrieben, dass eine deutsche Excel-Einstellung sie ohne Importdialog
+  öffnet; in der `.xlsx` sind Zahlen Zahlen und Zeitpunkte Zeitpunkte.
+
+## Mehrere Wetterjahre vergleichen
+
+Dieselbe Anlage lässt sich über mehrere Wetterdatensätze rechnen - ein Lauf je
+Jahr, nacheinander im Hintergrund. Die Gegenüberstellung zeigt je Bilanzgröße die
+Werte der Jahre, die Abweichung gegenüber dem ersten und die Zahl der Warnungen.
+Ein Jahreslauf dauert rund acht Minuten; der Fortschritt gilt für die ganze Reihe,
+ein Abbruch verhindert auch die noch nicht begonnenen Jahre, und ein Neuladen der
+Seite verliert nichts. Liegt ein Vergleich vor, geht er in den Bericht ein.
+
+## Rückgängig
+
+Jede Änderung an einer Anlage lässt sich zurücknehmen und wiederholen - Karte
+gelöscht, Verbindung getrennt, Parameter geändert. Der Verlauf liegt in der
+Datenbank und überlebt das Schließen des Browsers.
+
+Umgesetzt über vollständige Momentaufnahmen des Anlagenzustands, nicht über die
+Umkehrung einzelner Vorgänge: Ein Zustand ist komprimiert rund 7 KiB, und eine
+Momentaufnahme kann nicht unvollständig sein, während eine Umkehrung bei jedem
+neuen Kartentyp neu vergessen werden kann. Entscheidend dabei ist, dass die
+Kennungen erhalten bleiben - die Zeitreihen gespeicherter Läufe verweisen darauf,
+und eine neue Kennung machte alle früheren Ergebnisse stumm.
+
+Entwurf und Begründung: `docs/superpowers/plans/2026-09-02-rueckgaengig.md`.
+
+## Bedienung auf dem iPad
+
+Die Anwendung ist für Berührungseingabe gebaut, nicht nur dafür angepasst:
+
+- Karte anlegen: Paletteneintrag antippen, dann die Stelle auf der Leinwand.
+- Verbinden: Karte antippen, den Anknüpfpunkt an ihrem Rand auf die Zielkarte
+  ziehen. Der Pfeil verdrahtet alle passenden Anschlüsse selbst.
+- Verschieben mit einem Finger, Zoomen mit zwei Fingern.
+- Die Seite selbst lässt sich im Editor weder scrollen noch aufziehen, damit die
+  Gesten der Leinwand gehören. Auf den übrigen Seiten bleibt beides erhalten.
+
+Safari verlangt dafür Eigenheiten, die im Code begründet stehen: `100dvh` statt
+`100vh`, die WebKit-eigenen Gestenereignisse für das Zoomen der Leinwand, und ein
+`<div>` als Rahmen für die Zeichenfläche, weil Safari die bemalte Fläche eines
+SVG im Flex-Layout anders berechnet als der CSS-Kasten.
+
 ## Referenz
 
 Unter `referenz/` liegen die ursprüngliche Excel-Mappe, ihre ausgelesenen Formeln
