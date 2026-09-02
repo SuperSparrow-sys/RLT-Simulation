@@ -451,7 +451,7 @@ textarea:focus-visible {
 
 /* ---------- Parameterfenster ---------- */
 .panel {
-  width: 288px;
+  width: 320px;
   flex-shrink: 0;
   background: var(--surface);
   border-left: 1px solid var(--border-light);
@@ -480,17 +480,175 @@ textarea:focus-visible {
   width: 100%;
 }
 .panel-zeile input[type="number"] { font-variant-numeric: tabular-nums; }
-/* Zahlenreihen (Wochenzeitplan, Ferien, Lastgaenge - bis zu 24 Werte je Zeile)
-   stehen als JSON in der Textarea; dicht gesetzte Ziffern lesen sich in
-   Festbreite deutlich sicherer als proportional. */
-.panel-zeile textarea {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.5;
-  resize: vertical;
-  min-height: 68px;
+
+/* ---------- Zusammengesetzte Parameter (Zeitreihe, Monatswerte, Zeitraeume,
+   Anteile, Textlisten) - je Darstellungsart genau ein Baustein, siehe
+   static/js/panel.js. Ein rohes JSON-Feld ist keine Bedienung. ---------- */
+.panel-block { margin-bottom: 18px; }
+.panel-block > .panel-label { display: block; margin-bottom: 6px; }
+.panel-hinweis { font-size: 11.5px; color: var(--text-tertiary); margin: 2px 0 6px; }
+
+.panel-knopf-klein {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  padding: 4px 9px;
+  font-size: 11.5px;
+  font-family: inherit;
+  cursor: pointer;
 }
-.panel-zeile textarea.fehlerhaft { border-color: var(--danger); background: var(--danger-tint); }
+.panel-knopf-klein:hover { background: var(--surface-alt); border-color: var(--border-strong); color: var(--text); }
+
+/* Prozentfelder: "%" als sichtbares Anhaengsel statt eckiger Einheit -
+   direkt am Feld, nicht nur in der Beschriftung darueber. */
+.panel-prozent-huelle { display: flex; align-items: center; gap: 6px; }
+.panel-prozent-huelle input { flex: 1; min-width: 0; }
+.panel-prozent-huelle span { font-size: 12px; color: var(--text-secondary); }
+
+/* Zeitreihe (24 Stunden): eine kleine Balkenreihe fuer den Verlauf auf einen
+   Blick, darunter jede Stunde als eigenes, beschriftetes Zahlenfeld. */
+.panel-zeitreihe-balken { display: flex; align-items: flex-end; gap: 2px; height: 32px; margin: 2px 0 8px; }
+.panel-balken-saeule { flex: 1; min-height: 2px; background: var(--blue-tint); border-top: 2px solid var(--blue); border-radius: 1px 1px 0 0; }
+.panel-zeitreihe-gitter { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
+.panel-zeitreihe-zelle { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 9.5px; color: var(--text-tertiary); }
+.panel-zeitreihe-zelle input { width: 100%; padding: 3px 2px; text-align: center; font-size: 11px; }
+
+/* Monatswerte: Umschaltknoepfe statt Checkbox-Liste. */
+.panel-monat-gitter { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.panel-monat-knopf {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  padding: 6px 0;
+  font-size: 11.5px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.panel-monat-knopf:hover { border-color: var(--border-strong); }
+.panel-monat-knopf.aktiv { background: var(--blue); border-color: var(--blue); color: var(--auf-farbe); }
+
+/* Zeitraeume mit Datum (Ferien): eine Karte je Zeitraum, Tag/Monat einzeln -
+   genau das Format, das core/bausteine/ferien.py liest (kein Jahr). */
+.panel-zeitraeume { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
+.panel-zeitraum-zeile {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.panel-zeitraum-zeile input[type="text"] {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 7px;
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface);
+  width: 100%;
+}
+.panel-zeitraum-daten { display: flex; gap: 16px; }
+.panel-zeitraum-datum { display: flex; align-items: center; gap: 3px; font-size: 11px; color: var(--text-secondary); }
+.panel-zeitraum-datum input {
+  width: 32px;
+  padding: 4px 2px;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface);
+}
+.panel-entfernen { align-self: flex-end; }
+
+/* Anteile einer Aufteilung (Verteiler). */
+.panel-anteil-zeile { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.panel-anteil-zeile .panel-prozent-huelle { width: 84px; flex-shrink: 0; }
+.panel-anteil-ziel { font-size: 12px; color: var(--text); overflow-wrap: anywhere; }
+
+/* Gepaarte Textlisten (Datenlogger: Spaltennamen + Einheiten) als eine
+   Tabelle - Zeile i der einen gehoert zu Zeile i der anderen. */
+.panel-textlisten-tabelle { display: flex; flex-direction: column; gap: 4px; margin-bottom: 4px; }
+.panel-textlisten-zeile { display: grid; gap: 5px; align-items: center; }
+.panel-textlisten-zeile input {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 6px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface);
+  width: 100%;
+  min-width: 0;
+}
+.panel-textlisten-kopf span { font-size: 9.5px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: .03em; }
+.panel-textlisten-nummer { font-size: 11px; color: var(--text-tertiary); text-align: right; }
+.panel-textliste-zeile { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.panel-textliste-zeile > span { width: 16px; font-size: 11px; color: var(--text-tertiary); text-align: right; flex-shrink: 0; }
+.panel-textliste-zeile input {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 7px;
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface);
+  width: 100%;
+}
+
+/* Fest oder Verbindung: eine Zahl neben einem gerade belegten Anschluss ist
+   wirkungslos - dieses Feld darf deshalb nicht wie ein normales Eingabefeld
+   aussehen (gestrichelter Rahmen statt Eingaberahmen, keine Eingabe). */
+.panel-ueberschrieben {
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface-alt);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- "Regelt auf": Sollwert/Istwert eines Reglers ----------
+   Eigener Abschnitt statt der rohen Anschlussliste (siehe .panel-ports) -
+   zeigt in Klartext, woher der Wert kommt, und laesst es aendern. */
+.panel-regelung { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--border-light); }
+.panel-regelung h3 {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--text-secondary);
+  margin: 0 0 10px;
+}
+.panel-regelkreis {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  margin-bottom: 10px;
+}
+.panel-regelkreis:last-child { margin-bottom: 0; }
+.panel-regelkreis-titel { font-size: 12px; font-weight: 500; color: var(--text); margin-bottom: 8px; }
+.panel-regeleingang { margin-bottom: 10px; }
+.panel-regeleingang:last-child { margin-bottom: 0; }
+.panel-regeleingang-label { display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; }
+.panel-regeleingang select {
+  margin-top: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface);
+  width: 100%;
+}
+
 .panel-ports { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--border-light); }
 .panel-ports h3 {
   font-size: 11px;
@@ -800,5 +958,5 @@ textarea:focus-visible {
 
 @media (max-width: 900px) {
   .palette { width: 190px; }
-  .panel { width: 250px; }
+  .panel { width: 270px; }
 }
