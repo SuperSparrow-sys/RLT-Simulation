@@ -236,7 +236,18 @@ def karte_loeschen(karte_id):
 
 def _karte_instanz(zeile, ports):
     klasse = basis.hole(zeile["typ"])
-    werte = json.loads(zeile["parameter"])
+    # Gespeicherte Werte auf die Vorgaben legen, nicht umgekehrt: Eine Karte,
+    # die vor der Einfuehrung eines Parameters angelegt wurde, kennt ihn nicht
+    # - berechne() oder anfangszustand() liefen dann in einen KeyError, und die
+    # Anlage war ohne Wanderung der Datenbank nicht mehr rechenbar. Genau das
+    # ist beim Hinzufuegen von raum.start_feuchte passiert, an einer Anlage,
+    # die seit Wochen im Bestand lag.
+    #
+    # Andersherum bleibt ein Wert, den die Karte NICHT MEHR kennt, einfach
+    # stehen - er stoert niemanden, und ihn zu loeschen hiesse, eine
+    # Rueckkehr zur vorigen Fassung unmoeglich zu machen.
+    werte = klasse.vorgabeparameter()
+    werte.update(json.loads(zeile["parameter"]))
     return graph.KarteInstanz(
         id=zeile["id"],
         typ=zeile["typ"],

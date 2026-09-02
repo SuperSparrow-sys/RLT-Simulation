@@ -961,3 +961,47 @@ def test_die_anlagenpruefung_schweigt_zu_reserveanschluessen(app):
         f"/api/anlagen/{anlage}/pruefung"
     ).get_json()["meldungen"]
     assert meldungen == []
+
+
+def test_eine_alte_karte_bekommt_neue_parameter_aus_der_vorgabe(app):
+    """Ein neuer Parameter darf bestehende Anlagen nicht unbrauchbar machen.
+
+    Die Parameter einer Karte stehen als JSON in der Datenbank. Eine Karte,
+    die vor der Einführung eines Parameters angelegt wurde, kennt ihn nicht -
+    berechne() oder anfangszustand() liefen dann in einen KeyError, und die
+    Anlage war ohne Wanderung der Datenbank nicht mehr rechenbar. Genau das
+    ist beim Hinzufügen von raum.start_feuchte an einer Anlage aus dem
+    Bestand passiert.
+
+    Beim Laden werden die gespeicherten Werte deshalb auf die Vorgaben
+    gelegt, nicht umgekehrt.
+    """
+    import json
+
+    from core.bausteine import basis
+    from core.database import get_db
+
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        karte = anlagen.karte_anlegen(anlage, "raum", 0.0, 0.0)
+
+        # Den Zustand einer alten Karte nachstellen: ein Parameter fehlt.
+        db = get_db()
+        werte = json.loads(
+            db.execute("SELECT parameter FROM karte WHERE id = ?", (karte,))
+            .fetchone()["parameter"]
+        )
+        del werte["start_feuchte"]
+        db.execute(
+            "UPDATE karte SET parameter = ? WHERE id = ?",
+            (json.dumps(werte), karte),
+        )
+        db.commit()
+
+        g = anlagen.lade_graph(anlage)
+        instanz = g.karten[karte]
+        vorgabe = basis.hole("raum").vorgabeparameter()["start_feuchte"]
+        assert instanz.parameter["start_feuchte"] == vorgabe
+        # Und sie lässt sich wieder rechnen.
+        assert instanz.baustein.anfangszustand(instanz.parameter)["F_Raum"] == vorgabe
