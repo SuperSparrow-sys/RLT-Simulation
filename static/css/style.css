@@ -89,13 +89,46 @@ html, body {
   font-family: var(--font-body);
   font-size: 14px;
   line-height: 1.4;
-  /* Schaltet das Gummiband-Ueberscrollen ab (siehe Task, Befund 3): ohne
-     das hier schiebt sich auf iOS die ganze Seite mit, wenn man ueber den
-     Rand eines Bereichs hinaus zieht - auch wenn der Bereich selbst (z.B.
-     #leinwand, siehe dort touch-action:none) gar nicht mitgeschoben werden
-     sollte. Wurzel UND Koerper, weil je nach Browser der eine oder der
-     andere die eigentliche Scroll-Wurzel ist. */
+  /* Verhindert das Gummiband-Ueberschwingen am Rand eines Bereichs, der
+     tatsaechlich scrollt (Startseite, /bausteine, Palette, Parameterfenster)
+     - schaltet aber NICHT das Scrollen selbst ab (dafuer siehe
+     .seite-editor weiter unten). overscroll-behavior regelt nur, ob ein
+     ausgeschoepfter innerer Scrollbereich seinen Überschuss an den
+     naechsten Vorfahren weiterreicht, nicht, ob html/body selbst ein
+     natives Wischziel sind - genau das war der eigentliche Fehler auf der
+     Editorseite: html/body blieben ohne eigenes overflow ganz normal
+     scrollbar, jeder Wisch, der nirgendwo lokal "verbraucht" wurde (leere
+     Kopfleiste, ein Parameterfenster ohne eigenen Ueberlauf, ...) bewegte
+     also die Seite selbst - unabhaengig von overscroll-behavior. */
   overscroll-behavior: none;
+}
+
+/* ---------- Editorseite: keine Seite zum Scrollen ----------
+   Siehe Task ("Es scrollt weiterhin, nach rechts und nach unten") und
+   Kommentar oben: overscroll-behavior allein schaltet nur das
+   Ueberschwingen ab, nicht die Scrollbarkeit von html/body selbst. Der
+   direkte, von der Fenstergroesse/Zoomstufe/Werkzeugleiste unabhaengige Weg
+   ist, html/body auf der Editorseite gar keine Scrollflaeche mehr sein zu
+   lassen: position:fixed + inset 0 + overflow:hidden. position:fixed statt
+   nur overflow:hidden, weil overflow:hidden allein auf iOS Safari bekannt
+   unzuverlaessig ist, sobald die Seite mit zwei Fingern aufgezogen wurde
+   (die Seite bleibt dann trotzdem wischbar) - die Kombination aus beidem
+   ist der in der Praxis verlaessliche Weg ("iOS body scroll lock").
+   .seite-editor steht auf <html> UND <body> (siehe templates/editor.html) -
+   beide muessen feststehen, sonst bleibt der jeweils andere die
+   Scroll-Wurzel. NUR die Editorseite traegt diese Klasse: Startseite,
+   /bausteine und die Fehlerseite sollen weiterhin ganz normal scrollen
+   (siehe .start/.lehre - unveraendert scrollbar). */
+html.seite-editor,
+body.seite-editor {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 
 h1, h2, h3, p { margin: 0; }
@@ -142,6 +175,16 @@ textarea:focus-visible {
   display: flex;
   height: 100vh;
   height: 100dvh;
+  /* --app-hoehe: von static/js/editor.js ueber die VisualViewport-API
+     nachgetragen (siehe dort) - deckt einen Fall ab, den dvh allein nicht
+     zuverlaessig abdeckt: die von der Bildschirmtastatur verkleinerte
+     sichtbare Flaeche. Ohne das koennte .panel (ein Kind von .app, siehe
+     unten) unten laenger sein als tatsaechlich sichtbar, und ein
+     "scrollIntoView" beim Fokussieren eines Feldes braechte es dann nicht
+     zuverlaessig ueber die Tastatur hinaus. Faellt auf 100dvh zurueck,
+     solange JS die Eigenschaft noch nicht gesetzt hat oder VisualViewport
+     fehlt. */
+  height: var(--app-hoehe, 100dvh);
   padding: env(safe-area-inset-top) env(safe-area-inset-right)
            env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
@@ -157,9 +200,21 @@ textarea:focus-visible {
   /* "contain" statt "none": die Palette darf innerhalb ihrer selbst ganz
      gewoehnlich zu Ende scrollen (kein hartes Abschneiden der Animation),
      nur soll ein Ueberscrollen an ihrem eigenen Rand nicht an die Seite
-     weitergereicht werden - das uebernimmt schon overscroll-behavior auf
-     html/body, contain ist hier die zweite, lokale Sicherung. */
+     weitergereicht werden. Auf der Editorseite gibt es dank .seite-editor
+     (siehe oben) ohnehin nichts mehr, an das weiterzureichen waere -
+     contain bleibt trotzdem stehen (schadet nicht, und die Palette taucht
+     unveraendert auch ausserhalb des Editors auf, falls sie das je tut). */
   overscroll-behavior: contain;
+  /* pan-y statt des ererbten "auto": die Liste soll sich weiter mit einem
+     Finger senkrecht schieben lassen (das ist ihr eigentlicher Zweck),
+     aber NICHT als Ansatzpunkt fuer die native Kneifgeste des Browsers
+     (Seiten-Zoom) dienen - genau das waere ein zweiter Weg, die Seite in
+     einen verschobenen/vergroesserten Zustand zu bringen, den
+     .seite-editor allein nicht abfaengt (siehe Task, "Aufziehen mit zwei
+     Fingern ist der zweite Weg"). #leinwand loest das bereits mit
+     touch-action:none; hier muss das einfingrige Scrollen erhalten
+     bleiben, deshalb pan-y statt none. */
+  touch-action: pan-y;
 }
 .gruppe {
   font-size: 11px;
@@ -217,6 +272,13 @@ textarea:focus-visible {
   background: var(--surface);
   border-bottom: 1px solid var(--border-light);
 }
+/* Nur die Kopfleiste DES EDITORS (.app .leiste, nicht das gleichnamige
+   .leiste auf Startseite/Bausteine/Fehlerseite - dort bleibt die native
+   Kneifgeste des Browsers erlaubt, diese Seiten sind nicht festgesetzt):
+   keine native Kneifgeste (Seiten-Zoom) - siehe Kommentar bei .palette
+   weiter oben, derselbe zweite Weg, hier ohne eigenen Scrollinhalt, deshalb
+   "none" statt "pan-y". */
+.app .leiste { touch-action: none; }
 .titel {
   font-size: 15px;
   font-weight: 500;
@@ -520,6 +582,10 @@ a.knopf-haupt { display: inline-block; text-decoration: none; }
   border-left: 1px solid var(--border-light);
   overflow-y: auto;
   overscroll-behavior: contain;
+  /* pan-y: dieselbe Begruendung wie bei .palette (siehe dort) - senkrechtes
+     Scrollen mit einem Finger bleibt, die native Kneifgeste (Seiten-Zoom)
+     des Browsers greift hier nicht mehr an. */
+  touch-action: pan-y;
   padding: 16px;
 }
 .panel-kopf {
@@ -806,6 +872,11 @@ a.knopf-haupt { display: inline-block; text-decoration: none; }
   max-width: 90vw;
   max-height: 85vh;
   overflow-y: auto;
+  /* Fehlte hier (siehe Kommentar bei .palette weiter oben, dieselbe
+     Begruendung): ein bis zum Ende gescrollter Dialog (z.B. ein langer
+     Loeschtext) reichte einen weiteren Wisch sonst an den naechsten
+     Vorfahren weiter. */
+  overscroll-behavior: contain;
   box-shadow: var(--schatten-2);
 }
 .dialog-breit { min-width: 560px; }
@@ -843,6 +914,7 @@ a.knopf-haupt { display: inline-block; text-decoration: none; }
   padding: 0;
   max-height: 150px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-sm);
 }
@@ -919,7 +991,7 @@ a.knopf-haupt { display: inline-block; text-decoration: none; }
 .abbruchhinweis { color: var(--warning); font-size: 12px; margin: -8px 0 16px; }
 
 /* ---------- Stundenprotokoll (Datenlogger-Spalten, bis zu 8760 Zeilen) ---------- */
-.protokoll-huelle { max-height: 60vh; overflow: auto; border: 1px solid var(--border-light); border-radius: var(--radius-sm); }
+.protokoll-huelle { max-height: 60vh; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--border-light); border-radius: var(--radius-sm); }
 .protokoll { width: 100%; border-collapse: collapse; font-size: 12px; }
 .protokoll th, .protokoll td {
   padding: 5px 10px;
@@ -962,6 +1034,7 @@ a.knopf-haupt { display: inline-block; text-decoration: none; }
   color: var(--text-secondary);
   max-height: 120px;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .warn-beispiele li { margin-bottom: 3px; }
 

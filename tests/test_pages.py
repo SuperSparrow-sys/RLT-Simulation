@@ -260,3 +260,59 @@ def test_editor_js_leinwand_beachtet_bewaffnete_palette_und_kneifgeste(app):
     # einer unbehandelten Ausnahme zum Abbruch bringen (siehe Bericht).
     aufruf = js[js.index("try {\n        leinwand.setPointerCapture"):]
     assert "} catch {" in aufruf[: aufruf.index("this._zeiger.set")]
+
+
+def test_nur_die_editorseite_traegt_seite_editor(app):
+    """.seite-editor setzt html/body auf position:fixed + overflow:hidden
+    (siehe style.css) - das darf NUR den Editor treffen. Startseite,
+    Bausteine und die Fehlerseite muessen weiterhin ganz normal scrollen
+    (siehe dortiger Kommentar in style.css: overscroll-behavior allein
+    schaltet nicht die Scrollbarkeit von html/body ab, das war der
+    eigentliche Fehler - siehe Bericht)."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("Referenz")
+        anlage = ax_sim_2_1.baue(projekt, "AX_SIM 2.1")
+
+    klient = app.test_client()
+    editor_html = klient.get(f"/anlage/{anlage}").get_data(as_text=True)
+    assert 'class="seite-editor"' in editor_html
+    # Zweimal: einmal auf <html>, einmal auf <body>.
+    assert editor_html.count('class="seite-editor"') == 2
+
+    for pfad in ("/", "/bausteine", "/anlage/9999"):
+        html = klient.get(pfad).get_data(as_text=True)
+        assert "seite-editor" not in html, pfad
+
+
+def test_style_css_setzt_html_body_auf_der_editorseite_fest(app):
+    """position:fixed + overflow:hidden statt sich auf eine Hoehenangabe zu
+    verlassen - overflow:hidden allein ist auf iOS Safari nach einer
+    Kneifgeste bekannt unzuverlaessig, deshalb beides zusammen ("iOS body
+    scroll lock", siehe Kommentar in style.css)."""
+    klient = app.test_client()
+    css = klient.get("/static/css/style.css").get_data(as_text=True)
+    block = css[css.index("html.seite-editor,"):]
+    block = block[: block.index("}") + 1]
+    assert "position: fixed;" in block
+    assert "overflow: hidden;" in block
+
+
+def test_alle_scrollbaren_flaechen_haben_overscroll_behavior_contain(app):
+    """Jede Flaeche mit overflow-y:auto/overflow:auto in style.css muss
+    overscroll-behavior:contain tragen - sonst reicht sie einen Wisch, der
+    an ihrem eigenen Ende ankommt, an den naechsten Vorfahren weiter (siehe
+    Bericht: genau das war die tatsaechliche Fehlerquelle, bevor
+    .seite-editor html/body ganz von der Scroll-Wurzel nahm). Bewusst als
+    generische Pruefung ueber die ganze Datei, nicht je Klasse einzeln
+    aufgezaehlt - eine kuenftig neu hinzukommende Scrollflaeche faellt sonst
+    unbemerkt wieder durch dasselbe Loch."""
+    klient = app.test_client()
+    css = klient.get("/static/css/style.css").get_data(as_text=True)
+    bloecke = css.split("}")
+    fehlend = []
+    for block in bloecke:
+        if "overflow-y: auto" not in block and "overflow: auto" not in block:
+            continue
+        if "overscroll-behavior: contain" not in block:
+            fehlend.append(block.strip().splitlines()[-1])
+    assert not fehlend, f"Scrollflaeche(n) ohne overscroll-behavior:contain: {fehlend}"

@@ -1110,6 +1110,31 @@ const Editor = {
   },
 };
 
+/* Traegt die tatsaechlich sichtbare Hoehe (VisualViewport, nicht die
+   Layout-Hoehe) als --app-hoehe nach - siehe Kommentar bei .app in
+   style.css. Wichtig bei eingeblendeter Bildschirmtastatur: iOS Safari
+   verkleinert dafuer die VisualViewport, nicht zuverlaessig die per dvh
+   gemessene Layout-Hoehe (dvh reagiert nachweislich auf ein-/ausfahrende
+   Werkzeugleisten, nicht in jedem Fall auf die Tastatur). Ohne diesen
+   Nachtrag koennte .app (und damit .panel als sein Kind) unten laenger
+   bleiben, als tatsaechlich zu sehen ist, sobald die Tastatur offen ist -
+   ein Feld am unteren Rand des Parameterfensters liesse sich dann per
+   scrollIntoView() zwar innerhalb des Panels erreichen, das Panel selbst
+   ragte aber teils hinter die Tastatur. Nur die Editorseite bindet
+   editor.js ein, kein Aufwand fuer Startseite/Bausteine noetig.
+   window.visualViewport fehlt in aelteren Browsern - dann bleibt die
+   CSS-Variable unbenutzt und .app faellt auf 100dvh zurueck (siehe
+   style.css, var(--app-hoehe, 100dvh)). */
+if (window.visualViewport) {
+  const aktualisiereAppHoehe = () => {
+    document.documentElement.style.setProperty(
+      "--app-hoehe", `${window.visualViewport.height}px`
+    );
+  };
+  window.visualViewport.addEventListener("resize", aktualisiereAppHoehe);
+  aktualisiereAppHoehe();
+}
+
 window.addEventListener("DOMContentLoaded", async () => {
   Editor.bindeLeinwand();
   panelLeeren();
