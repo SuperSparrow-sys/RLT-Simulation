@@ -25,6 +25,23 @@ function uhrzeitAnzeigen(tagesanteil) {
   const minuten = minutenGesamt % 60;
   return `${String(stunden).padStart(2, "0")}:${String(minuten).padStart(2, "0")}`;
 }
+// Kleiner Richtungspfeil vor jedem Anschluss (bauePortliste): eine gezeichnete
+// SVG statt der Schriftzeichen ◀/▶, die je nach Schriftart des Geraets in
+// Strichstaerke und Groesse abweichen. Immer als Eingangspfeil gezeichnet und
+// bei "aus" per CSS gespiegelt (.port-pfeil-aus, style.css) - eine Form statt
+// zweier fast gleicher Pfade.
+function portPfeilSvg(richtung) {
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", "0 0 10 10");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("class", `port-pfeil${richtung === "aus" ? " port-pfeil-aus" : ""}`);
+  const pfad = document.createElementNS(NS, "path");
+  pfad.setAttribute("d", "M6.8 2 3 5l3.8 3");
+  svg.appendChild(pfad);
+  return svg;
+}
+
 function uhrzeitEinlesen(text) {
   const [stunden, minuten] = String(text).split(":").map(Number);
   return ((stunden || 0) * 60 + (minuten || 0)) / (24 * 60);
@@ -970,7 +987,8 @@ const Panel = {
 
     // Gruppiert nach Beschriftung UND Richtung - ein Eingang und ein Ausgang
     // mit demselben Label (luft_ein/luft_aus -> beide "Zuluft") sind durch den
-    // Pfeil (◀/▶) schon eindeutig unterschieden und brauchen keine Nummer.
+    // Pfeil (portPfeilSvg) schon eindeutig unterschieden und brauchen keine
+    // Nummer.
     const vorkommen = new Map();
     for (const port of uebrige) {
       const schluesselGruppe = `${port.richtung}|${port.label}`;
@@ -985,7 +1003,8 @@ const Panel = {
         const treffer = port.schluessel.match(/_(\d+)$/);
         beschriftung += ` ${treffer ? treffer[1] : port.schluessel}`;
       }
-      zeile.textContent = `${port.richtung === "ein" ? "◀" : "▶"} ${beschriftung}`;
+      zeile.appendChild(portPfeilSvg(port.richtung));
+      zeile.appendChild(document.createTextNode(` ${beschriftung}`));
       zeile.title = port.schluessel;
       ports.appendChild(zeile);
     }

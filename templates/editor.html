@@ -48,7 +48,7 @@
                (templates/bausteine.html, .lehre-zurueck) - links neben dem
                Anlagennamen, damit es sich gleich anfuehlt. -->
           <a class="editor-zurueck" href="{{ url_for('pages.index') }}"
-             title="Zur Startseite" aria-label="Zur Startseite"><span class="knopf-zeichen" aria-hidden="true">←</span><span class="knopf-wort">Start</span></a>
+             title="Zur Startseite" aria-label="Zur Startseite">{% include "bedienzeichen/pfeil-links.svg" %}<span class="knopf-wort">Start</span></a>
 
           <span class="titel anlagenname-zeile">
             <span id="anlagenname">Anlage</span>
@@ -69,19 +69,19 @@
              (zeigeHinweis() in editor.js). -->
         <div class="leiste-gruppe verlauf-knoepfe">
           <button class="leiste-knopf leiste-knopf-rund" id="btn-zurueck"
-                  title="Rückgängig" aria-label="Rückgängig" disabled><span class="knopf-zeichen" aria-hidden="true">↶</span></button>
+                  title="Rückgängig" aria-label="Rückgängig" disabled>{% include "bedienzeichen/rueckgaengig.svg" %}</button>
           <button class="leiste-knopf leiste-knopf-rund" id="btn-vor"
-                  title="Wiederholen" aria-label="Wiederholen" disabled><span class="knopf-zeichen" aria-hidden="true">↷</span></button>
+                  title="Wiederholen" aria-label="Wiederholen" disabled>{% include "bedienzeichen/wiederholen.svg" %}</button>
         </div>
 
         <span class="leiste-trenner" aria-hidden="true"></span>
 
         <div class="leiste-gruppe">
           <button class="leiste-knopf leiste-knopf-rund" id="btn-einpassen"
-                  title="Ganze Anlage einpassen" aria-label="Ganze Anlage einpassen"><span class="knopf-zeichen" aria-hidden="true">⤢</span></button>
+                  title="Ganze Anlage einpassen" aria-label="Ganze Anlage einpassen">{% include "bedienzeichen/einpassen.svg" %}</button>
 
           <details class="legende">
-            <summary title="Verbindungsarten" aria-label="Verbindungsarten"><span class="knopf-zeichen" aria-hidden="true">⇢</span><span class="knopf-wort">Verbindungen</span></summary>
+            <summary title="Verbindungsarten" aria-label="Verbindungsarten">{% include "bedienzeichen/verbindungen.svg" %}<span class="knopf-wort">Verbindungen</span>{% include "bedienzeichen/aufklapp.svg" %}</summary>
             <div class="legende-inhalt">
               <p class="legende-titel">Karten verbinden</p>
               <p class="legende-hinweistext">

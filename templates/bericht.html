@@ -10,7 +10,7 @@
 </head>
 <body class="seite-bericht">
   <header class="bericht-kopfleiste">
-    <a class="bericht-zurueck" href="{{ url_for('pages.editor', anlage_id=daten.anlage.id) }}">← Zurück zur Anlage</a>
+    <a class="bericht-zurueck" href="{{ url_for('pages.editor', anlage_id=daten.anlage.id) }}">{% include "bedienzeichen/pfeil-links.svg" %}Zurück zur Anlage</a>
     <div class="bericht-kopfleiste-knoepfe">
       <button type="button" id="btn-drucken">Drucken</button>
       <a class="knopf-haupt" href="{{ pdf_href }}">

@@ -89,7 +89,7 @@
           </div>
 
           <details class="wetter-weg wetter-weg-nebenweg" id="wetter-upload-details">
-            <summary class="wetter-weg-titel">Eigene Datei hochladen (TRY) …</summary>
+            <summary class="wetter-weg-titel">Eigene Datei hochladen (TRY) …{% include "bedienzeichen/aufklapp.svg" %}</summary>
             <p class="wetter-weg-hinweis">
               Für eine TRY-Wetterdatei, die schon vorliegt – etwa vom DWD oder
               einem anderen Anbieter besorgt. Gelesen werden .xls, .xlsx oder .csv.
@@ -110,7 +110,7 @@
       </section>
 
       <details class="start-abschnitt start-lehrmaterial" id="start-lehrmaterial" hidden>
-        <summary class="start-lehrmaterial-titel">Beispielanlagen aus der Erklärung</summary>
+        <summary class="start-lehrmaterial-titel">{% include "bedienzeichen/aufklapp.svg" %}Beispielanlagen aus der Erklärung</summary>
         <p class="abschnitt-hinweis">
           Entstehen beim Ansehen eines Kartentyps unter
           <a href="{{ url_for('lehre.seite') }}">Bausteine</a> - kein eigenes

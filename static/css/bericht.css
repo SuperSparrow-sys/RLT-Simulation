@@ -26,6 +26,9 @@ body.seite-bericht {
 }
 
 .bericht-zurueck {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   color: var(--text-secondary);
   text-decoration: none;
   font-size: 14px;

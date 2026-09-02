@@ -496,17 +496,25 @@ def test_editor_js_zoomeumpunkt_bleibt_innerhalb_der_zoomgrenzen(app):
     assert "this.ZOOM_MIN" in funktion
 
 
-def test_editor_js_mausrad_zoom_unveraendert_ohne_festen_punkt(app):
-    """Ausdruecklich unveraendert lassen (siehe Bericht) - das Mausrad
-    zoomt seit jeher ohne festen Bildschirmpunkt (sicht.x/y bleiben dabei
-    unangetastet), anders als der neue Zeiger-/Gesten-Zoompfad."""
+def test_editor_js_mausrad_zoom_um_zeigerpunkt(app):
+    """Fruehere Fassung zoomte ohne festen Bildschirmpunkt - die Anlage zog
+    sich beim Herauszoomen zur Ecke (0,0) hin zusammen statt zum Mauszeiger
+    (Task-Rueckmeldung, mit einer Messreihe belegt: Weltpunkt unter dem
+    Zeiger vor/nach dem Zoomen an fuenf Positionen, Abweichung < 0.15px).
+    Das Mausrad nutzt jetzt denselben Weg wie Kneifgeste und WebKit-Geste:
+    _zoomeUmPunkt() mit dem Zeigerpunkt (nicht der Fingermitte)."""
     klient = app.test_client()
     js = klient.get("/static/js/editor.js").get_data(as_text=True)
     rad = js[js.index('leinwand.addEventListener("wheel"'):]
     rad = rad[: rad.index("{ passive: false });")]
-    assert "_zoomeUmPunkt" not in rad
-    assert "this.sicht.x" not in rad
-    assert "this.sicht.y" not in rad
+    assert "this._zoomeUmPunkt(" in rad
+    assert "e.clientX" in rad and "e.clientY" in rad
+
+    # Strg+Mausrad bleibt dem Browser ueberlassen (Seitenzoom, eine
+    # Zugaenglichkeitsfunktion) - fruehester Ausstieg im Lauscher, VOR dem
+    # preventDefault().
+    vor_preventdefault = rad[: rad.index("e.preventDefault();")]
+    assert "e.ctrlKey" in vor_preventdefault
 
 
 def test_karte_ziehen_uebersteht_pointercancel_ohne_halben_zustand(app):
@@ -551,8 +559,9 @@ def test_sicht_aktualisierung_waehrend_gesten_gebuendelt_sonst_sofort(app):
     """Der vermutete Grund fuer die kurz aufblitzenden weissen Felder bei
     bestimmten Zoomstufen (siehe Bericht): jedes einzelne Zoom-Ereignis baute
     bisher sofort eine komplette Minikarte neu auf. _sichtAktualisierenGebuendelt()
-    muss von den drei haeufig feuernden Pfaden (Kneifzoom/Gestenpfad ueber
-    _zoomeUmPunkt(), Ein-Finger-Schieben, Mausrad) genutzt werden - die
+    muss von den drei haeufig feuernden Pfaden (Kneifzoom/Gestenpfad/Mausrad,
+    alle drei ueber _zoomeUmPunkt(), sowie Ein-Finger-Schieben) genutzt
+    werden - die
     einmaligen Aktionen (Einpassen, Startansicht, Minikarte anklicken,
     Neuzeichnen der ganzen Anlage) bleiben bei der vollen, sofortigen
     aktualisiereSicht(), dort ist eine sofortige Minikarte wichtiger als das
@@ -566,9 +575,13 @@ def test_sicht_aktualisierung_waehrend_gesten_gebuendelt_sonst_sofort(app):
     zoomen = zoomen[: zoomen.index("\n  },")]
     assert "this._sichtAktualisierenGebuendelt();" in zoomen
 
+    # Das Mausrad buendelt nicht mehr direkt, sondern ueber _zoomeUmPunkt()
+    # (siehe test_editor_js_mausrad_zoom_um_zeigerpunkt) - dessen Koerper ist
+    # oben (zoomen) bereits auf "this._sichtAktualisierenGebuendelt();"
+    # geprueft, hier reicht der Aufruf.
     rad = js[js.index('leinwand.addEventListener("wheel"'):]
     rad = rad[: rad.index("{ passive: false });")]
-    assert "this._sichtAktualisierenGebuendelt();" in rad
+    assert "this._zoomeUmPunkt(" in rad
 
     einpassen = js[js.index("einpassen() {"):]
     einpassen = einpassen[: einpassen.index("\n  },\n")]

@@ -131,14 +131,16 @@
   border-radius: var(--radius-sm);
 }
 .wetter-weg-nebenweg summary::-webkit-details-marker { display: none; }
-.wetter-weg-nebenweg summary::after {
-  content: "▾";
-  display: inline-block;
+/* Aufklapp-Pfeilchen als gezeichnete SVG statt Schriftzeichen (▾/▴) - siehe
+   .aufklapp-zeichen in style.css, dieselbe Datei wie bei der Legende im
+   Editor (templates/bedienzeichen/aufklapp.svg). Hier nur Abstand und Farbe
+   fuer diese Stelle, Form und Drehung kommen von dort. */
+.wetter-weg-nebenweg summary .aufklapp-zeichen {
   margin-left: 6px;
-  font-size: 10px;
+  vertical-align: -1px;
   color: var(--text-tertiary);
 }
-.wetter-weg-nebenweg[open] summary::after { content: "▴"; }
+.wetter-weg-nebenweg[open] summary .aufklapp-zeichen { transform: rotate(180deg); }
 .wetter-weg-nebenweg summary:focus-visible {
   outline: 2px solid var(--blue);
   outline-offset: 2px;
@@ -183,14 +185,14 @@
   padding: 12px 0;
 }
 .start-lehrmaterial-titel::-webkit-details-marker { display: none; }
-.start-lehrmaterial-titel::before {
-  content: "▾";
-  display: inline-block;
+/* Dieselbe gezeichnete SVG wie beim Nebenweg oben, hier vor statt nach dem
+   Wort (siehe templates/index.html). */
+.start-lehrmaterial-titel .aufklapp-zeichen {
   margin-right: 6px;
-  font-size: 10px;
+  vertical-align: -1px;
   color: var(--text-tertiary);
 }
-.start-lehrmaterial[open] .start-lehrmaterial-titel::before { content: "▴ "; }
+.start-lehrmaterial[open] .start-lehrmaterial-titel .aufklapp-zeichen { transform: rotate(180deg); }
 .start-lehrmaterial-titel:focus-visible {
   outline: 2px solid var(--blue);
   outline-offset: 2px;

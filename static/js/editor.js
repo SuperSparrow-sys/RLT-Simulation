@@ -248,6 +248,26 @@ const Editor = {
   ZOOM_MIN: 0.08,
   ZOOM_MAX: 3,
 
+  // Mausrad-Normierung (siehe bindeLeinwand(), addEventListener("wheel")):
+  // deltaY kommt je nach Geraet/Browser in Pixeln, Zeilen oder Seiten
+  // (e.deltaMode) - eine "Zeile" ist ohne Umrechnung mal 1 und mal 100.
+  // WHEEL_LINE_PX naehert eine Zeile an die Zeilenhoehe der Oberflaeche an
+  // (13px Schrift, Zeilenhoehe knapp 1.2 - siehe .leiste-knopf u.a. in
+  // style.css). WHEEL_PX_MAX begrenzt den Betrag JE Ereignis, damit weder
+  // eine grobe Rastung noch ein einzelnes Seiten-Ereignis (deltaMode 2) den
+  // ganzen Zoombereich in einem Sprung durchlaeuft. WHEEL_PX_PRO_FAKTOR_1_1
+  // ist der Massstab: bei so vielen genormten Pixeln soll die Aenderung dem
+  // fruehreren Faktor 1,1 entsprechen - eine klassische Mausrad-Rastung
+  // liefert in Chrome/Edge deltaY 100, genau dort war 1,1 also von Anfang an
+  // richtig gewaehlt (Task-Rueckmeldung); nur die Auswertung nur des
+  // Vorzeichens sprang bei feiner Rasterung (Trackpad, praezise Maus) durch
+  // viele Ereignisse je Rastung katastrophal - bei vierzig kleinen
+  // Ereignissen ergab 1,1^40 schon das 45-fache, der ganze Bereich von 0,08
+  // bis 3 (37-fach) war in einer einzigen Rastung durchlaufen.
+  WHEEL_LINE_PX: 16,
+  WHEEL_PX_MAX: 120,
+  WHEEL_PX_PRO_FAKTOR_1_1: 100,
+
   // Mehrfingerzustand der Leinwand (Schieben/Kneifen, siehe bindeLeinwand()
   // weiter unten): eine Map ueber alle gerade aktiven Zeiger (Finger oder
   // die eine Maustaste) statt eines einzelnen Satzes Ereignis-Lauscher pro
@@ -1368,15 +1388,39 @@ const Editor = {
     };
   },
 
+  /* Rechnet ein einzelnes wheel-Ereignis in einen Zoomfaktor um - eigene,
+     reine Funktion (kein Seiteneffekt, direkt pruefbar) statt Inline-
+     Rechnung im Lauscher. Normiert deltaY zunaechst auf Pixel (deltaMode),
+     begrenzt den Betrag auf WHEEL_PX_MAX und leitet den Faktor STETIG aus
+     dem Betrag ab (Exponentialfunktion): dieselbe insgesamt gedrehte Menge
+     ergibt denselben Faktor, egal ob sie als ein grosses oder viele kleine
+     Ereignisse ankommt - Summen im Exponenten werden zu Produkten der
+     Faktoren (exp(a)*exp(b) = exp(a+b)), solange kein einzelnes Ereignis
+     die Begrenzung erreicht. seitenHoehe ist die Bezugsgroesse fuer
+     deltaMode 2 (Seiten, selten) - vom Aufrufer uebergeben statt hier
+     window.innerHeight zu lesen, damit die Funktion ohne DOM testbar ist. */
+  _wheelFaktor(deltaY, deltaMode, seitenHoehe) {
+    let px = deltaY;
+    if (deltaMode === 1) px *= this.WHEEL_LINE_PX;
+    else if (deltaMode === 2) px *= seitenHoehe || 800;
+    px = Math.max(-this.WHEEL_PX_MAX, Math.min(this.WHEEL_PX_MAX, px));
+    const k = Math.log(1.1) / this.WHEEL_PX_PRO_FAKTOR_1_1;
+    return Math.exp(-px * k);
+  },
+
   /* Setzt sicht.zoom auf zoomZiel (auf ZOOM_MIN/MAX begrenzt) und
      verschiebt sicht.x/y so, dass der Weltpunkt (weltX, weltY) unter dem
      Bildschirmpunkt (punktX, punktY relativ zur Leinwandecke) stehen
      bleibt - das eigentliche "Zoom um einen Punkt". Gemeinsam von
-     _kneifBewegen() (zeigerbasierter Pfad) und dem WebKit-Gestenpfad
-     (siehe bindeLeinwand(), gesturechange) genutzt, damit beide exakt
-     dasselbe Verhalten zeigen - absichtlich NICHT vom Mausrad-Lauscher
-     mitbenutzt, der zoomt seit jeher ohne festen Punkt (siehe dortiger
-     Kommentar), das soll unveraendert bleiben. */
+     _kneifBewegen() (zeigerbasierter Pfad), dem WebKit-Gestenpfad (siehe
+     bindeLeinwand(), gesturechange) UND dem Mausrad (siehe dort) genutzt,
+     damit alle drei exakt dasselbe Verhalten zeigen: der Weltpunkt unter
+     dem Zeiger/Finger bleibt an derselben Bildschirmstelle stehen, statt
+     dass sich die Anlage zur Ecke (0,0) hin zusammenzieht (Task-
+     Rueckmeldung - das Mausrad setzte sicht.zoom bis eben ohne Bezugspunkt,
+     ein Rest aus der Zeit vor der Gestenarbeit). "Einpassen" (siehe dort)
+     ist die zulaessige Ausnahme: es bestimmt Ausschnitt UND Zoom ohnehin
+     gemeinsam neu, ein Bezugspunkt waere dort bedeutungslos. */
   _zoomeUmPunkt(zoomZiel, punktX, punktY, weltX, weltY) {
     const zoom = Math.min(this.ZOOM_MAX, Math.max(this.ZOOM_MIN, zoomZiel));
     this.sicht.zoom = zoom;
@@ -1637,18 +1681,31 @@ const Editor = {
     }, { passive: false });
 
     leinwand.addEventListener("wheel", (e) => {
+      // Strg+Mausrad gehoert dem Browser (Seitenzoom am Schreibtisch, eine
+      // Zugaenglichkeitsfunktion) - kein preventDefault(), keine eigene
+      // Reaktion, das Ereignis laeuft ungehindert weiter.
+      if (e.ctrlKey) return;
       e.preventDefault();
-      const faktor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+      // Faktor aus der tatsaechlich gedrehten Menge, nicht nur dem
+      // Vorzeichen von deltaY (siehe _wheelFaktor() und die Konstanten
+      // WHEEL_* weiter oben - dort steht auch, warum das noetig war).
+      const faktor = this._wheelFaktor(e.deltaY, e.deltaMode, leinwand.clientHeight);
       // Untere Schranke bewusst unter der ueblichen Einpassen-Zoomstufe
       // (siehe einpassen()) - sonst liesse sich bei einer besonders grossen
       // Anlage nicht so weit herauszoomen, wie "Einpassen" selbst braucht.
-      this.sicht.zoom = Math.min(this.ZOOM_MAX, Math.max(this.ZOOM_MIN, this.sicht.zoom * faktor));
-      // Gebuendelt (siehe _sichtAktualisierenGebuendelt()): eine schnelle
-      // Mausrad-/Trackpad-Serie feuert oft mehrfach pro Bildwechsel - bei
-      // grossen Anlagen sonst derselbe kurze weisse Blitzer wie bei der
-      // Kneifgeste (siehe Bericht), am Schreibtisch bisher nur seltener
-      // aufgefallen.
-      this._sichtAktualisierenGebuendelt();
+      const zielZoom = Math.min(this.ZOOM_MAX, Math.max(this.ZOOM_MIN, this.sicht.zoom * faktor));
+      // Um den Mauszeiger herum zoomen statt zur Ecke (0,0) hin (siehe
+      // _zoomeUmPunkt() oben, dort auch die Begruendung) - derselbe Weg wie
+      // Kneifgeste und WebKit-Gestenpfad, hier mit dem Zeigerpunkt statt
+      // einer Fingermitte. _zoomeUmPunkt() ruft _sichtAktualisierenGebuendelt()
+      // selbst auf (bei einer schnellen Mausrad-/Trackpad-Serie oft mehrfach
+      // pro Bildwechsel - siehe dort).
+      const kasten = leinwand.getBoundingClientRect();
+      const punktX = e.clientX - kasten.left;
+      const punktY = e.clientY - kasten.top;
+      const weltX = (punktX - this.sicht.x) / this.sicht.zoom;
+      const weltY = (punktY - this.sicht.y) / this.sicht.zoom;
+      this._zoomeUmPunkt(zielZoom, punktX, punktY, weltX, weltY);
     }, { passive: false });
 
     leinwand.addEventListener("dragover", (e) => e.preventDefault());

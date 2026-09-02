@@ -371,15 +371,15 @@ textarea:focus-visible {
   cursor: default;
   pointer-events: none;
 }
-/* Rund: Breite = Hoehe, genau ein Zeichen. Das Zeichen etwas groesser als
-   die Schrift der Pillen, sonst wirkt es in der runden Flaeche verloren. */
+/* Rund: Breite = Hoehe, genau ein Zeichen. */
 .leiste-knopf-rund { width: 36px; padding: 0; }
-.knopf-zeichen { font-size: 16px; line-height: 1; }
-/* Der Stift ist als Schriftzeichen (U+270E) nicht zu haben: die
-   Emoji-Schrift gewinnt in den meisten Browsern und malt ihn bunt, auch
-   mit angehaengtem Textwaehler (U+FE0E) - nachgestellt und nachgesehen.
-   Deshalb hier als kleine, einfarbige Zeichnung in derselben Strichstaerke
-   wie die uebrigen Zeichen der Leiste. */
+/* Jedes Zeichen der Leiste ist eine gezeichnete SVG, kein Schriftzeichen -
+   Stift, Pfeile & Co. sehen dadurch auf jedem Geraet gleich aus, statt von
+   der Emoji-Schrift des Browsers abzuhaengen (der Stift als U+270E etwa
+   gewinnt in den meisten Browsern bunt aus der Emoji-Schrift, auch mit
+   angehaengtem Textwaehler U+FE0E - nachgestellt und nachgesehen).
+   currentColor macht jede SVG in Farbe und Abblendung vom eigenen Knopf
+   abhaengig, dieselbe Strichstaerke fuer alle. */
 .knopf-symbol {
   width: 15px;
   height: 15px;
@@ -551,16 +551,21 @@ a.knopf-mini { display: inline-block; text-decoration: none; }
   background: var(--warning);
 }
 .legende summary::-webkit-details-marker { display: none; }
-.legende summary::after {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
-  transform: rotate(45deg);
-  margin-top: -3px;
+/* Aufklapp-Pfeilchen: eine gezeichnete SVG (templates/bedienzeichen/aufklapp.svg),
+   keine aus Rahmenlinien gedrehte Ecke mehr - siehe Task "alles soll durch
+   SVGs geloest sein". currentColor macht die Drehung unabhaengig von Farbe
+   und Zustand des Knopfes (abgeblendet, Tastaturfokus). */
+.aufklapp-zeichen {
+  width: 9px;
+  height: 9px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform .15s ease;
 }
-.legende[open] summary::after { transform: rotate(-135deg); margin-top: 2px; }
+.legende[open] .aufklapp-zeichen { transform: rotate(180deg); }
 .legende[open] summary { border-color: var(--border-strong); }
 .legende-inhalt {
   position: absolute;
@@ -1060,6 +1065,22 @@ a.knopf-mini { display: inline-block; text-decoration: none; }
 }
 .port-zeile { font-size: 11.5px; color: var(--text-secondary); padding: 3px 0; }
 .port-zeile-luft { color: var(--text); font-weight: 500; }
+/* Richtungspfeil vor der Beschriftung (panel.js, portPfeilSvg) - eine Form,
+   fuer "aus" gespiegelt statt eines zweiten Pfads. currentColor macht ihn von
+   derselben Farbe wie die Zeile abhaengig (gedimmt bei .port-zeile,
+   kraeftiger bei .port-zeile-luft). */
+.port-pfeil {
+  width: 7px;
+  height: 7px;
+  vertical-align: middle;
+  margin-top: -1px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.port-pfeil-aus { transform: scaleX(-1); }
 .leerhinweis { font-size: 13px; color: var(--text-secondary); }
 
 /* ---------- Fehlerleiste ----------
@@ -1097,19 +1118,24 @@ a.knopf-mini { display: inline-block; text-decoration: none; }
      gemessen: der Pfeil kam nicht wieder). */
   pointer-events: none;
 }
+/* Das Ausrufezeichen im Kreis war ein Schriftzeichen (content:"!") - jetzt
+   eine gezeichnete SVG, als Hintergrundbild statt Text. Kein <svg> in der
+   HTML: zeigeFehler()/zeigeHinweis() setzen textContent auf #fehlermeldung
+   (editor.js, bausteine.js UND das nicht zu dieser Aufgabe gehoerende
+   start.js) und wuerden ein Kind-Element dabei jedesmal mitloeschen - ein
+   Hintergrundbild auf ::before uebersteht das. Kreis (halbdurchsichtiges
+   Weiss, wie vorher --schleier-hell) und Strich fest als Weiss in der SVG
+   verdrahtet statt currentColor: die Leiste hat nur diese eine Erscheinung
+   (roter Grund, weisse Schrift, siehe .fehlermeldung), kein abgeblendeter
+   oder fokussierter Zustand wie bei einem Knopf. */
 .fehlermeldung::before {
-  content: "!";
+  content: "";
   flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   width: 16px;
   height: 16px;
-  border-radius: 50%;
-  background: var(--schleier-hell);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='8' fill='%23fff' fill-opacity='.3'/%3E%3Cline x1='8' y1='4.2' x2='8' y2='9' stroke='%23fff' stroke-width='1.6' stroke-linecap='round'/%3E%3Ccircle cx='8' cy='11.6' r='.9' fill='%23fff'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-size: 16px 16px;
 }
 
 /* ---------- Hinweisleiste ----------
