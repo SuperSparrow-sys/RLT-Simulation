@@ -12,11 +12,13 @@ DATEN = Path(__file__).parent / "daten"
 # siehe den Befund am Anfang dieser Aufgabe.
 TOLERANZ = {"strom": 0.02, "kaelte": 0.02}
 
-# Kennwerte des eigenen Laufs, nicht der Excel. Gemessen am 2026-09-01 mit dem
-# damaligen Stand von Rechenkern, Vorlage und Solver (Referenzjahr 2000,
-# tests/daten/wetterdaten_try04.csv, 8760 Stunden).
-STAND_WAERME_MWH = 436.6556  # gemessen 2026-09-02, mit geregelter WRG
-STAND_WASSER_M3 = 702.0604  # gemessen 2026-09-02, mit geregelter WRG
+# Kennwerte des eigenen Laufs, nicht der Excel. Gemessen am 2026-09-02 ueber das
+# Referenzjahr (tests/daten/wetterdaten_try04.csv, 8760 Stunden), nachdem die
+# Waermerueckgewinnung ihre Regelung bekommen hat - vorher gewann sie nichts
+# zurueck (Anlage!J20 = J61, der P-Regler dazu fehlte in der Vorlage).
+# Zum Vergleich der Excel-Lauf: Waerme 328,92 MWh, Wasser 111,64 m3.
+STAND_WAERME_MWH = 436.6556
+STAND_WASSER_M3 = 702.0604
 
 
 @pytest.fixture
