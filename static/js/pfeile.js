@@ -86,20 +86,59 @@ const Pfeile = {
   // static/css/style.css, .pfeil-energie).
   ENERGIEROLLEN: ["strom", "waerme", "kaelte", "wasser"],
 
-  artDesPfeils(pfeil, anlage) {
-    /* Traegt der Pfeil mindestens eine Luftverbindung, wird er dick gezeichnet. */
+  /* Welche Luft fuehrt dieser Weg? Die Anschluesse wissen es laengst
+     (core/bausteine/basis.py: AUSSENLUFT, FORTLUFT, UMLUFT, ABLUFT, ZULUFT,
+     dazu LUFTWEG fuer neutrale Bauteile wie einen Erhitzer) - gezeichnet
+     wurde es bisher nicht, alle Luftwege sahen gleich aus.
+
+     Die Reihenfolge ist die Rangfolge: von den beiden Anschluessen eines
+     Weges gewinnt die aussagekraeftigere Rolle, und die Enden der Kette
+     (Aussenluft, Fortluft) sind aussagekraeftiger als ihre Mitte. So wird
+     aus 'abluft -> fortluft' ein Fortluftweg und aus 'aussenluft ->
+     zuluft' ein Aussenluftweg - beides das, was ein Anlagenbauer auf dem
+     Schema erwartet. Bleiben BEIDE Enden neutral (luftweg), bleibt der Weg
+     der neutrale, blaue Luftweg wie bisher; gemessen an den drei echten
+     Anlagen des Benutzers kommt das bei keiner einzigen der 44
+     Luftverbindungen vor. */
+  LUFTROLLEN: ["aussenluft", "fortluft", "umluft", "abluft", "zuluft"],
+
+  klassenDesPfeils(pfeil, anlage) {
     const ports = new Map();
     for (const karte of anlage.karten) {
       for (const port of karte.ports) ports.set(port.id, port);
     }
-    const hatLuft = pfeil.verbindungen.some(
-      (v) => (ports.get(v.von_port_id) || {}).art === "luft"
-    );
-    if (hatLuft) return "luft";
-    const hatEnergie = pfeil.verbindungen.some((v) =>
-      this.ENERGIEROLLEN.includes((ports.get(v.von_port_id) || {}).rolle)
-    );
-    return hatEnergie ? "energie" : "signal";
+
+    const luftrollen = new Set();
+    let hatLuft = false;
+    let hatEnergie = false;
+    let hatProtokoll = false;
+    for (const v of pfeil.verbindungen) {
+      const von = ports.get(v.von_port_id) || {};
+      const nach = ports.get(v.nach_port_id) || {};
+      if (von.art === "luft") {
+        hatLuft = true;
+        luftrollen.add(von.rolle);
+        luftrollen.add(nach.rolle);
+      }
+      if (this.ENERGIEROLLEN.includes(von.rolle)) hatEnergie = true;
+      // Meldeweg: was nur zum Mitschreiben an einen Datenlogger geht
+      // (Rolle 'protokoll' am Ziel-Anschluss).
+      if (nach.rolle === "protokoll") hatProtokoll = true;
+    }
+
+    /* Traegt der Pfeil mindestens eine Luftverbindung, wird er dick
+       gezeichnet - und traegt zusaetzlich die Klasse seiner Luftart. */
+    if (hatLuft) {
+      const rolle = this.LUFTROLLEN.find((r) => luftrollen.has(r));
+      return rolle ? ["pfeil-luft", `pfeil-luft-${rolle}`] : ["pfeil-luft"];
+    }
+    // Energie- und Meldewege sind Buchhaltung, kein Regelkreis: sie
+    // bekommen eine eigene Klasse, damit sie zurueckhaltender gezeichnet
+    // und gemeinsam ausgeblendet werden koennen (siehe style.css,
+    // .leinwand-ohne-meldewege).
+    if (hatEnergie) return ["pfeil-energie", "pfeil-meldeweg"];
+    if (hatProtokoll) return ["pfeil-protokoll", "pfeil-meldeweg"];
+    return ["pfeil-signal"];
   },
 
   zeichneAlle(anlage) {
@@ -115,7 +154,7 @@ const Pfeile = {
       const { a, b, achse } = this.rand(von, nach);
       const bahn = document.createElementNS(NSS, "path");
       bahn.setAttribute("d", this.bahnPunkte(a, b, achse));
-      const klassen = ["pfeil", `pfeil-${this.artDesPfeils(pfeil, anlage)}`];
+      const klassen = ["pfeil", ...this.klassenDesPfeils(pfeil, anlage)];
       if (pfeil.mehrdeutig) klassen.push("pfeil-mehrdeutig");
       bahn.setAttribute("class", klassen.join(" "));
       bahn.setAttribute("data-id", pfeil.id);

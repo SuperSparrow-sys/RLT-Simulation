@@ -621,6 +621,56 @@ def test_pfeil_mit_mehreren_verbindungen_kommt_vollstaendig_zurueck(app):
         assert len(anlagen.als_json(anlage)["pfeile"]) == len(daten["pfeile"])
 
 
+def test_vorlage_schreibt_ihren_aufbau_nicht_in_den_verlauf(app):
+    """Eine Anlage aus einer Vorlage anzulegen ist EINE Handlung, kein
+    Bauprozess, den jemand Schritt fuer Schritt zuruecknehmen will.
+
+    Ohne verlauf.stumm() standen hier ueber hundert Schritte - 42 Karten und
+    61 Pfeile einzeln -, von denen die Grenze fuenfzig uebrig liess: wer eine
+    frische Vorlage oeffnete und "Rueckgaengig" drueckte, baute sie Pfeil fuer
+    Pfeil auseinander, statt seine eigene Aenderung zurueckzunehmen."""
+    from core import vorlagen
+
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = vorlagen.baue("ax_sim_2_1", projekt, "Frisch aus der Vorlage")
+        db = database.get_db()
+        assert db.execute(
+            "SELECT COUNT(*) AS n FROM zustand WHERE anlage_id = ?", (anlage,)
+        ).fetchone()["n"] == 0
+        stand = verlauf.stand_lesen(anlage)
+        assert stand["kann_zurueck"] is False, "eine frische Vorlage hat nichts zurückzunehmen"
+        assert stand["kann_vor"] is False
+
+        # Der fertige Zustand wird zum Ausgangszustand, sobald selbst etwas
+        # geaendert wird - und genau dorthin fuehrt das erste Rueckgaengig.
+        fertig = _zustand(anlage)
+        karte = anlagen.als_json(anlage)["karten"][0]["id"]
+        anlagen.karte_loeschen(karte)
+        assert db.execute(
+            "SELECT COUNT(*) AS n FROM zustand WHERE anlage_id = ?", (anlage,)
+        ).fetchone()["n"] == 2
+
+        verlauf.zurueck(anlage)
+        _fremdschluessel_pruefen()
+        assert _zustand(anlage) == fertig
+        assert verlauf.stand_lesen(anlage)["kann_zurueck"] is False
+
+
+def test_beispielanlage_schreibt_ihren_aufbau_nicht_in_den_verlauf(app):
+    """Dasselbe fuer die Beispielanlagen des Erklaerbereichs - sie bauen ueber
+    denselben Weg (core/lehrinhalte/beispielanlagen.py, _Bau)."""
+    from core.lehrinhalte import beispielanlagen
+
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("Bausteine")
+        anlage = beispielanlagen.baue_beispiel("erhitzer", projekt)
+        db = database.get_db()
+        assert db.execute(
+            "SELECT COUNT(*) AS n FROM zustand WHERE anlage_id = ?", (anlage,)
+        ).fetchone()["n"] == 0
+
+
 def test_editorseite_bringt_die_beiden_knoepfe_mit(app):
     """Die Bedienung haengt an zwei festen Kennungen (siehe
     static/js/editor.js) - fehlt eine davon in der Vorlage, bleibt der

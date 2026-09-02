@@ -1,0 +1,130 @@
+"""Kopfleiste und Legende des Editors.
+
+Was hier geprueft wird, ist nicht die Optik - die laesst sich nur im Browser
+beurteilen (und wurde dort nachgestellt und ausgemessen) -, sondern das,
+woran der Aufbau haengt: dass jedes Bedienelement der Leiste dieselbe
+Grundform traegt, dass es genau EINEN Hauptknopf gibt, und dass die Legende
+alle Wegarten nennt, die static/js/pfeile.js zeichnen kann. Faellt eines
+davon beim naechsten Umbau heraus, faellt es hier auf und nicht erst dem
+Benutzer.
+"""
+
+import pathlib
+import re
+
+import pytest
+
+from app import create_app
+from core import anlagen, database
+
+
+@pytest.fixture
+def app(tmp_path, monkeypatch):
+    monkeypatch.setattr("core.config.DB_PATH", tmp_path / "test.db")
+    anwendung = create_app()
+    with anwendung.app_context():
+        database.init_db()
+        yield anwendung
+
+
+@pytest.fixture
+def seite(app):
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+    return app.test_client().get(f"/anlage/{anlage}").get_data(as_text=True)
+
+
+def test_die_kopfleiste_steht_in_gruppen(seite):
+    """Ort, Bearbeitung, Ansicht, Ergebnis - vier Gruppen statt einer Reihe
+    aus allem, was ueber die Zeit dazukam."""
+    assert seite.count('class="leiste-gruppe') >= 3
+    assert 'class="leiste-gruppe leiste-ergebnis"' in seite
+    assert 'class="leiste-trenner"' in seite
+
+
+def test_jedes_bedienelement_der_leiste_traegt_dieselbe_grundform(seite):
+    """Die Formensprache haengt daran, dass jeder Knopf .leiste-knopf traegt
+    (und die beiden Ausnahmen, die keine eigene Klasse haben koennen, in der
+    gemeinsamen CSS-Regel mitgenannt sind: .editor-zurueck und die
+    Zusammenfassung der Legende)."""
+    kopf = seite[seite.index('<header class="leiste">'):seite.index("</header>")]
+    knoepfe = re.findall(r"<(?:button|a)\s[^>]*id=\"([^\"]+)\"[^>]*>", kopf)
+    assert set(knoepfe) >= {
+        "btn-anlage-umbenennen", "btn-zurueck", "btn-vor", "btn-einpassen",
+        "btn-palette-umschalten", "btn-panel-umschalten", "link-bericht",
+        "btn-vergleich", "btn-simulieren",
+    }
+    for kennung in knoepfe:
+        stelle = kopf.index(f'id="{kennung}"')
+        anfang = kopf.rindex("<", 0, stelle)
+        assert "leiste-knopf" in kopf[anfang:stelle + len(kennung) + 60], (
+            f"'{kennung}' faellt aus der Formensprache der Kopfleiste"
+        )
+
+
+def test_genau_ein_hauptknopf(seite):
+    """'Simulieren' ist der Zweck der Seite und der einzige gefuellte Knopf -
+    zwei Hauptknoepfe waeren keiner."""
+    assert seite.count("leiste-knopf-haupt") == 1
+    stelle = seite.index("leiste-knopf-haupt")
+    assert 'id="btn-simulieren"' in seite[stelle:stelle + 120]
+
+
+def test_runde_knoepfe_nennen_ihre_handlung_auch_ohne_wort(seite):
+    """Auf schmalen Geraeten tragen sie nur ihr Zeichen (siehe style.css,
+    @media max-width: 1400px) - dann muss der Name in aria-label und title
+    stehen, sonst ist der Knopf fuer Vorlesesoftware und fuer die Maus
+    stumm."""
+    kopf = seite[seite.index('<header class="leiste">'):seite.index("</header>")]
+    for kennung in ("btn-anlage-umbenennen", "btn-zurueck", "btn-vor", "btn-einpassen"):
+        stelle = kopf.index(f'id="{kennung}"')
+        umfeld = kopf[kopf.rindex("<", 0, stelle):stelle + 200]
+        assert "aria-label=" in umfeld, kennung
+        assert "title=" in umfeld, kennung
+
+
+def test_die_legende_nennt_alle_fuenf_luftarten(seite):
+    """core/bausteine/basis.py unterscheidet Aussenluft, Zuluft, Abluft,
+    Fortluft und Umluft; static/js/pfeile.js zeichnet sie seit dieser
+    Aenderung verschieden (LUFTROLLEN). Was gezeichnet wird, muss die
+    Legende auch erklaeren."""
+    for art in ("aussenluft", "zuluft", "abluft", "fortluft", "umluft"):
+        assert f"pfeil-luft-{art}" in seite, art
+    for wort in ("Außenluft", "Zuluft", "Abluft", "Fortluft", "Umluft"):
+        assert wort in seite, wort
+
+
+def test_die_legende_nennt_auch_die_uebrigen_wegarten(seite):
+    for klasse in ("pfeil-signal", "pfeil-energie", "pfeil-protokoll", "pfeil-mehrdeutig"):
+        assert klasse in seite, klasse
+
+
+def test_melde_und_energiewege_lassen_sich_abschalten(seite):
+    """Sie laufen aus der ganzen Anlage auf zwei Karten am Rand zu (in
+    AX_SIM 2.1 zwoelf der 61 Pfeile) und queren dabei alles. Der Schalter
+    steht in der Legende, weil er zu den Wegarten gehoert, die sie
+    erklaert - von Haus aus AN (nichts verschwindet ungefragt)."""
+    assert 'id="schalter-meldewege"' in seite
+    stelle = seite.index('id="schalter-meldewege"')
+    assert "checked" in seite[stelle:stelle + 60]
+    assert "Energie- und Meldewege anzeigen" in seite
+
+
+def test_luftarten_sind_nicht_nur_an_der_farbe_zu_unterscheiden():
+    """Dieselbe Regel wie bei Luft/Signal/Energie und den Palettengruppen:
+    Farbe ist Verstaerkung, nicht der einzige Traeger. Geprueft wird, dass
+    jede der fuenf Luftarten ein EIGENES Strichmuster hat - im
+    Schwarzweissdruck bleibt nur das uebrig."""
+    css = (
+        pathlib.Path(__file__).resolve().parent.parent
+        / "static" / "css" / "style.css"
+    ).read_text(encoding="utf-8")
+    muster = {}
+    for art in ("zuluft", "abluft", "aussenluft", "fortluft", "umluft"):
+        treffer = re.search(rf"\.pfeil-luft-{art}\s*{{([^}}]*)}}", css)
+        assert treffer, art
+        regel = treffer.group(1)
+        strich = re.search(r"stroke-dasharray:\s*([^;]+);", regel)
+        muster[art] = strich.group(1).strip() if strich else "durchgezogen"
+    assert len(set(muster.values())) == 5, muster

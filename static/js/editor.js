@@ -449,6 +449,48 @@ const Editor = {
     );
   },
 
+  /* Melde- und Energiewege ein-/ausblenden (Legende in der Kopfleiste).
+     Der Wunsch dahinter: "hier ist zu viel Gewirr" - in AX_SIM 2.1 laufen
+     17 der 52 Signalwege als Meldung an die Bilanzkarte und den
+     Datenlogger und queren dabei die halbe Anlage. Fuer die Rechnung sind
+     sie noetig, beim Betrachten des Luftwegs stoeren sie.
+
+     Von Haus aus SICHTBAR (nur blasser gezeichnet, siehe style.css):
+     etwas stillschweigend zu verstecken, das der Benutzer selbst
+     verdrahtet hat, waere die schlechtere Voreinstellung - er suchte dann
+     eine Verbindung, die es gibt. Die Wahl bleibt im Browser gemerkt
+     (localStorage), weil sie zur Arbeitsweise gehoert und nicht zur
+     Anlage: sie darf keinen Verlaufsschritt erzeugen und nichts an den
+     Daten aendern. localStorage kann in einem privaten Fenster werfen -
+     deshalb ueberall in try/catch, ohne dass der Editor daran haengt. */
+  MELDEWEGE_SCHLUESSEL: "rlt-meldewege-zeigen",
+
+  meldewegeGemerkt() {
+    try {
+      return window.localStorage.getItem(this.MELDEWEGE_SCHLUESSEL) !== "nein";
+    } catch {
+      return true;
+    }
+  },
+
+  meldewegeSetzen(zeigen) {
+    const leinwand = document.getElementById("leinwand");
+    if (leinwand) leinwand.classList.toggle("leinwand-ohne-meldewege", !zeigen);
+    const schalter = document.getElementById("schalter-meldewege");
+    if (schalter) schalter.checked = zeigen;
+    // Ein Punkt an der Legende, solange etwas ausgeblendet ist: sonst
+    // sucht man beim naechsten Oeffnen der Anlage eine Verbindung, die es
+    // gibt - man sieht sie nur gerade nicht.
+    const legende = document.querySelector(".legende");
+    if (legende) legende.classList.toggle("legende-gefiltert", !zeigen);
+    try {
+      window.localStorage.setItem(this.MELDEWEGE_SCHLUESSEL, zeigen ? "ja" : "nein");
+    } catch {
+      /* Kein Speicher (privates Fenster) - die Wahl gilt dann nur fuer diese
+         Sitzung, das ist kein Grund fuer eine Fehlermeldung. */
+    }
+  },
+
   // -- Einen Pfeil auswaehlen und loeschen ---------------------------------
   /* Bis hierher liess sich ein Pfeil nur per Doppelklick loeschen - und
      genau das ging nicht mehr: der pointerdown-Lauscher der Leinwand
@@ -487,7 +529,14 @@ const Editor = {
       if (!bahn.dataset.id) continue;   // die Vorschau beim Ziehen hat keine
       const treffer = document.createElementNS(NS, "path");
       treffer.setAttribute("d", bahn.getAttribute("d"));
-      treffer.setAttribute("class", "pfeil pfeil-treffer");
+      // Die Meldeweg-Markierung wandert mit: sonst finge die Trefferbahn
+      // eines ausgeblendeten Melde- oder Energiewegs weiter Klicks ab, und
+      // man waehlte einen Pfeil aus, den man gar nicht sieht.
+      treffer.setAttribute(
+        "class",
+        "pfeil pfeil-treffer"
+          + (bahn.classList.contains("pfeil-meldeweg") ? " pfeil-meldeweg" : "")
+      );
       treffer.setAttribute("data-id", bahn.dataset.id);
       ebene.insertBefore(treffer, bahn);
     }
@@ -1828,6 +1877,14 @@ window.addEventListener("DOMContentLoaded", async () => {
   Editor.berichtLinkAktualisieren();
 
   Editor.verlaufAktualisieren();
+  Editor.meldewegeSetzen(Editor.meldewegeGemerkt());
+
+  const schalterMeldewege = document.getElementById("schalter-meldewege");
+  if (schalterMeldewege) {
+    schalterMeldewege.addEventListener("change", (e) =>
+      Editor.meldewegeSetzen(e.target.checked)
+    );
+  }
 
   const btnPfeilLoeschen = document.getElementById("btn-pfeil-loeschen");
   if (btnPfeilLoeschen) {

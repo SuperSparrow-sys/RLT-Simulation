@@ -165,7 +165,7 @@ Zur Wahl der Verdrahtung - ein Befund ueber Task 14:
     nicht angefasst; der Befund gehoert nach Task 14.
 """
 
-from core import anlagen
+from core import anlagen, verlauf
 
 NAME = "Testanlage Technikhalle"
 BESCHREIBUNG = (
@@ -176,6 +176,16 @@ BESCHREIBUNG = (
 
 
 def baue(projekt_id, name=NAME):
+    """Baut die Vorlage - ohne den Verlauf mitzuschreiben (verlauf.stumm).
+
+    Auch beim direkten Aufruf, nicht nur ueber core.vorlagen.baue(): der
+    Aufbau ist EINE Handlung, kein Prozess, den jemand Schritt fuer Schritt
+    zuruecknehmen will (siehe core/verlauf.py, stumm())."""
+    with verlauf.stumm():
+        return _baue_roh(projekt_id, name)
+
+
+def _baue_roh(projekt_id, name=NAME):
     anlage = anlagen.anlage_anlegen(
         projekt_id, name,
         notiz="Zum Pruefen gebaut, nicht aus der Excel uebernommen (Task 25)",

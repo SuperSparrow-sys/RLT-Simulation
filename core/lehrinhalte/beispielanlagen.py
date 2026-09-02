@@ -19,7 +19,7 @@ absichtlich in vertauschter Wirkrichtung hängen - wird über
 anlagen.verbindung_anlegen() gezielt verbunden, genau wie in ax_sim_2_1.py.
 """
 
-from core import anlagen
+from core import anlagen, verlauf
 from core.bausteine import basis
 
 NAME_PROJEKT = "Bausteine"
@@ -39,23 +39,34 @@ def projekt_bausteine():
 
 
 class _Bau:
-    """Dünner Wrapper um core.anlagen für die Anlage, die gerade entsteht."""
+    """Dünner Wrapper um core.anlagen für die Anlage, die gerade entsteht.
+
+    Jeder Schreibvorgang läuft unter verlauf.stumm(): eine Beispielanlage
+    entsteht in einem Zug, und ihr Aufbau gehört nicht in den Verlauf des
+    Benutzers - "Rückgängig" soll die frisch geöffnete Beispielanlage nicht
+    Karte für Karte wieder auseinandernehmen (siehe core/verlauf.py,
+    stumm()). Bewusst hier an den drei Schreibwegen statt einmal um
+    baue_beispiel(): so gilt es auch, wenn eine bau_<typ>()-Funktion einmal
+    von woanders aufgerufen wird (die Testreihe tut genau das)."""
 
     def __init__(self, anlage_id):
         self.anlage_id = anlage_id
 
     def karte(self, typ, x, y, name, **parameter):
-        return anlagen.karte_anlegen(self.anlage_id, typ, x, y, parameter, name)
+        with verlauf.stumm():
+            return anlagen.karte_anlegen(self.anlage_id, typ, x, y, parameter, name)
 
     def pfeil(self, von, nach):
-        anlagen.pfeil_anlegen(self.anlage_id, von, nach)
+        with verlauf.stumm():
+            anlagen.pfeil_anlegen(self.anlage_id, von, nach)
 
     def verbinde(self, von, von_schluessel, nach, nach_schluessel):
-        anlagen.verbindung_anlegen(
-            self.anlage_id,
-            anlagen.port_id(von, von_schluessel),
-            anlagen.port_id(nach, nach_schluessel),
-        )
+        with verlauf.stumm():
+            anlagen.verbindung_anlegen(
+                self.anlage_id,
+                anlagen.port_id(von, von_schluessel),
+                anlagen.port_id(nach, nach_schluessel),
+            )
 
 
 def _anlage(projekt_id, name, notiz):

@@ -31,113 +31,168 @@
     <aside class="palette" id="palette"></aside>
 
     <main class="buehne">
+      <!-- Kopfleiste: vier Gruppen, durch schmale Striche getrennt, in
+           EINER Formensprache (siehe style.css, "Kopfleiste des Editors").
+           Runde Knöpfe tragen genau ein Zeichen und einen Namen in
+           title/aria-label; Pillen tragen ein Wort; genau eine gefüllte
+           Pille trägt den Zweck der Seite. Die Gruppen von links nach
+           rechts: ORT (zurück, Name, umbenennen), BEARBEITUNG (rückgängig,
+           wiederholen), ANSICHT (einpassen, Verbindungen, auf schmalen
+           Geräten die beiden Seitenbereiche), ERGEBNIS (Bericht,
+           Vergleich, Simulieren). Auf schmalen Geräten verlieren die
+           Knöpfe links ihr Wort und behalten ihr Zeichen - der Platz
+           gehört dann den drei Wegen zum Ergebnis. -->
       <header class="leiste">
-        <!-- Derselbe Weg zurueck wie im Erklaerbereich (templates/bausteine.html,
-             .lehre-zurueck) - links neben dem Anlagennamen, damit es sich
-             gleich anfuehlt. Vorher fuehrte aus einer Anlage nur die
-             Adresszeile wieder heraus. -->
-        <a class="editor-zurueck" href="{{ url_for('pages.index') }}" title="Zur Startseite">← Start</a>
+        <div class="leiste-gruppe">
+          <!-- Derselbe Weg zurueck wie im Erklaerbereich
+               (templates/bausteine.html, .lehre-zurueck) - links neben dem
+               Anlagennamen, damit es sich gleich anfuehlt. -->
+          <a class="editor-zurueck" href="{{ url_for('pages.index') }}"
+             title="Zur Startseite" aria-label="Zur Startseite"><span class="knopf-zeichen" aria-hidden="true">←</span><span class="knopf-wort">Start</span></a>
 
-        <!-- Rueckgaengig/Wiederholen (core/verlauf.py, editor.js).
-             Links bei "← Start", weil sie zur Anlage als Ganzem gehoeren
-             und nicht zu einer einzelnen Karte. Zu Beginn beide gesperrt;
-             editor.js hebt die Sperre auf, sobald der Verlauf etwas
-             hergibt, und traegt in title/aria-label ein, WAS der Knopf
-             zuruecknimmt ("Rückgängig: Karte 'Erhitzer' gelöscht"). Auf
-             dem iPad, wo es kein Schweben gibt, nennt der Hinweisstreifen
-             nach dem Druck dasselbe noch einmal (zeigeHinweis() in
-             editor.js). -->
-        <span class="verlauf-knoepfe">
-          <button class="knopf-mini knopf-verlauf" id="btn-zurueck"
-                  title="Rückgängig" aria-label="Rückgängig" disabled>
-            <span aria-hidden="true">↶</span> Rückgängig
-          </button>
-          <button class="knopf-mini knopf-verlauf" id="btn-vor"
-                  title="Wiederholen" aria-label="Wiederholen" disabled>
-            <span aria-hidden="true">↷</span> Wiederholen
-          </button>
-        </span>
+          <span class="titel anlagenname-zeile">
+            <span id="anlagenname">Anlage</span>
+            <button class="leiste-knopf leiste-knopf-rund leiste-knopf-still"
+                    id="btn-anlage-umbenennen" title="Anlage umbenennen"
+                    aria-label="Anlage umbenennen"><svg class="knopf-symbol" viewBox="0 0 16 16" aria-hidden="true"><path d="M11.3 1.9 14.1 4.7 5.6 13.2 2.2 14.1 3.1 10.7z"/><path d="M9.9 3.3 12.7 6.1"/></svg></button>
+          </span>
+        </div>
 
-        <span class="titel anlagenname-zeile">
-          <span id="anlagenname">Anlage</span>
-          <button class="knopf-mini" id="btn-anlage-umbenennen" title="Anlage umbenennen">Umbenennen</button>
-        </span>
+        <span class="leiste-trenner" aria-hidden="true"></span>
 
-        <!-- Nur auf schmalem Hochformat mit Finger (@media (max-width: 900px)
-             and (pointer: coarse), siehe style.css) sichtbar: dort ist neben
-             der Leinwand kein Platz mehr fuer Palette UND Parameterfenster
-             gleichzeitig (siehe Task, Befund 6) - beide werden zu
-             ein-/ausblendbaren Seitenbereichen, dieser Knopf und
-             btn-panel-umschalten weiter unten schalten sie. Am Schreibtisch
-             (auch bei schmalem Fenster) bleiben Palette und Parameterfenster
-             wie bisher immer sichtbar. -->
-        <button class="knopf-mini knopf-seitenbereich" id="btn-palette-umschalten"
-                aria-controls="palette" aria-expanded="false">Palette</button>
+        <!-- Rueckgaengig/Wiederholen (core/verlauf.py, editor.js). Zu Beginn
+             beide gesperrt; editor.js hebt die Sperre auf, sobald der
+             Verlauf etwas hergibt, und traegt in title/aria-label ein, WAS
+             der Knopf zuruecknimmt ("Rückgängig: Karte 'Erhitzer'
+             gelöscht"). Auf dem iPad, wo es kein Schweben gibt, nennt der
+             Hinweisstreifen nach dem Druck dasselbe noch einmal
+             (zeigeHinweis() in editor.js). -->
+        <div class="leiste-gruppe verlauf-knoepfe">
+          <button class="leiste-knopf leiste-knopf-rund" id="btn-zurueck"
+                  title="Rückgängig" aria-label="Rückgängig" disabled><span class="knopf-zeichen" aria-hidden="true">↶</span></button>
+          <button class="leiste-knopf leiste-knopf-rund" id="btn-vor"
+                  title="Wiederholen" aria-label="Wiederholen" disabled><span class="knopf-zeichen" aria-hidden="true">↷</span></button>
+        </div>
 
-        <details class="legende">
-          <summary>Verbindungen</summary>
-          <div class="legende-inhalt">
-            <p class="legende-titel">Karten verbinden</p>
-            <p class="legende-hinweistext">
-              Karte überfahren oder antippen – am Rand erscheint ein Punkt –
-              und ihn auf die Zielkarte ziehen. Oder mit Umschalt+Ziehen von
-              einer Karte zur anderen.
-            </p>
-            <p class="legende-titel">Pfeilarten</p>
-            <div class="legende-zeile">
-              <svg class="legende-muster" viewBox="0 0 32 8" aria-hidden="true">
-                <path class="pfeil pfeil-luft" d="M1 4 H31"/>
-              </svg>
-              <span>Luft</span>
+        <span class="leiste-trenner" aria-hidden="true"></span>
+
+        <div class="leiste-gruppe">
+          <button class="leiste-knopf leiste-knopf-rund" id="btn-einpassen"
+                  title="Ganze Anlage einpassen" aria-label="Ganze Anlage einpassen"><span class="knopf-zeichen" aria-hidden="true">⤢</span></button>
+
+          <details class="legende">
+            <summary title="Verbindungsarten" aria-label="Verbindungsarten"><span class="knopf-zeichen" aria-hidden="true">⇢</span><span class="knopf-wort">Verbindungen</span></summary>
+            <div class="legende-inhalt">
+              <p class="legende-titel">Karten verbinden</p>
+              <p class="legende-hinweistext">
+                Karte überfahren oder antippen – am Rand erscheint ein Punkt –
+                und ihn auf die Zielkarte ziehen. Oder mit Umschalt+Ziehen von
+                einer Karte zur anderen. Einen Pfeil antippen wählt ihn aus;
+                dann löscht ihn der Knopf an der Verbindung oder die Entf-Taste.
+              </p>
+
+              <!-- Luftarten: Farbe UND Strichmuster, damit sie auch ohne
+                   Farbunterscheidung und im Schwarzweissdruck tragen
+                   (siehe static/js/pfeile.js, LUFTROLLEN). -->
+              <p class="legende-titel">Luftwege</p>
+              <div class="legende-zeile">
+                <svg class="legende-muster" viewBox="0 0 32 8" aria-hidden="true">
+                  <path class="pfeil pfeil-luft pfeil-luft-aussenluft" d="M1 4 H31"/>
+                </svg>
+                <span>Außenluft</span>
+              </div>
+              <div class="legende-zeile">
+                <svg class="legende-muster" viewBox="0 0 32 8" aria-hidden="true">
+                  <path class="pfeil pfeil-luft pfeil-luft-zuluft" d="M1 4 H31"/>
+                </svg>
+                <span>Zuluft</span>
+              </div>
+              <div class="legende-zeile">
+                <svg class="legende-muster" viewBox="0 0 32 8" aria-hidden="true">
+                  <path class="pfeil pfeil-luft pfeil-luft-abluft" d="M1 4 H31"/>
+                </svg>
+                <span>Abluft</span>
+              </div>
+              <div class="legende-zeile">
+                <svg class="legende-muster" viewBox="0 0 32 8" aria-hidden="true">
+                  <path class="pfeil pfeil-luft pfeil-luft-fortluft" d="M1 4 H31"/>
+                </svg>
+                <span>Fortluft</span>
+              </div>
+              <div class="legende-zeile">
+                <svg class="legende-muster" viewBox="0 0 32 8" aria-hidden="true">
+                  <path class="pfeil pfeil-luft pfeil-luft-umluft" d="M1 4 H31"/>
+                </svg>
+                <span>Umluft</span>
+              </div>
+
+              <p class="legende-titel">Weitere Wege</p>
+              <div class="legende-zeile">
+                <svg class="legende-muster" viewBox="0 0 32 8" aria-hidden="true">
+                  <path class="pfeil pfeil-signal" d="M1 4 H31"/>
+                </svg>
+                <span>Signal (Regelung)</span>
+              </div>
+              <div class="legende-zeile">
+                <svg class="legende-muster" viewBox="0 0 32 8" aria-hidden="true">
+                  <path class="pfeil pfeil-energie" d="M1 4 H31"/>
+                </svg>
+                <span>Energie zur Bilanz</span>
+              </div>
+              <div class="legende-zeile">
+                <svg class="legende-muster" viewBox="0 0 32 8" aria-hidden="true">
+                  <path class="pfeil pfeil-protokoll" d="M1 4 H31"/>
+                </svg>
+                <span>Meldung an den Datenlogger</span>
+              </div>
+              <div class="legende-zeile">
+                <svg class="legende-muster" viewBox="0 0 32 8" aria-hidden="true">
+                  <path class="pfeil pfeil-mehrdeutig" d="M1 4 H31"/>
+                </svg>
+                <span>Mehrdeutig &ndash; bitte prüfen</span>
+              </div>
+
+              <!-- Energie- und Meldewege laufen aus der ganzen Anlage auf
+                   zwei Karten am Rand zu (in AX_SIM 2.1 sind das 17 der 52
+                   Signalwege) und queren dabei alles. Von Haus aus sichtbar,
+                   nur blasser gezeichnet - hier lassen sie sich ganz
+                   ausblenden (editor.js, meldewegeSetzen). -->
+              <label class="legende-schalter">
+                <input type="checkbox" id="schalter-meldewege" checked>
+                <span>Energie- und Meldewege anzeigen</span>
+              </label>
             </div>
-            <div class="legende-zeile">
-              <svg class="legende-muster" viewBox="0 0 32 8" aria-hidden="true">
-                <path class="pfeil pfeil-signal" d="M1 4 H31"/>
-              </svg>
-              <span>Signal</span>
-            </div>
-            <div class="legende-zeile">
-              <svg class="legende-muster" viewBox="0 0 32 8" aria-hidden="true">
-                <path class="pfeil pfeil-energie" d="M1 4 H31"/>
-              </svg>
-              <span>Energie</span>
-            </div>
-            <div class="legende-zeile">
-              <svg class="legende-muster" viewBox="0 0 32 8" aria-hidden="true">
-                <path class="pfeil pfeil-mehrdeutig" d="M1 4 H31"/>
-              </svg>
-              <span>Mehrdeutig &ndash; bitte prüfen</span>
-            </div>
-          </div>
-        </details>
+          </details>
 
-        <button class="knopf-mini knopf-seitenbereich" id="btn-panel-umschalten"
-                aria-controls="panel" aria-expanded="false">Parameter</button>
+          <!-- Nur auf schmalem Hochformat mit Finger (@media (max-width: 900px)
+               and (pointer: coarse), siehe style.css) sichtbar: dort ist neben
+               der Leinwand kein Platz mehr fuer Palette UND Parameterfenster
+               gleichzeitig - beide werden zu ein-/ausblendbaren
+               Seitenbereichen, diese beiden Knoepfe schalten sie. -->
+          <button class="leiste-knopf knopf-seitenbereich" id="btn-palette-umschalten"
+                  aria-controls="palette" aria-expanded="false">Palette</button>
+          <button class="leiste-knopf knopf-seitenbereich" id="btn-panel-umschalten"
+                  aria-controls="panel" aria-expanded="false">Parameter</button>
+        </div>
 
-        <button class="knopf-sekundaer" id="btn-einpassen" title="Ganze Anlage einpassen" aria-label="Ganze Anlage einpassen">
-          Einpassen
-        </button>
+        <div class="leiste-gruppe leiste-ergebnis">
+          <!-- Dauerhaft in der Kopfleiste statt nur im Bilanzdialog (siehe
+               static/js/simulation.js, zeigeBilanz()) - sonst war der
+               Bericht nach dem Schliessen des Dialogs gar nicht mehr
+               erreichbar. Zu Beginn immer abgeblendet (kein Lauf bekannt);
+               Editor.berichtLinkAktualisieren() setzt href und hebt die
+               Abblendung auf, sobald ein Lauf mit Ergebnis vorliegt. -->
+          <a class="leiste-knopf" id="link-bericht" aria-disabled="true"
+             title="Bericht des letzten Laufs">Bericht</a>
 
-        <!-- Dauerhaft in der Kopfleiste statt nur im Bilanzdialog (siehe
-             static/js/simulation.js, zeigeBilanz()) - sonst war der
-             Bericht nach dem Schliessen des Dialogs gar nicht mehr
-             erreichbar. Zu Beginn immer abgeblendet (kein Lauf bekannt);
-             Editor.berichtLinkAktualisieren() in editor.js setzt href und
-             hebt die Abblendung auf, sobald ein Lauf mit Ergebnis
-             vorliegt - beim Laden der Seite und sofort, wenn ein Lauf
-             fertig wird (siehe simulation.js, beobachte()), ohne dass
-             neu geladen werden muss. -->
-        <a class="knopf-mini" id="link-bericht" aria-disabled="true"
-           title="Bericht des letzten Laufs">Bericht</a>
+          <!-- Vorhaben B: dieselbe Anlage ueber mehrere Wetterjahre
+               vergleichen (core/vergleich.py, core/laeufe.py
+               starte_reihe()). -->
+          <button class="leiste-knopf" id="btn-vergleich"
+                  title="Diese Anlage über mehrere Wetterjahre vergleichen">Vergleich</button>
 
-        <!-- Vorhaben B: dieselbe Anlage ueber mehrere Wetterjahre vergleichen
-             (core/vergleich.py, core/laeufe.py starte_reihe()) - ein eigener
-             Knopf statt eine Option im Simulationsdialog, weil eine Reihe
-             ihre eigene Fortschritts-/Abbruchanzeige braucht (static/js/
-             simulation.js, Vergleich). -->
-        <button class="knopf-mini" id="btn-vergleich" title="Diese Anlage über mehrere Wetterjahre vergleichen">Vergleich</button>
-
-        <button class="knopf-haupt" id="btn-simulieren">Simulieren</button>
+          <button class="leiste-knopf leiste-knopf-haupt" id="btn-simulieren">Simulieren</button>
+        </div>
       </header>
       <!-- .leinwand-flaeche traegt die Kanten (top/right/bottom/left,
            siehe style.css), #leinwand selbst nur noch width/height:100%

@@ -15,13 +15,23 @@ Alle Nennwerte sind aus dem Blatt 'Anlage' uebernommen; die Zellbezuege stehen
 jeweils als Kommentar daneben.
 """
 
-from core import anlagen
+from core import anlagen, verlauf
 
 NAME = "AX_SIM 2.1"
 BESCHREIBUNG = "Zwei Lüftungsgeräte an gemeinsamer WRG, ein Raum (aus der Excel)"
 
 
 def baue(projekt_id, name="AX_SIM 2.1"):
+    """Baut die Vorlage - ohne den Verlauf mitzuschreiben (verlauf.stumm).
+
+    Auch beim direkten Aufruf, nicht nur ueber core.vorlagen.baue(): der
+    Aufbau ist EINE Handlung, kein Prozess, den jemand Schritt fuer Schritt
+    zuruecknehmen will (siehe core/verlauf.py, stumm())."""
+    with verlauf.stumm():
+        return _baue_roh(projekt_id, name)
+
+
+def _baue_roh(projekt_id, name="AX_SIM 2.1"):
     anlage = anlagen.anlage_anlegen(
         projekt_id, name, notiz="Nachbau der Excel-Mappe AX_SIM 2.1"
     )

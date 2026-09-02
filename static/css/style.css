@@ -36,6 +36,18 @@
      weiter unten) - die Farbe hier ist Verstaerkung, nicht der einzige
      Traeger. */
   --luft: #1a73e8;
+  /* Die fuenf Luftarten (core/bausteine/basis.py: AUSSENLUFT, ZULUFT,
+     ABLUFT, FORTLUFT, UMLUFT). Farbe UND Strichmuster unterscheiden sie
+     (siehe .pfeil-luft-* weiter unten) - im Schwarzweissdruck und ohne
+     Farbsinn traegt das Muster allein. Die Toene folgen der ueblichen
+     Lesart im Lueftungsbau: Aussenluft kuehl/gruenblau, Zuluft blau,
+     Abluft warm/orange, Fortluft braun (verbraucht), Umluft violett
+     (kreist im Haus). */
+  --luft-aussen: #00838f;
+  --luft-zu: #1a73e8;
+  --luft-ab: #e37400;
+  --luft-fort: #8d5a1b;
+  --luft-um: #8430ce;
   --signal: #5f6368;
   --energie: #146c2e;
   --energie-tint: #e6f4ea;
@@ -141,6 +153,11 @@ body.seite-editor .fehlermeldung,
 body.seite-editor .hinweismeldung {
   touch-action: none;
 }
+/* Auf der Editorseite unterhalb der Kopfleiste (52 Punkte hoch, siehe
+   .leiste) statt darueber: sonst verdeckt eine Meldung den Anlagennamen
+   und die Knoepfe, ueber die sie gerade spricht. */
+body.seite-editor .fehlermeldung,
+body.seite-editor .hinweismeldung { top: 64px; }
 
 h1, h2, h3, p { margin: 0; }
 
@@ -298,61 +315,160 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
-/* Weg zurueck zur Startseite aus dem Editor - dieselbe Optik wie
-   .lehre-zurueck im Erklaerbereich (templates/bausteine.html,
-   static/css/bausteine.css), hier eigenstaendig, weil bausteine.css
-   nicht zu dieser Seite gehoert. */
-.editor-zurueck {
-  color: var(--text-secondary);
-  text-decoration: none;
-  font-size: 13px;
-  flex-shrink: 0;
-}
-.editor-zurueck:hover { color: var(--blue); }
+/* ---------- Kopfleiste des Editors: eine Formensprache ----------
+   Die Leiste war ueber viele Schritte gewachsen - ein Textlink, drei
+   Knopfarten, ein <details>, ein gefuellter Hauptknopf, zuletzt zwei runde
+   Zeichenknoepfe: verschiedene Formen, verschiedene Gewichte, keine
+   erkennbare Ordnung. Sie folgt jetzt drei Regeln:
 
-/* Rueckgaengig/Wiederholen (templates/editor.html, core/verlauf.py): ein
-   Paar, das zusammenbleibt - deshalb ein eigener Behaelter mit kleinerem
-   Abstand als der 16px-Abstand der Kopfleiste, sonst stuenden die beiden
-   Knoepfe so weit auseinander wie zwei unabhaengige Handlungen.
-   flex-shrink:0, damit sie ein langer Anlagenname nicht zusammendrueckt. */
-.verlauf-knoepfe {
+   1. ALLE Bedienelemente der Leiste haben DIESELBE Grundform: gleiche
+      Hoehe, gleicher Radius, gleicher Rahmen, gleiche Schrift
+      (.leiste-knopf - dazu .editor-zurueck und die Zusammenfassung der
+      Legende, die aus aelteren Gruenden keine eigene Klasse tragen).
+   2. Sie unterscheiden sich in DREI Stufen: rund mit genau einem Zeichen
+      (ein Handgriff - zurueck, umbenennen, rueckgaengig, wiederholen,
+      einpassen), Pille mit einem Wort (ein benannter Weg - Verbindungen,
+      Palette, Parameter, Bericht, Vergleich), und genau EINE gefuellte
+      Pille fuer den Zweck der Seite (Simulieren).
+   3. Sie stehen in Gruppen, durch einen schmalen Strich getrennt: ORT,
+      BEARBEITUNG, ANSICHT - und ganz rechts das ERGEBNIS.
+
+   Alles ist mindestens 36 Punkte hoch, mit Finger 44 (siehe @media
+   (pointer: coarse) weiter unten) - Apples Richtwert, denselben, den die
+   uebrigen Knoepfe des Programms schon einhalten. */
+.leiste-knopf,
+.editor-zurueck,
+.legende summary {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  user-select: none;
+}
+.leiste-knopf:hover,
+.editor-zurueck:hover,
+.legende summary:hover {
+  background: var(--surface-alt);
+  border-color: var(--border-strong);
+}
+.leiste-knopf:disabled,
+.leiste-knopf[aria-disabled="true"] {
+  opacity: .45;
+  cursor: default;
+  pointer-events: none;
+}
+/* Rund: Breite = Hoehe, genau ein Zeichen. Das Zeichen etwas groesser als
+   die Schrift der Pillen, sonst wirkt es in der runden Flaeche verloren. */
+.leiste-knopf-rund { width: 36px; padding: 0; }
+.knopf-zeichen { font-size: 16px; line-height: 1; }
+/* Der Stift ist als Schriftzeichen (U+270E) nicht zu haben: die
+   Emoji-Schrift gewinnt in den meisten Browsern und malt ihn bunt, auch
+   mit angehaengtem Textwaehler (U+FE0E) - nachgestellt und nachgesehen.
+   Deshalb hier als kleine, einfarbige Zeichnung in derselben Strichstaerke
+   wie die uebrigen Zeichen der Leiste. */
+.knopf-symbol {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+/* Ohne eigenen Rahmen - fuer den Stift neben dem Anlagennamen, der zum
+   Namen gehoert und nicht als eigener Knopf daneben stehen soll. */
+.leiste-knopf-still { border-color: transparent; background: none; }
+.leiste-knopf-still:hover { border-color: var(--border); }
+/* Die eine gefuellte Pille: der Zweck der Seite. */
+.leiste-knopf-haupt {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: var(--auf-farbe);
+  font-weight: 500;
+  padding: 0 18px;
+}
+.leiste-knopf-haupt:hover { background: var(--blue-hover); border-color: var(--blue-hover); }
+.leiste-knopf-haupt:disabled {
+  background: var(--border);
+  border-color: var(--border);
+  color: var(--text-tertiary);
+  opacity: 1;
+}
+
+.leiste-gruppe {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+}
+/* Zwischen den Gruppen mehr Luft als innerhalb (6px), aber weniger als die
+   16px, die die Leiste sonst zwischen allem setzt - die Gruppierung soll
+   man sehen, ohne dass die Leiste auseinanderfaellt. Nur die Leiste des
+   Editors; auf Startseite/Bausteine bleibt der Abstand wie er war. */
+.app .leiste { gap: 10px; }
+/* Das Ergebnis steht rechts - der Rest waechst von links. */
+.leiste-ergebnis { margin-left: auto; }
+.leiste-trenner {
+  width: 1px;
+  height: 20px;
+  background: var(--border-light);
   flex-shrink: 0;
 }
-/* Die Pfeilzeichen (↶ ↷) sind in vielen Schriften schmal und blass - eine
-   Spur groesser gesetzt, damit sie auf einem iPad-Bildschirm zu erkennen
-   sind, ohne den Knopf hoeher zu machen. */
-/* Zwei Selektoren tief (.verlauf-knoepfe .knopf-verlauf) - NICHT aus
-   Gewohnheit, sondern weil .knopf-mini in loeschen.css steht und diese
-   Datei NACH style.css geladen wird: eine einfache .knopf-verlauf-Regel
-   haette dieselbe Spezifitaet wie .knopf-mini und verloere gegen die
-   spaetere Datei (derselbe Stolperstein ist dort schon einmal kommentiert).
-   Mit dem Elternselektor gewinnt sie unabhaengig von der Ladereihenfolge. */
-.verlauf-knoepfe .knopf-verlauf { white-space: nowrap; }
-.verlauf-knoepfe .knopf-verlauf span { font-size: 15px; line-height: 1; }
-/* Schmale Fenster (iPad-Hochformat ist 810 Punkte breit): nur die Zeichen,
-   ohne Wort - sonst schoebe das Paar die Knoepfe rechts (Vergleich,
-   Simulieren) aus der Kopfleiste hinaus. aria-label und title nennen die
-   Handlung weiterhin vollstaendig, und nach dem Druck sagt der
-   Hinweisstreifen, was geschehen ist (siehe editor.js, zeigeHinweis). */
+
+/* Rueckgaengig/Wiederholen bilden ein Paar und stehen deshalb enger
+   beieinander als die uebrigen Glieder einer Gruppe. Ihre Form kommt aus
+   .leiste-knopf-rund - sie waren der Ausgangspunkt der Formensprache oben
+   und sind keine eigene Variante mehr. */
+.verlauf-knoepfe { gap: 4px; }
+
+/* Wo der Platz knapp wird, legen die Knoepfe links ihr Wort ab und
+   behalten ihr Zeichen; die drei Wege zum Ergebnis behalten ihres, denn
+   "Bericht", "Vergleich" und "Simulieren" waeren als Zeichen nicht zu
+   erraten. title und aria-label nennen die Handlung weiterhin
+   vollstaendig, und nach einem Druck sagt der Hinweisstreifen, was
+   geschehen ist (editor.js, zeigeHinweis).
+
+   Die Schwellen sind gemessen, nicht geraten: Palette und
+   Parameterfenster nehmen zusammen 548 Punkte, sodass einem
+   1280-Punkte-Laptop nur 732 fuer die Leiste bleiben - mit beiden
+   Woertern braeuchte sie 747. Unter 1100 (iPad quer, 1080) entfallen
+   zusaetzlich die Trennstriche und die Leiste rueckt enger; unter 900
+   kommen die beiden Seitenbereich-Umschalter dazu, die den Platz dann
+   selbst brauchen. */
+@media (max-width: 1400px) {
+  .knopf-wort { display: none; }
+  .editor-zurueck,
+  .legende summary { width: 36px; padding: 0; }
+}
 @media (max-width: 1100px) {
-  .verlauf-knoepfe { gap: 4px; }
-  .verlauf-knoepfe .knopf-verlauf {
-    font-size: 0;
-    padding-left: 9px;
-    padding-right: 9px;
-  }
-  .verlauf-knoepfe .knopf-verlauf span { font-size: 17px; }
-  /* Die Kopfleiste des Editors war im iPad-Hochformat (810 Punkte) schon
-     ohne die beiden Knoepfe genau ausgereizt - mit ihnen ragte
-     "Simulieren" ueber den rechten Rand hinaus. Auf schmalen Geraeten
-     ruecken deshalb ALLE Eintraege der Leiste enger zusammen, statt einen
-     von ihnen zu opfern. Nur die Leiste des Editors (.app .leiste), nicht
-     die gleichnamige auf Startseite/Bausteine - dieselbe Abgrenzung wie
-     bei touch-action weiter oben. */
-  .app .leiste { gap: 10px; padding: 0 10px; }
+  .app .leiste { gap: 8px; padding: 0 8px; }
+  .leiste-gruppe { gap: 5px; }
+  .anlagenname-zeile { gap: 4px; }
+  /* Die Gruppen stehen dann eng genug beieinander, dass die Striche mehr
+     Platz kosten als sie ordnen. */
+  .leiste-trenner { display: none; }
+}
+/* Dieselben runden Knoepfe mit dem Finger: 44 statt 36 Punkte. Muss NACH
+   der Regel oben stehen (gleiche Spezifitaet, spaeter gewinnt) und
+   getrennt von ihr bleiben - an einem breiten Beruehrungsbildschirm tragen
+   sie ihr Wort und duerfen keine feste Breite bekommen. */
+@media (max-width: 1100px) and (pointer: coarse) {
+  .editor-zurueck,
+  .legende summary { width: 44px; }
 }
 
 /* Der Bericht-Weg in der Kopfleiste (templates/editor.html, #link-bericht):
@@ -402,15 +518,11 @@ a.knopf-mini { display: inline-block; text-decoration: none; }
 }
 .knopf-sekundaer:hover { background: var(--surface-alt); border-color: var(--border-strong); }
 
-/* Nur in der Kopfleiste soll der Hauptknopf (und der Einpassen-Knopf davor)
-   ganz nach rechts wandern - als Vorgabe auf .knopf-haupt selbst griff das
-   faelschlich auch dort, wo die Klasse in einem anderen Fliesskontext
-   wiederverwendet wird (z.B. im Wetter-Formular: dort landete "Hochladen"
-   einsam am rechten Rand, weit weg von den Eingabefeldern, zu denen es
-   gehoert). Der auto-Rand sitzt auf dem ERSTEN der beiden rechten Knoepfe,
-   damit sie als Paar zusammenbleiben statt sich den freien Platz zu teilen.
-   */
-.leiste .knopf-sekundaer { margin-left: auto; }
+/* (Der frueher hier stehende "margin-left: auto" auf .knopf-sekundaer ist
+   entfallen: die Kopfleiste schiebt jetzt die ganze Ergebnisgruppe nach
+   rechts - siehe .leiste-ergebnis weiter oben. Ausserhalb der Kopfleiste
+   hatte die Regel ohnehin nie etwas zu suchen, genau das war ihr
+   urspruenglicher Anlass.) */
 
 /* Seitenbereich-Umschalter (Palette/Parameter): nur im schmalen
    Hochformat mit Finger sichtbar (siehe @media (max-width: 900px) and
@@ -421,17 +533,22 @@ a.knopf-mini { display: inline-block; text-decoration: none; }
 /* Legende der Pfeilarten: eine natives <details> - klickbar und per Tastatur
    bedienbar (Enter/Leertaste) ganz ohne Skript. */
 .legende { position: relative; font-size: 12.5px; }
-.legende summary {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  list-style: none;
-  cursor: pointer;
-  color: var(--text-secondary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 6px 10px;
-  user-select: none;
+/* Form und Masse kommen aus der gemeinsamen Regel ganz oben
+   (.leiste-knopf, .editor-zurueck, .legende summary) - hier bleibt nur,
+   was ein <summary> zusaetzlich braucht. */
+.legende summary { list-style: none; position: relative; }
+/* Solange Melde- und Energiewege ausgeblendet sind, traegt die Legende
+   einen kleinen Punkt - die Anzeige zeigt dann nicht alles, und das soll
+   man sehen, ohne die Legende erst zu oeffnen. */
+.legende-gefiltert summary::before {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warning);
 }
 .legende summary::-webkit-details-marker { display: none; }
 .legende summary::after {
@@ -444,13 +561,13 @@ a.knopf-mini { display: inline-block; text-decoration: none; }
   margin-top: -3px;
 }
 .legende[open] summary::after { transform: rotate(-135deg); margin-top: 2px; }
-.legende summary:hover { border-color: var(--border-strong); color: var(--text); }
+.legende[open] summary { border-color: var(--border-strong); }
 .legende-inhalt {
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
   z-index: 15;
-  min-width: 230px;
+  min-width: 258px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -478,6 +595,23 @@ a.knopf-mini { display: inline-block; text-decoration: none; }
   color: var(--text);
   margin: 0 0 4px;
 }
+/* Der Schalter unter der Legende: er gehoert zu den Wegen, die darueber
+   erklaert sind, steht aber fuer eine Handlung - deshalb durch eine feine
+   Linie abgesetzt. */
+.legende-schalter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-light);
+  font-size: 12.5px;
+  color: var(--text);
+  cursor: pointer;
+  line-height: 1.35;
+}
+.legende-schalter input { flex-shrink: 0; margin: 0; }
+
 .legende-zeile {
   display: flex;
   align-items: center;
@@ -955,6 +1089,13 @@ a.knopf-mini { display: inline-block; text-decoration: none; }
   line-height: 1.35;
   z-index: 40;
   box-shadow: var(--schatten-2);
+  /* Nichts an diesen beiden Leisten ist zum Anklicken da - und sie
+     schweben ueber der Kopfleiste. Ohne pointer-events:none verschluckt
+     die Hinweisleiste genau den Knopf, den sie nennt: "Verbindung
+     gelöscht - „Rückgängig" holt sie zurück" legte sich auf dem iPad
+     ueber ↶, und der Fingertipp dort kam nicht an (nachgestellt und
+     gemessen: der Pfeil kam nicht wieder). */
+  pointer-events: none;
 }
 .fehlermeldung::before {
   content: "!";
@@ -982,6 +1123,7 @@ a.knopf-mini { display: inline-block; text-decoration: none; }
 .hinweismeldung {
   position: fixed;
   top: 14px;
+  pointer-events: none;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -1004,9 +1146,35 @@ a.knopf-mini { display: inline-block; text-decoration: none; }
    traegt. "Mehrdeutig" ueberlagert jede der drei mit einem eigenen, feinen
    Punktmuster in Warnfarbe. */
 .pfeil { fill: none; pointer-events: stroke; }
+/* Luft ist immer dick - daran erkennt man den Luftweg schon von weitem,
+   unabhaengig von der Art. Die Art selbst steht im Muster (und, als
+   Verstaerkung, in der Farbe): durchgezogen fuer die Zuluft als den
+   Hauptweg, lange Striche fuer die Abluft, Punkte fuer die Aussenluft,
+   Strich-Punkt fuer die Fortluft, Strich-Punkt-Punkt fuer die Umluft.
+   Fuenf Muster, die sich auch in einer Schwarzweisskopie unterscheiden -
+   genau die Regel, die auch fuer Luft/Signal/Energie schon galt. */
 .pfeil-luft { stroke: var(--luft); stroke-width: 3; }
+.pfeil-luft-zuluft    { stroke: var(--luft-zu);     stroke-width: 3.5; }
+.pfeil-luft-abluft    { stroke: var(--luft-ab);     stroke-width: 3.5; stroke-dasharray: 12 5; }
+.pfeil-luft-aussenluft{ stroke: var(--luft-aussen); stroke-width: 3.5; stroke-dasharray: 3 4; stroke-linecap: round; }
+.pfeil-luft-fortluft  { stroke: var(--luft-fort);   stroke-width: 3.5; stroke-dasharray: 12 4 3 4; }
+.pfeil-luft-umluft    { stroke: var(--luft-um);     stroke-width: 3.5; stroke-dasharray: 10 4 3 4 3 4; }
 .pfeil-signal { stroke: var(--signal); stroke-width: 1.5; stroke-dasharray: 5 4; }
 .pfeil-energie { stroke: var(--energie); stroke-width: 2; stroke-dasharray: 9 3 1.5 3; }
+/* Meldeweg zu einem Datenlogger: dieselbe Strichart wie ein Signal, nur
+   noch feiner - er meldet einen Wert zum Mitschreiben, er regelt nichts. */
+.pfeil-protokoll { stroke: var(--signal); stroke-width: 1.2; stroke-dasharray: 2 4; }
+
+/* Melde- und Energiewege sind Buchhaltung: sie fuehren aus der ganzen
+   Anlage auf zwei Karten am Rand zu (in AX_SIM 2.1 sind das 17 der 52
+   Signalwege) und queren dabei alles. Fuer die Rechnung sind sie noetig,
+   beim Betrachten des Luftwegs stoeren sie. Deshalb zweierlei: sie sind
+   von Haus aus blasser als ein Regelweg - und ganz abschalten laesst sich
+   die Gruppe ueber die Legende (editor.js, meldewegeZeigen). Ausgeblendet
+   wird die ganze Bahn samt ihrer Trefferbahn, sie faengt dann auch keine
+   Klicks mehr ab. */
+.pfeil-meldeweg { opacity: .45; }
+.leinwand-ohne-meldewege .pfeil-meldeweg { display: none; }
 .pfeil-mehrdeutig { stroke: var(--warning); stroke-dasharray: 1.5 3.5; stroke-width: 2.5; }
 .pfeil-vorschau { stroke: var(--blue); stroke-width: 2; stroke-dasharray: 4 4; }
 .pfeil:hover { stroke: var(--blue); }
@@ -1378,7 +1546,13 @@ a.knopf-mini { display: inline-block; text-decoration: none; }
 }
 .wetter-tabelle { max-width: 640px; }
 
-@media (max-width: 900px) {
+/* Bis 1100px (das iPad im Querformat ist 1080 Punkte breit) schmalere
+   Seitenbereiche: dort gehen sonst 548 der 1080 Punkte an Palette und
+   Parameterfenster, und fuer die Kopfleiste bleibt weniger uebrig, als
+   ihre Knoepfe brauchen (gemessen: 532 verfuegbar, 589 noetig). Frueher
+   galt diese Regel erst ab 900px - dazwischen standen beide auf ihrer
+   vollen Schreibtischbreite. */
+@media (max-width: 1100px) {
   .palette { width: 190px; }
   .panel { width: 270px; }
 }
@@ -1415,10 +1589,12 @@ a.knopf-mini { display: inline-block; text-decoration: none; }
     padding-top: 14px;
     padding-bottom: 14px;
   }
-  .legende summary {
-    padding-top: 13px;
-    padding-bottom: 13px;
-  }
+  /* Die ganze Kopfleiste des Editors auf Apples 44 Punkte - eine Regel
+     fuer alle ihre Formen, statt je Knopfart eine eigene. */
+  .leiste-knopf,
+  .editor-zurueck,
+  .legende summary { height: 44px; }
+  .leiste-knopf-rund { width: 44px; }
   /* Generische Parameterfelder - NICHT die eng gepackten Gitter (Zeitreihe
      Stundenwerte, Zeitraeume, Textlisten): deren eigene, spezifischere
      Regeln (z.B. .panel-zeitreihe-zelle input) bleiben unangetastet, weil
@@ -1451,7 +1627,10 @@ a.knopf-mini { display: inline-block; text-decoration: none; }
    Auswaehlen/Abwaehlen einer Karte (Parameterfenster) bzw. beim Antippen
    eines Paletteneintrags (Palette, siehe dort Palette.armieren()). */
 @media (max-width: 900px) and (pointer: coarse) {
-  .knopf-seitenbereich { display: inline-block; }
+  /* inline-flex, nicht inline-block: sonst faellt genau dieser Knopf aus
+     der Formensprache der Kopfleiste (die zentriert ihre Beschriftung
+     ueber align-items/justify-content, siehe .leiste-knopf). */
+  .knopf-seitenbereich { display: inline-flex; }
 
   .app { position: relative; }
   .palette,

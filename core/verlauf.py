@@ -348,6 +348,49 @@ def _darf_buendeln(db, anlage_id, oberster, buendel, jetzt):
     return 0 <= (jetzt - vorher).total_seconds() <= BUENDEL_FENSTER_S
 
 
+# Zaehler statt Schalter: stumm() darf sich schachteln (die Vorlagen rufen
+# ueber core.vorlagen.baue() auch ihr eigenes baue() auf, das dieselbe
+# Klammer noch einmal setzt). Ein einfaches True/False haette der innere
+# Ausstieg zu frueh wieder aufgehoben.
+_stumm = 0
+
+
+class stumm:
+    """Baut eine ganze Anlage, ohne den Verlauf mitzuschreiben.
+
+    Fuer das Anlegen aus einer Vorlage (core/vorlagen/) und fuer die
+    Beispielanlagen des Erklaerbereichs (core/lehrinhalte/): das sind
+    ueber hundert einzelne Schreibvorgaenge - 42 Karten, 61 Pfeile bei
+    AX_SIM 2.1 -, aber fuer die Anwenderin EINE Handlung ("Anlage aus
+    Vorlage anlegen"). Ohne diese Klammer stuende in ihrem Verlauf der
+    Bauprozess selbst, und "Rueckgaengig" naehme die frische Vorlage Pfeil
+    fuer Pfeil wieder auseinander, statt ihre eigene erste Aenderung
+    zurueckzunehmen (gemessen: von ueber hundert Schritten liess die
+    Grenze fuenfzig uebrig, der aelteste erhaltene war ein Pfeil mitten im
+    Aufbau).
+
+    Ergebnis: Die fertige Anlage hat noch gar keinen Verlauf. Die erste
+    eigene Aenderung legt sie selbst als Ausgangszustand ab (siehe
+    _grundzustand_sichern) - bis dahin ist "Rueckgaengig" abgeblendet, was
+    der Wahrheit entspricht: es gibt nichts zurueckzunehmen.
+
+    Gilt fuer den ganzen Prozess, nicht je Thread. Das ist hier richtig:
+    aendernde Zugriffe auf Anlagendaten kommen aus dem Web-Thread, der
+    Rechen-Thread eines Simulationslaufs schreibt nur Ergebnisse (siehe
+    core/laeufe.py).
+    """
+
+    def __enter__(self):
+        global _stumm
+        _stumm += 1
+        return self
+
+    def __exit__(self, art, wert, spur):
+        global _stumm
+        _stumm -= 1
+        return False
+
+
 class schritt:
     """Klammert eine Aenderung an einer Anlage: Ausgangszustand sichern,
     Aenderung ausfuehren lassen, neuen Zustand festhalten.
@@ -365,12 +408,12 @@ class schritt:
         self.buendel = buendel
 
     def __enter__(self):
-        if self.anlage_id is not None:
+        if self.anlage_id is not None and not _stumm:
             _grundzustand_sichern(get_db(), self.anlage_id)
         return self
 
     def __exit__(self, art, wert, spur):
-        if art is None and self.anlage_id is not None:
+        if art is None and self.anlage_id is not None and not _stumm:
             festhalten(self.anlage_id, self.beschreibung, self.buendel)
         return False
 
