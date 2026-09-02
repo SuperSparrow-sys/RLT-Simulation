@@ -59,13 +59,34 @@ const Panel = {
   // ueberschreiben.
   _anfrage: 0,
 
+  // Ein fokussiertes Eingabefeld verliert beim Abriss des Panels (innerHTML-
+  // bzw. textContent-Ersetzung in leeren()/zeige() unten) nicht in jedem Fall
+  // zuverlaessig synchron den Fokus, bevor der Knoten verschwindet - das vom
+  // DOM eigentlich verlangte "blur" beim Entfernen eines fokussierten
+  // Elements feuert hier nachweislich NICHT immer (per Netzwerkmitschnitt
+  // geprueft: Leinwand anklicken nach dem Tippen in "Bezeichnung" loeste
+  // keine PATCH-Anfrage aus). zeileText()/zeileUhrzeit() speichern beim
+  // Verlassen des Feldes ("blur") - ohne dieses ausdrueckliche blur() vorher
+  // ginge ein gerade getippter Wert beim Wegklicken oder Kartenwechsel
+  // verloren. explizites .blur() ist (anders als das implizite Verhalten
+  // beim Entfernen) garantiert synchron.
+  _commitAktivesFeld() {
+    const panel = document.getElementById("panel");
+    const aktiv = document.activeElement;
+    if (panel && aktiv && panel.contains(aktiv) && typeof aktiv.blur === "function") {
+      aktiv.blur();
+    }
+  },
+
   leeren() {
+    this._commitAktivesFeld();
     this.karte = null;
     document.getElementById("panel").innerHTML =
       '<p class="leerhinweis">Karte auswählen, um ihre Parameter zu sehen.</p>';
   },
 
   async zeige(karte) {
+    this._commitAktivesFeld();
     this.karte = karte;
     const anfrage = ++this._anfrage;
     const panel = document.getElementById("panel");
@@ -150,11 +171,28 @@ const Panel = {
     return zeile;
   },
 
+  // "blur" statt "change": ein Klick auf die Leinwand oder eine andere Karte
+  // raeumt das Panel sofort leer (panelLeeren()/Panel.zeige() setzen
+  // panel.innerHTML/.textContent synchron zurueck, noch im selben
+  // Pointerdown-Handler) - das fokussierte Feld verschwindet dabei aus dem
+  // DOM. Ein Browser MUSS beim Entfernen eines fokussierten Elements
+  // synchron "blur" nachliefern (die Fokus-Invariante des DOM verlangt das),
+  // "change" ist dagegen nur eine Ableitung davon, die einzelne Engines in
+  // genau diesem erzwungenen Fall unterschiedlich behandeln koennen. "blur"
+  // ist deshalb die einzige Stelle, an der ein getippter Wert garantiert
+  // ankommt - dasselbe Muster wie ueberall sonst im Parameterfenster
+  // (zeileZahl, zeileUhrzeit, zeileZeitraeume, zeileTextlisten, ...).
   zeileText(beschriftung, wert, beiAenderung) {
     const eingabe = document.createElement("input");
     eingabe.type = "text";
     eingabe.value = wert;
-    eingabe.addEventListener("change", () => beiAenderung(eingabe.value));
+    let aktuell = wert;
+    eingabe.addEventListener("keydown", (e) => { if (e.key === "Enter") eingabe.blur(); });
+    eingabe.addEventListener("blur", () => {
+      if (eingabe.value === aktuell) return;
+      aktuell = eingabe.value;
+      beiAenderung(eingabe.value);
+    });
     return this._huelle(beschriftung, eingabe, "");
   },
 
@@ -206,8 +244,11 @@ const Panel = {
     const eingabe = document.createElement("input");
     eingabe.type = "time";
     eingabe.value = uhrzeitAnzeigen(wert);
-    eingabe.addEventListener("change", async () => {
-      if (!eingabe.value) return;
+    let aktuell = eingabe.value;
+    // "blur" statt "change" - siehe Begruendung bei zeileText() oben.
+    eingabe.addEventListener("blur", async () => {
+      if (!eingabe.value || eingabe.value === aktuell) return;
+      aktuell = eingabe.value;
       const tagesanteil = uhrzeitEinlesen(eingabe.value);
       karte.parameter[feld.schluessel] = tagesanteil;
       await this.speichereParameter(feld.schluessel, tagesanteil);
