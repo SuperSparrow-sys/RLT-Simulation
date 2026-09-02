@@ -161,6 +161,38 @@ Safari verlangt dafür Eigenheiten, die im Code begründet stehen: `100dvh` stat
 `<div>` als Rahmen für die Zeichenfläche, weil Safari die bemalte Fläche eines
 SVG im Flex-Layout anders berechnet als der CSS-Kasten.
 
+## Prüfen und Nachrechnen
+
+Neben der Testreihe gibt es drei Werkzeuge, die von Hand gestartet werden und
+je eine andere Frage beantworten:
+
+```bash
+./venv/bin/python werkzeuge/abgleich.py           # gegen die Excel-Mappe
+./venv/bin/python werkzeuge/plausibilitaet.py     # Testanlage physikalisch
+./venv/bin/python werkzeuge/beispielpruefung.py   # alle 34 Beispielanlagen
+```
+
+Der Abgleich rechnet AX_SIM 2.1 über das Referenzjahr und stellt Strom,
+Wärme, Kälte und Wasser der Excel gegenüber. Die Plausibilitätsprüfung stellt
+vierzehn Fragen an die Testanlage (bleibt der Raum in einem sinnvollen Band,
+wird im Winter geheizt und im Sommer gekühlt, passen Stundenwerte und
+Jahresbilanz zusammen). Die Beispielprüfung rechnet jede der 34
+Beispielanlagen über eine Januar- und eine Juliwoche und sucht Werte, die
+physikalisch nicht sein können.
+
+Was dabei über die Rechnung selbst herausgekommen ist — gefundene Fehler,
+bewusst übernommene Eigenschaften der Excel-Vorlage und die Lücken, die ein
+Lehrmittel füllen muss — steht in
+[docs/analyse-schulreife.md](docs/analyse-schulreife.md).
+
+## Anlage prüfen
+
+Vor jedem Simulationslauf zeigt der Dialog Hinweise zur Anlage: ein
+Verbraucher, dessen Leistung nirgends ankommt (er fehlt sonst lautlos in der
+Jahresbilanz), ein offener Luftweg, ein Regler ohne Stellgröße, eine fehlende
+Wetterkarte. Es sind Hinweise, kein Riegel — eine Anlage darf unvollständig
+sein, solange man weiß, dass sie es ist.
+
 ## Referenz
 
 Unter `referenz/` liegen die ursprüngliche Excel-Mappe, ihre ausgelesenen Formeln

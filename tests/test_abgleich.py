@@ -13,12 +13,17 @@ DATEN = Path(__file__).parent / "daten"
 TOLERANZ = {"strom": 0.02, "kaelte": 0.02}
 
 # Kennwerte des eigenen Laufs, nicht der Excel. Gemessen am 2026-09-02 ueber das
-# Referenzjahr (tests/daten/wetterdaten_try04.csv, 8760 Stunden), nachdem die
-# Waermerueckgewinnung ihre Regelung bekommen hat - vorher gewann sie nichts
-# zurueck (Anlage!J20 = J61, der P-Regler dazu fehlte in der Vorlage).
-# Zum Vergleich der Excel-Lauf: Waerme 328,92 MWh, Wasser 111,64 m3.
-STAND_WAERME_MWH = 436.6556
-STAND_WASSER_M3 = 702.0604
+# Referenzjahr (tests/daten/wetterdaten_try04.csv, 8760 Stunden), nachdem der
+# Solver einen Grenzzyklus erkennt und das Mittel beider Zustaende ausweist,
+# statt den zuletzt gerechneten Durchgang zu nehmen (core/solver.py). Vorher
+# hing das Ergebnis daran, ob MAX_ITERATIONEN gerade oder ungerade ist - der
+# taktende Befeuchtungskreis wurde jede Stunde ganz an oder ganz aus gerechnet.
+#
+# Der Stand davor lag bei 436,66 MWh und 702,06 m3; zum Vergleich der
+# Excel-Lauf: Waerme 328,92 MWh, Wasser 111,64 m3. Die Waerme ist damit von
+# 32,8 auf 8,5 Prozent Abweichung gefallen.
+STAND_WAERME_MWH = 300.8150
+STAND_WASSER_M3 = 421.2367
 
 
 @pytest.fixture
