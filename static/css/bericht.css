@@ -25,15 +25,6 @@ body.seite-bericht {
   border-bottom: 1px solid var(--border-light);
 }
 
-.bericht-zurueck {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--text-secondary);
-  text-decoration: none;
-  font-size: 14px;
-}
-.bericht-zurueck:hover { color: var(--blue); }
 
 .bericht-kopfleiste-knoepfe { display: flex; gap: 8px; }
 

@@ -17,15 +17,6 @@
   padding-left: env(safe-area-inset-left);
 }
 
-.lehre-zurueck {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--text-secondary);
-  text-decoration: none;
-  font-size: 13px;
-}
-.lehre-zurueck:hover { color: var(--blue); }
 
 .lehre-haupt {
   flex: 1;

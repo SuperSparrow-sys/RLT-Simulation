@@ -14,10 +14,19 @@
   <div id="fehlermeldung" class="fehlermeldung" role="alert" aria-live="assertive" hidden></div>
 
   <div class="start">
+    <!-- Dieselbe Formensprache wie die Kopfleiste des Editors (siehe
+         style.css, "Kopfleiste des Editors"): links steht, wo man ist,
+         rechts die Wege hinaus - eine Pille mit einem Wort fuer den
+         benannten Weg, genau EINE gefuellte Pille fuer den Zweck der Seite.
+         Vorher war "Bausteine" ein nackter, unterstrichener Link neben einem
+         gefuellten Knopf mit anderem Radius: dieselbe Leiste, drei
+         Formensprachen. -->
     <header class="leiste">
       <span class="titel">RLT-Simulation</span>
-      <a href="{{ url_for('lehre.seite') }}">Bausteine</a>
-      <button class="knopf-haupt" id="btn-projekt-anlegen">+ Projekt</button>
+      <span class="leiste-fueller" aria-hidden="true"></span>
+      <a class="leiste-knopf" href="{{ url_for('lehre.seite') }}">Bausteine</a>
+      <button class="leiste-knopf leiste-knopf-haupt"
+              id="btn-projekt-anlegen">+ Projekt</button>
     </header>
 
     <main class="start-haupt">

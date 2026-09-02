@@ -44,10 +44,10 @@
            gehört dann den drei Wegen zum Ergebnis. -->
       <header class="leiste">
         <div class="leiste-gruppe">
-          <!-- Derselbe Weg zurueck wie im Erklaerbereich
-               (templates/bausteine.html, .lehre-zurueck) - links neben dem
-               Anlagennamen, damit es sich gleich anfuehlt. -->
-          <a class="editor-zurueck" href="{{ url_for('pages.index') }}"
+          <!-- Derselbe Weg zurueck wie im Erklaerbereich und im Bericht
+               (.zurueck-knopf, style.css) - links neben dem Anlagennamen,
+               damit es sich auf jeder Seite gleich anfuehlt. -->
+          <a class="zurueck-knopf" href="{{ url_for('pages.index') }}"
              title="Zur Startseite" aria-label="Zur Startseite">{% include "bedienzeichen/pfeil-links.svg" %}<span class="knopf-wort">Start</span></a>
 
           <span class="titel anlagenname-zeile">

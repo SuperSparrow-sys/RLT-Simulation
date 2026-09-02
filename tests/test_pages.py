@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from app import create_app
@@ -71,7 +73,7 @@ def test_editor_seite_bindet_editor_js_fuer_palette_js_ein(app):
 def test_editor_seite_hat_einen_weg_zurueck_zur_startseite(app):
     """Vorher fuehrte aus einer geoeffneten Anlage nur die Adresszeile
     wieder heraus. Links neben dem Anlagennamen, wie im Erklaerbereich
-    (.lehre-zurueck) - hier vor <span class="titel anlagenname-zeile">,
+    (.zurueck-knopf) - hier vor <span class="titel anlagenname-zeile">,
     damit es sich gleich anfuehlt."""
     with app.app_context():
         projekt = anlagen.projekt_anlegen("Referenz")
@@ -79,8 +81,8 @@ def test_editor_seite_hat_einen_weg_zurueck_zur_startseite(app):
 
     klient = app.test_client()
     html = klient.get(f"/anlage/{anlage}").get_data(as_text=True)
-    assert 'class="editor-zurueck" href="/"' in html
-    assert html.index('class="editor-zurueck"') < html.index('class="titel anlagenname-zeile"')
+    assert 'class="zurueck-knopf" href="/"' in html
+    assert html.index('class="zurueck-knopf"') < html.index('class="titel anlagenname-zeile"')
 
 
 def test_editor_seite_hat_einen_dauerhaften_bericht_weg_in_der_kopfleiste(app):
@@ -681,3 +683,41 @@ def test_leinwand_svg_hat_eigenen_behaelter_statt_flex_auf_dem_svg_selbst(app):
     assert "position: absolute" not in leinwand_regel
     assert "width: 100%;" in leinwand_regel
     assert "height: 100%;" in leinwand_regel
+
+
+def test_alle_kopfleisten_sprechen_dieselbe_formensprache(app):
+    """Startseite, Erklärbereich und Bericht haben eine Kopfleiste - und
+    hatten drei verschiedene Formensprachen: die Startseite einen nackten,
+    unterstrichenen Link neben einem eckigen gefüllten Knopf; der Bericht
+    einen flachen Textlink neben einem Knopf ganz ohne Klasse, den der
+    Browser grau und eckig zeichnete; der Editor die Pillen, die
+    style.css beschreibt („Kopfleiste des Editors").
+
+    Es gilt jetzt überall dieselbe Regel: der Weg zurück ist .zurueck-knopf,
+    jeder benannte Weg eine Pille (.leiste-knopf), und genau EINE gefüllte
+    Pille (.leiste-knopf-haupt) trägt den Zweck der Seite.
+    """
+    klient = app.test_client()
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+
+    start = klient.get("/").get_data(as_text=True)
+    kopf = start[start.index('<header class="leiste">'):start.index("</header>")]
+    assert 'class="leiste-knopf" href' in kopf          # Bausteine: benannter Weg
+    assert kopf.count("leiste-knopf-haupt") == 1        # + Projekt: der Zweck
+    assert 'class="knopf-haupt"' not in kopf         # nicht die alte, eckige Form
+
+    lehre = klient.get("/bausteine").get_data(as_text=True)
+    assert 'class="zurueck-knopf"' in lehre
+    assert "lehre-zurueck" not in lehre
+
+    # Der Bericht braucht einen gerechneten Lauf; hier reicht die Vorlage der
+    # Seite selbst, deshalb nur die Klassen im Quelltext der Vorlage.
+    vorlage = (
+        Path(__file__).resolve().parent.parent / "templates" / "bericht.html"
+    ).read_text(encoding="utf-8")
+    kopf = vorlage[vorlage.index('<header class="bericht-kopfleiste">'):vorlage.index("</header>")]
+    assert 'class="zurueck-knopf"' in kopf
+    assert 'class="leiste-knopf" type="button"' in kopf or 'class="leiste-knopf" id' in kopf
+    assert kopf.count("leiste-knopf-haupt") == 1

@@ -46,7 +46,7 @@ def test_die_kopfleiste_steht_in_gruppen(seite):
 def test_jedes_bedienelement_der_leiste_traegt_dieselbe_grundform(seite):
     """Die Formensprache haengt daran, dass jeder Knopf .leiste-knopf traegt
     (und die beiden Ausnahmen, die keine eigene Klasse haben koennen, in der
-    gemeinsamen CSS-Regel mitgenannt sind: .editor-zurueck und die
+    gemeinsamen CSS-Regel mitgenannt sind: .zurueck-knopf und die
     Zusammenfassung der Legende)."""
     kopf = seite[seite.index('<header class="leiste">'):seite.index("</header>")]
     knoepfe = re.findall(r"<(?:button|a)\s[^>]*id=\"([^\"]+)\"[^>]*>", kopf)
