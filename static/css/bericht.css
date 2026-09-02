@@ -142,6 +142,23 @@ body.seite-bericht {
 .bericht-karte-typ { color: var(--text-secondary); font-size: 12.5px; }
 .bericht-karte-kennwerte { margin: 4px 0 0; font-size: 12.5px; color: var(--text-secondary); }
 
+/* ---------- Vergleich mit anderen Jahren derselben Reihe (Vorhaben B) ----------
+   Eigene Tabellenklasse statt .bericht-tabelle: die dortige feste 560px-
+   Breite ist fuer die zweispaltige Jahresbilanz gedacht, eine Reihe kann
+   aber mehrere Jahresspalten haben - .bericht-vergleich-huelle scrollt
+   waagerecht, statt die Tabelle zu stauchen. Die Zellstile selbst (Zahlen-
+   spalten, Zebrastreifen, Abweichung, "kein Ergebnis") kommen aus
+   static/css/style.css (.bilanz, .vergleich-*) - denselben Klassen wie im
+   Vergleichsdialog im Editor (static/js/simulation.js, Vergleich), damit
+   beide Stellen gleich aussehen. */
+.bericht-vergleich-hinweis { margin: 0 0 10px; font-size: 12.5px; color: var(--text-secondary); }
+.bericht-vergleich-huelle { overflow-x: auto; margin: 0 0 18px; }
+.bericht-vergleich-tabelle { min-width: 100%; }
+.bericht-vergleich-tabelle th:first-child,
+.bericht-vergleich-tabelle td:first-child { white-space: nowrap; }
+.bericht-vergleich-aktuell { background: var(--surface-alt); }
+.bericht-vergleich-marke { font-weight: 400; color: var(--text-secondary); font-size: 11px; }
+
 /* ---------- Tablet (iPad) ---------- */
 @media (max-width: 820px) {
   .bericht { padding: 18px 14px 48px; }
@@ -166,4 +183,5 @@ body.seite-bericht {
      im gedruckten Diagramm selbst (Titel/Legende zeigen, was ausgewaehlt
      wurde), das Formular waere nur totes Bedienelement. */
   .bericht-reihen-auswahl { display: none; }
+  .bericht-vergleich-huelle { overflow: visible; }
 }

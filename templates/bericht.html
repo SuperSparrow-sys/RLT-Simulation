@@ -54,6 +54,66 @@
       </table>
     </section>
 
+    {% if daten.vergleich %}
+    <section class="bericht-abschnitt">
+      <h2>Im Vergleich zu den anderen Jahren dieser Reihe</h2>
+      <p class="bericht-vergleich-hinweis">
+        Dieselbe Anlage, {{ daten.vergleich.laeufe | length }} Wetterjahre.
+        Abweichung jeweils gegenüber {{ daten.vergleich.laeufe[0].wetter_name }}.
+      </p>
+      <div class="bericht-vergleich-huelle">
+        <table class="bilanz bericht-vergleich-tabelle">
+          <thead>
+            <tr>
+              <th>Größe</th>
+              {% for lauf in daten.vergleich.laeufe %}
+              <th{% if lauf.simulation_id == daten.vergleich.diesen_lauf_id %} class="bericht-vergleich-aktuell"{% endif %}>
+                {{ lauf.wetter_name }}
+                {% if lauf.simulation_id == daten.vergleich.diesen_lauf_id %}<span class="bericht-vergleich-marke">(dieser Bericht)</span>{% endif %}
+                {% if not lauf.hat_ergebnis %}<span class="vergleich-kein-ergebnis">(kein Ergebnis)</span>{% endif %}
+              </th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for zeile in daten.vergleich.zeilen %}
+            <tr>
+              <td>{{ zeile.label }} [{{ zeile.einheit }}]</td>
+              {% for w in zeile.werte %}
+              <td class="zahl">
+                {% if w.menge is not none %}
+                  {{ format_zahl(w.menge, 3) }}
+                  {% if w.abweichung is not none %}
+                  <span class="vergleich-abweichung">{{ "+" if w.abweichung >= 0 else "" }}{{ "%.1f"|format(w.abweichung * 100) }} %</span>
+                  {% endif %}
+                {% else %}–{% endif %}
+              </td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr class="vergleich-zeile-kosten">
+              <td>Kosten gesamt</td>
+              {% for lauf in daten.vergleich.laeufe %}
+              <td class="zahl">{% if lauf.hat_ergebnis %}{{ format_zahl(lauf.kosten_gesamt) }} EUR{% else %}–{% endif %}</td>
+              {% endfor %}
+            </tr>
+            <tr class="vergleich-zeile-warnungen">
+              <td>Warnungen</td>
+              {% for lauf in daten.vergleich.laeufe %}
+              <td class="zahl">{% if lauf.hat_ergebnis %}{{ lauf.anzahl_warnungen }}{% else %}–{% endif %}</td>
+              {% endfor %}
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      {% if svg.vergleich %}
+      <div class="bericht-diagramm-karte bericht-diagramm-breit">{{ svg.vergleich|safe }}</div>
+      {% endif %}
+    </section>
+    {% endif %}
+
     {% if svg.monat or svg.dauerlinie %}
     <section class="bericht-abschnitt">
       <h2>Diagramme</h2>

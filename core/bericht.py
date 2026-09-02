@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from core import anlagen, ergebnisse, pdf as pdfschreiber, zeichnung
+from core import anlagen, ergebnisse, pdf as pdfschreiber, vergleich, zeichnung
 from core.bausteine import basis
 from core.wetter import speicher
 
@@ -115,6 +115,37 @@ class BerichtNichtVerfuegbar(ValueError):
     Bericht braucht eine (und sei es unvollstaendige) Bilanz."""
 
 
+def _vergleich_fuer(simulation_id):
+    """Ist dieser Lauf Teil einer Reihe (core.laeufe.starte_reihe, Vorhaben
+    B) mit mindestens einem weiteren Jahr, dann die Gegenueberstellung mit
+    den anderen Jahren derselben Reihe (core.vergleich.vergleichsdaten()) -
+    sonst None. Ein einzeln gestarteter Lauf hat keine Geschwister und damit
+    keinen Vergleich; eine Reihe mit nur diesem einen Jahr (z.B. weil alle
+    uebrigen schon beim Start scheiterten) waere kein sinnvoller Vergleich.
+
+    Ergaenzt die Zeilen um dasselbe 'label' wie die Jahresbilanz oben
+    (BILANZ_LABEL) - core.vergleich kennt core/bericht.py bewusst nicht
+    (siehe dortiger Moduldocstring), die im Bericht gebrauchten Labels
+    kommen darum von hier."""
+    geschwister = ergebnisse.reihen_geschwister(simulation_id)
+    if geschwister is None or len(geschwister) < 2:
+        return None
+    try:
+        daten = vergleich.vergleichsdaten(geschwister)
+    except vergleich.VergleichNichtMoeglich:
+        # Kann hier eigentlich nicht auftreten (reihen_geschwister() liefert
+        # nur Laeufe derselben Anlage), ist aber kein Grund, den ganzen
+        # Bericht scheitern zu lassen, falls doch - der Bericht zeigt dann
+        # einfach keinen Vergleichsabschnitt.
+        return None
+    daten["zeilen"] = [
+        {**zeile, "label": BILANZ_LABEL.get(zeile["groesse"], zeile["groesse"])}
+        for zeile in daten["zeilen"]
+    ]
+    daten["diesen_lauf_id"] = simulation_id
+    return daten
+
+
 def daten_fuer(simulation_id, ausgewaehlte_reihen=None):
     """Alle Angaben des Berichts zu einem Simulationslauf - Kopf, Bilanz,
     Warnungen, Anlage, Diagramme (als core.zeichnung.Leinwand-Objekte, noch
@@ -145,6 +176,16 @@ def daten_fuer(simulation_id, ausgewaehlte_reihen=None):
     karten = _karten_uebersicht(graph)
     diagramme = _diagramme(sim, graph, ausgewaehlte_reihen)
 
+    # Vorhaben B: gehoert dieser Lauf zu einer Reihe (core.laeufe.
+    # starte_reihe), bekommt der Bericht einen Abschnitt "im Vergleich zu
+    # den anderen Jahren dieser Reihe" statt eines eigenen Berichtstyps -
+    # dasselbe Diagramm-Vorgehen wie ueberall sonst in diesem Modul: erst
+    # eine core.zeichnung.Leinwand bauen, dann je Fassung (HTML/PDF) erst
+    # ganz am Schluss in SVG bzw. PDF-Operatoren umsetzen (routes/bericht.py
+    # bzw. baue_pdf() unten) - hier bleibt es ein rohes Leinwand-Objekt.
+    vergleich_daten = _vergleich_fuer(simulation_id)
+    diagramme["vergleich"] = vergleich.diagramm(vergleich_daten) if vergleich_daten else None
+
     return {
         "simulation_id": simulation_id,
         "anlage": anlage,
@@ -162,6 +203,7 @@ def daten_fuer(simulation_id, ausgewaehlte_reihen=None):
         "baustein_warnungen": baustein_warnungen,
         "karten": karten,
         "diagramme": diagramme,
+        "vergleich": vergleich_daten,
         "erzeugt_am": datetime.now(),
     }
 
@@ -675,6 +717,73 @@ class _Schreiber:
         self.y += leinwand.hoehe + 14
 
 
+def _kurz(text, laenge):
+    """Kappt einen frei vergebenen Namen (Wetterdatensatz) auf 'laenge'
+    Zeichen - eine Tabellenspalte im PDF hat keinen Zeilenumbruch wie eine
+    HTML-Zelle, ein langer Name wuerde sonst die Nachbarspalte ueberdecken."""
+    text = str(text)
+    return text if len(text) <= laenge else text[: laenge - 1].rstrip() + "…"
+
+
+def _vergleich_pdf(schreiber, vgl, leinwand):
+    """Der Vergleich-Abschnitt im PDF - dieselben Daten wie die HTML-Fassung
+    (core.bericht._vergleich_fuer(), templates/bericht.html), nur ueber
+    schreiber.tabelle()/schreiber.diagramm() statt einer HTML-Tabelle bzw.
+    einem eingebetteten SVG gesetzt. 'vgl' ist None, wenn dieser Lauf zu
+    keiner Reihe (mit mindestens einem weiteren Jahr) gehoert - dann bleibt
+    der Abschnitt ganz aus, wie im HTML."""
+    if not vgl:
+        return
+    diesen_lauf_id = vgl["diesen_lauf_id"]
+    laeufe = vgl["laeufe"]
+
+    # 32pt: Tabellenkopf + erste Zeile (dieselbe Reservierung wie bei der
+    # Jahresbilanz oben) - die Ueberschrift soll nicht ohne mindestens eine
+    # Vergleichszeile am Seitenende stehen.
+    schreiber.zwischentitel(
+        "Im Vergleich zu den anderen Jahren dieser Reihe", mindest_folgehoehe=32,
+    )
+    schreiber.absatz(
+        f"Abweichung jeweils gegenüber {laeufe[0]['wetter_name']}.",
+        groesse=9, farbe=zeichnung.FARBE_TEXT_SCHWACH,
+    )
+
+    spalten_breite = (_INHALT_BREITE - 150) / max(len(laeufe), 1)
+    spalten = [("Größe", 150, "links")] + [
+        (
+            _kurz(l["wetter_name"], 20) + (" (dieser)" if l["simulation_id"] == diesen_lauf_id else ""),
+            spalten_breite, "rechts",
+        )
+        for l in laeufe
+    ]
+
+    zeilen = []
+    for zeile in vgl["zeilen"]:
+        werte = []
+        for w in zeile["werte"]:
+            if w["menge"] is None:
+                werte.append("–")
+            elif w["abweichung"] is None:
+                werte.append(format_zahl(w["menge"], 3))
+            else:
+                vorzeichen = "+" if w["abweichung"] >= 0 else ""
+                werte.append(
+                    f"{format_zahl(w['menge'], 3)} ({vorzeichen}{w['abweichung'] * 100:.1f} %)"
+                )
+        zeilen.append([f"{zeile['label']} [{zeile['einheit']}]", *werte])
+    zeilen.append([
+        "Kosten gesamt",
+        *[f"{format_zahl(l['kosten_gesamt'])} EUR" if l["hat_ergebnis"] else "–" for l in laeufe],
+    ])
+    zeilen.append([
+        "Warnungen",
+        *[str(l["anzahl_warnungen"]) if l["hat_ergebnis"] else "–" for l in laeufe],
+    ])
+    schreiber.tabelle(spalten, zeilen)
+    schreiber.y += 10
+    schreiber.diagramm(leinwand)
+
+
 def baue_pdf(daten) -> bytes:
     """Baut das Berichts-PDF aus den Daten von daten_fuer() - eine Kopfseite
     mit Bilanz und Warnungen, die Diagramme, zuletzt die Kartenliste."""
@@ -717,6 +826,9 @@ def baue_pdf(daten) -> bytes:
     )
     schreiber.y += 20
 
+    diagramme = daten["diagramme"]
+    _vergleich_pdf(schreiber, daten.get("vergleich"), diagramme.get("vergleich"))
+
     schreiber.zwischentitel("Warnungen")
     warnungen = daten["warnungen"]
     if warnungen["anzahl"] == 0:
@@ -733,7 +845,6 @@ def baue_pdf(daten) -> bytes:
             for w in daten["baustein_warnungen"]
         ])
 
-    diagramme = daten["diagramme"]
     erstes_diagramm = diagramme["monat"] or diagramme["dauerlinie"]
     if erstes_diagramm is not None:
         # Dieselbe Hoehe, die diagramm() gleich selbst fuer das erste

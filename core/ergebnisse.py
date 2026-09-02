@@ -262,6 +262,33 @@ def laufende_reihe(anlage_id):
     return dict(zeile) if zeile else None
 
 
+def reihen_geschwister(simulation_id):
+    """Alle Simulation-IDs derselben Reihe wie 'simulation_id' (sie selbst
+    eingeschlossen), sortiert nach reihen_index - None, wenn dieser Lauf zu
+    keiner Reihe gehoert (core.laeufe.starte_reihe).
+
+    Fuer core.vergleich.vergleichsdaten(), aufgerufen aus core.bericht: der
+    Bericht eines Laufs, der Teil einer Reihe ist, bekommt einen Abschnitt
+    'im Vergleich zu den anderen Jahren dieser Reihe' - dafuer muss er erst
+    wissen, welche anderen Laeufe das sind. Absichtlich unabhaengig vom
+    Arbeitsspeicherstand einer noch laufenden Reihe (core.laeufe._REIHEN):
+    der Bericht selbst existiert erst, wenn DIESER Lauf abgeschlossen ist
+    (siehe core.bericht.daten_fuer(), STATUS_MIT_ERGEBNIS), die Geschwister
+    koennen aber noch laufen oder erst noch drankommen - genau das zeigt
+    core.vergleich.vergleichsdaten() dann als 'kein Ergebnis'."""
+    db = get_db()
+    zeile = db.execute(
+        "SELECT reihen_kennung FROM simulation WHERE id = ?", (simulation_id,)
+    ).fetchone()
+    if zeile is None or zeile["reihen_kennung"] is None:
+        return None
+    zeilen = db.execute(
+        "SELECT id FROM simulation WHERE reihen_kennung = ? ORDER BY reihen_index",
+        (zeile["reihen_kennung"],),
+    ).fetchall()
+    return [z["id"] for z in zeilen]
+
+
 def lade_bilanz(simulation_id):
     db = get_db()
     return [

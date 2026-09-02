@@ -62,6 +62,10 @@ def ansehen(anlage_id, simulation_id):
         "vier_monats_ausschnitte": [
             a.als_svg() for a in diagramme["vier_monats_ausschnitte"]
         ],
+        # Vorhaben B: nur gesetzt, wenn dieser Lauf Teil einer Reihe ist
+        # (siehe core.bericht._vergleich_fuer()) - sonst None, das Formular
+        # in templates/bericht.html blendet den ganzen Abschnitt dann aus.
+        "vergleich": diagramme["vergleich"].als_svg() if diagramme.get("vergleich") else None,
     }
     pdf_href = url_for(
         "bericht.pdf", anlage_id=anlage_id, simulation_id=simulation_id, **_auswahl_query()
