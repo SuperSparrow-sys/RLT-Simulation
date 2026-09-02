@@ -15,7 +15,9 @@ def liste():
 
 @bp.patch("/<int:datensatz_id>")
 def umbenennen(datensatz_id):
-    daten = request.get_json(force=True)
+    daten = request.get_json(force=True) or {}
+    if not daten.get("name"):
+        return jsonify({"fehler": "Feld 'name' fehlt oder ist leer"}), 400
     try:
         speicher.datensatz_umbenennen(datensatz_id, daten["name"])
     except KeyError as fehler:

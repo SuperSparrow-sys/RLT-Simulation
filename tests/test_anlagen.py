@@ -758,3 +758,97 @@ def test_api_anlage_umbenennen_und_loeschen(app):
     antwort = klient.delete(f"/api/anlagen/{anlage}")
     assert antwort.status_code == 200
     assert klient.get(f"/api/anlagen?projekt_id={projekt}").get_json() == []
+
+
+# -- Eingabefehler (400) und unbekannte Kennungen (404) statt 500 -----------
+#
+# Vorher fuehrten alle Faelle hier zu einem rohen 500: ein fehlendes
+# Pflichtfeld oder ein unbekannter Bezug wurde nirgends abgefangen. Jetzt gilt
+# durchgehend: ein Eingabefehler (fehlendes/leeres Feld, falscher Typ) ergibt
+# 400 mit einer deutschen Meldung, eine unbekannte Kennung (Projekt, Anlage,
+# Kartentyp, Karte, Port) 404 - genau wie es beim Umbenennen schon lief.
+
+def test_api_projekt_anlegen_ohne_name_meldet_400(app):
+    klient = app.test_client()
+    antwort = klient.post("/api/projekte", json={})
+    assert antwort.status_code == 400
+    assert antwort.get_json()["fehler"]
+
+
+def test_api_anlage_anlegen_ohne_name_meldet_400(app):
+    klient = app.test_client()
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+    antwort = klient.post("/api/anlagen", json={"projekt_id": projekt})
+    assert antwort.status_code == 400
+
+
+def test_api_anlage_anlegen_mit_fremdem_projekt_meldet_404(app):
+    klient = app.test_client()
+    antwort = klient.post("/api/anlagen", json={"projekt_id": 9999, "name": "A"})
+    assert antwort.status_code == 404
+
+
+def test_api_anlage_umbenennen_ohne_name_meldet_400(app):
+    klient = app.test_client()
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+    antwort = klient.patch(f"/api/anlagen/{anlage}", json={})
+    assert antwort.status_code == 400
+
+
+def test_api_anlage_lesen_unbekannte_anlage_meldet_404(app):
+    klient = app.test_client()
+    antwort = klient.get("/api/anlagen/9999")
+    assert antwort.status_code == 404
+
+
+def test_api_karte_anlegen_unbekannter_typ_meldet_404(app):
+    klient = app.test_client()
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+    antwort = klient.post("/api/karten", json={"anlage_id": anlage, "typ": "gibtsnicht"})
+    assert antwort.status_code == 404
+    assert antwort.get_json()["fehler"]
+
+
+def test_api_karte_anlegen_fremde_anlage_meldet_404(app):
+    klient = app.test_client()
+    antwort = klient.post("/api/karten", json={"anlage_id": 9999, "typ": "erhitzer"})
+    assert antwort.status_code == 404
+
+
+def test_api_karte_anlegen_ohne_typ_meldet_400(app):
+    klient = app.test_client()
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+    antwort = klient.post("/api/karten", json={"anlage_id": anlage})
+    assert antwort.status_code == 400
+
+
+def test_api_pfeil_anlegen_ohne_pflichtfeld_meldet_400(app):
+    klient = app.test_client()
+    antwort = klient.post("/api/pfeile", json={"anlage_id": 1})
+    assert antwort.status_code == 400
+
+
+def test_api_pfeil_anlegen_unbekannte_karte_meldet_404(app):
+    klient = app.test_client()
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        karte = anlagen.karte_anlegen(anlage, "erhitzer", 0.0, 0.0)
+    antwort = klient.post(
+        "/api/pfeile",
+        json={"anlage_id": anlage, "von_karte_id": karte, "nach_karte_id": 9999},
+    )
+    assert antwort.status_code == 404
+
+
+def test_api_verbindung_anlegen_ohne_pflichtfeld_meldet_400(app):
+    klient = app.test_client()
+    antwort = klient.post("/api/verbindungen", json={"anlage_id": 1})
+    assert antwort.status_code == 400

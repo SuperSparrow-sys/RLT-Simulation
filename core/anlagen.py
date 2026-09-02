@@ -22,6 +22,8 @@ def projekt_anlegen(name, beschreibung=""):
 
 def anlage_anlegen(projekt_id, name, notiz=""):
     db = get_db()
+    if db.execute("SELECT 1 FROM projekt WHERE id = ?", (projekt_id,)).fetchone() is None:
+        raise KeyError(f"Projekt {projekt_id} gibt es nicht")
     cur = db.execute(
         "INSERT INTO anlage (projekt_id, name, notiz) VALUES (?, ?, ?)",
         (projekt_id, name, notiz),
@@ -93,6 +95,8 @@ def karte_anlegen(anlage_id, typ, pos_x=0.0, pos_y=0.0, parameter=None, name=Non
     werte.update(parameter or {})
 
     db = get_db()
+    if db.execute("SELECT 1 FROM anlage WHERE id = ?", (anlage_id,)).fetchone() is None:
+        raise KeyError(f"Anlage {anlage_id} gibt es nicht")
     try:
         return _karte_schreiben(db, anlage_id, typ, pos_x, pos_y, werte, name, klasse)
     except Exception:
@@ -490,9 +494,21 @@ def _ueberschreibung(karte, feld, nach_verbindung, g):
     }
 
 
+def anlage_existiert(anlage_id):
+    """Fuer routes/pages.py: die Editorseite einer Anlage, die es nicht (mehr)
+    gibt, soll das auch zeigen (siehe templates/anlage_nicht_gefunden.html),
+    statt einen leeren Editor zu rendern. Eigene, billige Abfrage statt
+    als_json() nur fuer diese Frage aufzurufen - das baut Karten, Ports und
+    Pfeile komplett auf, hier reicht eine einzelne Zeile."""
+    db = get_db()
+    return db.execute("SELECT 1 FROM anlage WHERE id = ?", (anlage_id,)).fetchone() is not None
+
+
 def als_json(anlage_id):
     db = get_db()
     anlage = db.execute("SELECT * FROM anlage WHERE id = ?", (anlage_id,)).fetchone()
+    if anlage is None:
+        raise KeyError(f"Anlage {anlage_id} gibt es nicht")
     g = lade_graph(anlage_id)
     nach_verbindung = {v.nach_port.id: v for v in g.verbindungen}
 
@@ -567,7 +583,7 @@ def als_json(anlage_id):
 
     return {
         "id": anlage_id,
-        "name": anlage["name"] if anlage else "",
+        "name": anlage["name"],
         "karten": karten,
         "pfeile": pfeile,
     }
