@@ -11,6 +11,7 @@ und Jahressumme zusammen?
 Aufruf von Hand:  ./venv/bin/python werkzeuge/plausibilitaet.py
 """
 
+import pathlib
 from pathlib import Path
 
 WURZEL = Path(__file__).resolve().parent.parent
@@ -314,6 +315,15 @@ if __name__ == "__main__":
     import sys
 
     sys.path.insert(0, str(WURZEL))
+
+    # In eine Wegwerfdatenbank rechnen, damit ein Aufruf von Hand keine Reste in
+    # der Datenbank des laufenden Dienstes hinterlaesst.
+    import tempfile
+
+    import core.config as config
+
+    config.DB_PATH = pathlib.Path(tempfile.mkdtemp()) / "plausibilitaet.db"
+
     from app import create_app
     from core import database
 

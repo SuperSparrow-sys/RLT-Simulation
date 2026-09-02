@@ -22,6 +22,7 @@ Kaelte pendeln sich dagegen schnell ein und werden mit 2 % Toleranz geprueft.
 import csv
 import json
 from datetime import datetime, timedelta
+import pathlib
 from pathlib import Path
 
 WURZEL = Path(__file__).resolve().parent.parent
@@ -174,6 +175,16 @@ if __name__ == "__main__":
     import sys
 
     sys.path.insert(0, str(WURZEL))
+
+    # In eine Wegwerfdatenbank rechnen. Sonst legt jeder Aufruf von Hand ein
+    # Projekt "Abgleich" samt Anlage in der Datenbank des laufenden Dienstes an -
+    # der Benutzer findet dort Reste, die er nie erzeugt hat.
+    import tempfile
+
+    import core.config as config
+
+    config.DB_PATH = pathlib.Path(tempfile.mkdtemp()) / "abgleich.db"
+
     from app import create_app
     from core import database
 
