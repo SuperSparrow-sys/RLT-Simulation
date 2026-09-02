@@ -123,6 +123,28 @@ const WETTER_QUELLE_TEXT = {
 // gebraucht wird und dafuer keine eigene Schnittstelle lohnt.
 const WETTER_FRUEHESTES_JAHR = 1940;
 
+/* Der Haken der erledigten Einstiegsschritte. Als eigenes SVG statt als
+   Schriftzeichen - dieselbe Regel wie in templates/bedienzeichen/. Ueber
+   createElementNS gebaut, weil ein spaeteres textContent am selben Element
+   ein eingehaengtes SVG stillschweigend mitloeschen wuerde. */
+const NS_SVG = "http://www.w3.org/2000/svg";
+function hakenSymbol() {
+  const svg = document.createElementNS(NS_SVG, "svg");
+  svg.setAttribute("viewBox", "0 0 16 16");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "2");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("focusable", "false");
+  svg.classList.add("einstieg-haken");
+  const pfad = document.createElementNS(NS_SVG, "path");
+  pfad.setAttribute("d", "M3 8.5 6.5 12 13 4.5");
+  svg.appendChild(pfad);
+  return svg;
+}
+
 const Start = {
   projekte: [],
   anlagen: [],
@@ -228,7 +250,17 @@ const Start = {
     schritt.className = "einstieg-schritt" + (erledigt ? " einstieg-schritt-erledigt" : "");
     const nr = document.createElement("div");
     nr.className = "einstieg-nummer";
-    nr.textContent = erledigt ? "✓" : String(nummer);
+    // Ein Haken ist ein Zeichen fuer eine Sache, kein Text - deshalb ein SVG
+    // und kein Schriftzeichen (siehe templates/bedienzeichen/, dieselbe Regel
+    // gilt fuer die Kopfleiste des Editors). Als Schriftzeichen haenge es an
+    // der Schriftart des Geraets und laesst sich in Strichstaerke und Groesse
+    // nicht auf die uebrigen Zeichen abstimmen.
+    if (erledigt) {
+      nr.appendChild(hakenSymbol());
+      nr.setAttribute("aria-label", "erledigt");
+    } else {
+      nr.textContent = String(nummer);
+    }
     const text = document.createElement("div");
     text.className = "einstieg-text";
     const h2 = document.createElement("h2");

@@ -66,6 +66,11 @@
   align-items: center;
   justify-content: center;
 }
+/* Der Haken ist ein SVG, kein Schriftzeichen (siehe start.js, hakenSymbol()).
+   Er erbt seine Farbe ueber currentColor von der Nummernflaeche und bekommt
+   dieselbe Groesse, die die Ziffer vorher hatte. */
+.einstieg-haken { width: 15px; height: 15px; display: block; }
+
 .einstieg-schritt-erledigt .einstieg-nummer {
   border-color: var(--energie);
   color: var(--energie);
