@@ -898,6 +898,7 @@ const Editor = {
     const leinwand = document.getElementById("leinwand");
     const kasten = leinwand.getBoundingClientRect();
     if (!huelle || kasten.width === 0) {
+      svg.textContent = "";
       huelle2.hidden = true;
       return;
     }
@@ -909,16 +910,36 @@ const Editor = {
     const komplettSichtbar =
       sichtX0 <= huelle.minX && sichtY0 <= huelle.minY &&
       sichtX1 >= huelle.maxX && sichtY1 >= huelle.maxY;
-    huelle2.hidden = komplettSichtbar;
-    if (komplettSichtbar) return;
+
+    // Kein frueher Ausstieg mehr, wenn alles sichtbar ist (siehe Bericht):
+    // der Inhalt wird IMMER zuerst neu gezeichnet, ausgeblendet wird erst
+    // danach - eine ausgeblendete Minikarte darf trotzdem nie einen
+    // veralteten Rahmen im Baum stehen lassen haben, falls sie aus
+    // irgendeinem Grund doch (kurz) sichtbar wird. Zurueckhaltend bleibt sie
+    // trotzdem: sobald wirklich alles zu sehen ist, gibt es nichts, wohin
+    // ein Klick noch fuehren koennte, das Ausblenden selbst ist also nach
+    // wie vor gerechtfertigt (siehe Kommentar oben) - nur der Inhalt muss
+    // stimmen, bevor darueber entschieden wird.
+    //
+    // Massstab aus dem GEMEINSAMEN Bereich von Kartenhuelle UND Sichtfeld,
+    // nicht nur der Kartenhuelle allein (siehe Bericht): ist man weiter
+    // herausgezoomt als die ganze Anlage, waere der Rahmen sonst rechnerisch
+    // groesser als die Flaeche, in die er gezeichnet wird, und liefe ueber
+    // den Rand der Minikarte hinaus. Bei einer eingezoomten Ansicht (Anlage
+    // groesser als das Sichtfeld) aendert das nichts - dann bestimmt weiter
+    // allein die Kartenhuelle den Massstab, wie bisher.
+    const minX = Math.min(huelle.minX, sichtX0);
+    const minY = Math.min(huelle.minY, sichtY0);
+    const maxX = Math.max(huelle.maxX, sichtX1);
+    const maxY = Math.max(huelle.maxY, sichtY1);
 
     const MMB = 168, MMH = 108, POLSTER = 4;
-    const inhaltBreite = Math.max(huelle.maxX - huelle.minX, 1);
-    const inhaltHoehe = Math.max(huelle.maxY - huelle.minY, 1);
+    const inhaltBreite = Math.max(maxX - minX, 1);
+    const inhaltHoehe = Math.max(maxY - minY, 1);
     const skala = Math.min((MMB - 2 * POLSTER) / inhaltBreite, (MMH - 2 * POLSTER) / inhaltHoehe);
     this._minikarteSkala = skala;
-    const ox = POLSTER - huelle.minX * skala;
-    const oy = POLSTER - huelle.minY * skala;
+    const ox = POLSTER - minX * skala;
+    const oy = POLSTER - minY * skala;
     this._minikarteVerschiebung = { ox, oy };
 
     svg.textContent = "";
@@ -940,6 +961,8 @@ const Editor = {
     rahmen.setAttribute("height", (sichtY1 - sichtY0) * skala);
     rahmen.setAttribute("class", "minikarte-sichtfenster");
     svg.appendChild(rahmen);
+
+    huelle2.hidden = komplettSichtbar;
   },
 
   /* Trifft SCHMAL (Hochformat-iPad, siehe Task Befund 6) UND FINGER

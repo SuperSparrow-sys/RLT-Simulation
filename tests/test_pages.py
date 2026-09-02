@@ -501,3 +501,37 @@ def test_sicht_aktualisierung_waehrend_gesten_gebuendelt_sonst_sofort(app):
     einpassen = einpassen[: einpassen.index("\n  },\n")]
     assert "this.aktualisiereSicht();" in einpassen
     assert "_sichtAktualisierenGebuendelt" not in einpassen
+
+
+def test_aktualisiere_minikarte_kein_fruehausstieg_und_massstab_aus_huelle_plus_sichtfeld(app):
+    """Zwei Fehler in einem: (1) ein frueher Ausstieg bei "alles sichtbar"
+    liess den Rahmen/Inhalt der letzten Zoomstufe im Baum stehen - beim
+    Herauszoomen ueber die ganze Anlage hinaus zeigte die Minikarte darum
+    einen zu kleinen, veralteten Rahmen (siehe Bericht, mit einer echten
+    Messreihe belegt). (2) der Massstab wurde nur aus der Kartenhuelle
+    berechnet - sobald das Sichtfeld groesser als die Anlage ist, liefe der
+    Rahmen rechnerisch ueber den Rand der Minikarte hinaus. Beides ohne
+    Browserlauf nicht direkt pruefbar (siehe Kommentar bei
+    test_entf_taste...) - hier nur festgehalten, DASS kein frueher Ausstieg
+    mehr vor dem Neuzeichnen steht und dass der Massstab den gemeinsamen
+    Bereich aus Huelle UND Sichtfeld nutzt."""
+    klient = app.test_client()
+    js = klient.get("/static/js/editor.js").get_data(as_text=True)
+    funktion = js[js.index("aktualisiereMinikarte() {"):]
+    funktion = funktion[: funktion.index("\n  },\n")]
+
+    # "hidden = komplettSichtbar" muss NACH dem Zeichnen stehen (svg.appendChild
+    # der Karten-Rechtecke), nicht davor mit einem return dazwischen.
+    stelle_zeichnen = funktion.index("svg.textContent = \"\";")
+    stelle_hidden = funktion.index("huelle2.hidden = komplettSichtbar;", stelle_zeichnen)
+    assert stelle_hidden > stelle_zeichnen
+    # Kein "return" zwischen der komplettSichtbar-Berechnung und dem Zeichnen.
+    stelle_komplett = funktion.index("const komplettSichtbar")
+    zwischen = funktion[stelle_komplett:stelle_zeichnen]
+    assert "return" not in zwischen
+
+    # Massstab aus min/max von huelle UND Sichtfeld, nicht huelle allein.
+    assert "Math.min(huelle.minX, sichtX0)" in funktion
+    assert "Math.max(huelle.maxX, sichtX1)" in funktion
+    assert "Math.min(huelle.minY, sichtY0)" in funktion
+    assert "Math.max(huelle.maxY, sichtY1)" in funktion
