@@ -105,6 +105,7 @@ def rechne_alle(app, stunden):
                     "karten": len(graph.karten),
                     "bilanz": dict(lauf.bilanz),
                     "warnungen": len(lauf.warnungen),
+                    "takte": len(lauf.takte),
                     "befunde": pruefe_lauf(lauf, graph, stunden),
                 }
             )
@@ -114,7 +115,9 @@ def rechne_alle(app, stunden):
 def als_text(berichte):
     zeilen = []
     for b in berichte:
-        stand = "ok" if not b["befunde"] and not b["warnungen"] else ""
+        stand = "ok" if not b["befunde"] and not b["warnungen"] and not b["takte"] else ""
+        if b["takte"]:
+            stand += f"{b['takte']} taktende Stunden "
         if b["warnungen"]:
             stand += f"{b['warnungen']} Konvergenzwarnungen "
         if b["befunde"]:

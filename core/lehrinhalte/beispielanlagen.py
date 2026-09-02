@@ -488,8 +488,19 @@ def bau_hysterese_regler(projekt_id):
     # vom Regler zum Luftwäscher würde die automatische Rückverdrahtung
     # auslösen und den Istwert mit der Luftwäscher-Austrittstemperatur
     # überschreiben.
+    # Schaltdifferenz 1,0 g/kg und nicht 0,1 wie in der Excel-Vorlage: Der
+    # Wäscher hebt die Raumfeuchte um mehrere g/kg an. Ist die Schaltdifferenz
+    # schmaler als das, was das Stellglied selbst bewirkt, schaltet der Regler
+    # sofort wieder ab - er taktet dann schneller, als eine Stundenrechnung ihn
+    # auflösen kann, und der Solver weist das Stundenmittel aus (siehe
+    # core/solver.py). Das ist zwar richtig gerechnet, aber in einer Anlage,
+    # die einen Zweipunktregler ERKLÄREN soll, will man es nicht: Dort soll man
+    # sehen, wie er ein- und ausschaltet, statt einen Mittelwert zu lesen. In
+    # der Vorlage AX_SIM 2.1 bleibt die schmale Schaltdifferenz stehen, weil
+    # sie dort aus der Excel-Mappe stammt - und wird dort zum Lehrstück über
+    # eine Fehlplanung.
     regler = b.karte(
-        "hysterese_regler", 640, 40, "Regler Luftwäscher", hysterese=0.1, istwert=6.0
+        "hysterese_regler", 640, 40, "Regler Luftwäscher", hysterese=1.0, istwert=6.0
     )
     b.verbinde(raum, "F_Raum", regler, "sollwert")
     b.verbinde(regler, "ausgang", waescher, "stellgroesse")
