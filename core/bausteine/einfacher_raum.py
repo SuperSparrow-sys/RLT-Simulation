@@ -21,7 +21,7 @@ class EinfacherRaum(Baustein):
     SYMBOL = "einfacher_raum.svg"
 
     PARAMETER = [
-        Param("spez_transmission", "spez. Transmission", "kW/K", 0.5, darstellung=ZAHL, dezimalstellen=2),
+        Param("spez_transmission", "spez. Transmission", "kW/K", 0.5, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
         Param("sollwert_stat", "Sollwert für stat. Hzg", "°C", 15.0, darstellung=ZAHL, dezimalstellen=1),
     ]
 

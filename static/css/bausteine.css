@@ -28,7 +28,9 @@
   font-size: 14px;
   color: var(--text-secondary);
   line-height: 1.6;
-  max-width: 68ch;
+  /* Gemeinsamer Wert mit .abschnitt-hinweis auf der Startseite (siehe
+     static/css/style.css, :root) statt einer eigenen, engeren Zahl. */
+  max-width: var(--lesebreite);
   margin: 0 0 24px;
 }
 

@@ -5,16 +5,20 @@
    vorhandene Klassen (.projekt-kopf, .anlagen-liste, .wetter-tabelle,
    .frueherer-lauf), ohne sie selbst anzufassen. */
 
-/* -- kleine Aktionsknoepfe (Umbenennen/Loeschen), ueberall wiederverwendet -- */
+/* -- kleine Aktionsknoepfe (Umbenennen/Loeschen), ueberall wiederverwendet --
+   Gemessene Hoehe war 20px - unter dem, was sich noch bequem trifft. 7px/9px
+   Innenabstand ergibt rund 30px (plus Rahmen), ohne neben den Karten, denen
+   die Knoepfe zugeordnet sind, zu dominieren. */
 .knopf-mini {
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text-secondary);
   border-radius: var(--radius-sm);
-  padding: 3px 9px;
+  padding: 7px 9px;
   cursor: pointer;
   font-family: inherit;
   font-size: 11.5px;
+  line-height: 1.3;
   white-space: nowrap;
 }
 .knopf-mini:hover { background: var(--surface-alt); border-color: var(--border-strong); color: var(--text); }

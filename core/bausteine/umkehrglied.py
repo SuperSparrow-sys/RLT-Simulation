@@ -26,7 +26,7 @@ class Umkehrglied(Baustein):
     # "bezug" war mit "-" beschriftet, obwohl gegen ein 0-100-Prozent-Signal
     # gespiegelt wird (siehe Docstring oben und berechne() unten).
     PARAMETER = [
-        Param("bezug", "Bezugswert", "%", 100.0, darstellung=PROZENT, dezimalstellen=1)
+        Param("bezug", "Bezugswert", "%", 100.0, darstellung=PROZENT, dezimalstellen=1, minimum=0.0, maximum=100.0)
     ]
 
     PORTS = [

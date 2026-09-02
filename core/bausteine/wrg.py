@@ -20,11 +20,11 @@ class Waermerueckgewinnung(Baustein):
     SYMBOL = "wrg.svg"
 
     PARAMETER = [
-        Param("V_nenn", "V_nenn", "m³/h", 12200.0, darstellung=ZAHL, dezimalstellen=0),
-        Param("dp_WRG_nenn", "dp_WRG_nenn", "Pa", 170.0, darstellung=ZAHL, dezimalstellen=0),
-        Param("dp_Bypass_nenn", "dp_Byp_nenn", "Pa", 50.0, darstellung=ZAHL, dezimalstellen=0),
-        Param("rueckwaermzahl", "Rückwärmzahl", "%", 81.0, darstellung=PROZENT, dezimalstellen=1),
-        Param("rueckfeuchtzahl", "Rückfeuchtzahl", "%", 0.0, darstellung=PROZENT, dezimalstellen=1),
+        Param("V_nenn", "V_nenn", "m³/h", 12200.0, darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
+        Param("dp_WRG_nenn", "dp_WRG_nenn", "Pa", 170.0, darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
+        Param("dp_Bypass_nenn", "dp_Byp_nenn", "Pa", 50.0, darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
+        Param("rueckwaermzahl", "Rückwärmzahl", "%", 81.0, darstellung=PROZENT, dezimalstellen=1, minimum=0.0, maximum=100.0),
+        Param("rueckfeuchtzahl", "Rückfeuchtzahl", "%", 0.0, darstellung=PROZENT, dezimalstellen=1, minimum=0.0, maximum=100.0),
     ]
 
     PORTS = [

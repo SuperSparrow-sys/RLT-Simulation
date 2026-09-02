@@ -56,6 +56,20 @@ PAARWEISE_ROLLEN = (
     STROM, WAERME, KAELTE, WASSER,
 )
 
+# Menschenlesbare Beschriftung einer Rolle, fuer den Anschluesse-Abschnitt des
+# Parameterfensters (siehe core.anlagen._port_label und static/js/panel.js,
+# bauePortliste). Ein Anschluss ohne eigene Beschriftung (kein Treffer in
+# AUSGABE_LABEL, kein gleichnamiger Parameter) faellt hierauf zurueck statt auf
+# seinen rohen, technischen Schluessel.
+ROLLEN_LABEL = {
+    ZULUFT: "Zuluft", ABLUFT: "Abluft", AUSSENLUFT: "Außenluft",
+    FORTLUFT: "Fortluft", UMLUFT: "Umluft", LUFTWEG: "Luftweg",
+    STELLGROESSE: "Stellgröße", ISTWERT: "Istwert", SOLLWERT: "Sollwert",
+    MESSWERT: "Messwert", STROM: "Strom", WAERME: "Wärme", KAELTE: "Kälte",
+    WASSER: "Wasser", ZEITPLAN: "Zeitplan", FERIEN: "Ferien",
+    LASTGANG: "Lastgang", BETRIEB: "Betrieb", PROTOKOLL: "Protokoll",
+}
+
 
 # Darstellungsarten: WIE ein Parameterwert angezeigt und eingegeben wird. Das
 # Parameterfenster liest allein diese Angabe (plus Einheit, Beschriftung und
@@ -107,6 +121,15 @@ class Param:
     lesbaren Beschriftung (siehe wahl() oben) - die Karte kennt ihre eigenen
     Kuerzel, das Parameterfenster nicht. Damit muss niemand static/js/panel.js
     anfassen, nur weil ein neuer Kartentyp ein Auswahlfeld bekommt.
+
+    `minimum`/`maximum` tragen die physikalisch zulaessige Spanne, wenn es eine
+    gibt (siehe pruefe_wert() unten) - None heisst "keine Grenze". Sie gehoeren
+    an den Parameter und nicht an eine zentrale Prueffunktion, aus demselben
+    Grund wie `darstellung` und `auswahl`: nur die Karte weiss, was fuer ihren
+    eigenen Parameter gilt. Eine erfundene Grenze ist schlimmer als keine -
+    gesetzt wird nur, was die Physik der Groesse tatsaechlich hergibt (ein
+    Volumenstrom, eine Leistung, ein Druckverlust und aehnliche Betraege koennen
+    nicht negativ sein; ein Anteil oder Prozentwert nicht ueber sein Maximum).
     """
 
     schluessel: str
@@ -116,6 +139,63 @@ class Param:
     auswahl: tuple = ()
     darstellung: str = ZAHL
     dezimalstellen: int = 1
+    minimum: float | None = None
+    maximum: float | None = None
+
+
+def pruefe_wert(param: "Param", wert) -> str | None:
+    """Prueft einen einzelnen Wert gegen die Erlaubnis von `param`.
+
+    Rueckgabe: eine lesbare, deutsche Fehlermeldung, wenn der Wert unzulaessig
+    ist - sonst None. Bei AUSWAHL-Parametern muss der Wert einer der
+    deklarierten Kuerzel sein (param.auswahl); sonst greifen, falls gesetzt,
+    param.minimum/maximum. Strukturierte Darstellungsarten (Zeitreihe,
+    Monatswerte, Zeitraeume, Anteile, Textliste) tragen weder auswahl noch
+    minimum/maximum und werden hier deshalb nie beanstandet - fuer ihre
+    einzelnen Eintraege gibt es keine Karte, die eine sinnvolle Grenze kennt.
+    """
+    if param.darstellung == AUSWAHL:
+        zulaessig = {w["wert"] for w in param.auswahl}
+        if wert not in zulaessig:
+            werte_text = ", ".join(str(w["wert"]) for w in param.auswahl)
+            return (
+                f"„{wert}“ ist bei {param.label} nicht zulässig "
+                f"(erlaubt: {werte_text})"
+            )
+        return None
+
+    if param.minimum is None and param.maximum is None:
+        return None
+
+    try:
+        zahl = float(wert)
+    except (TypeError, ValueError):
+        return f"{param.label} muss eine Zahl sein"
+    if param.minimum is not None and zahl < param.minimum:
+        return f"{param.label} darf nicht kleiner als {param.minimum:g} sein"
+    if param.maximum is not None and zahl > param.maximum:
+        return f"{param.label} darf nicht größer als {param.maximum:g} sein"
+    return None
+
+
+def pruefe_parameter(klasse, werte: dict) -> dict:
+    """Prueft nur die in `werte` enthaltenen Parameter von `klasse`.
+
+    Rueckgabe: {schluessel: Fehlermeldung} je unzulaessigem Eintrag, leer wenn
+    alles zulaessig ist. Ein Schluessel, den `klasse` nicht kennt, wird
+    uebergangen - dafuer ist diese Pruefung nicht da (siehe karte_aendern in
+    core/anlagen.py, das ohnehin nur bekannte Parameter uebernimmt).
+    """
+    parameter_nach_schluessel = {p.schluessel: p for p in klasse.PARAMETER}
+    fehler = {}
+    for schluessel, wert in werte.items():
+        param = parameter_nach_schluessel.get(schluessel)
+        if param is None:
+            continue
+        meldung = pruefe_wert(param, wert)
+        if meldung is not None:
+            fehler[schluessel] = meldung
+    return fehler
 
 
 @dataclass(frozen=True)

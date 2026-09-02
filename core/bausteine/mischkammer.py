@@ -14,7 +14,7 @@ class Mischkammer(Baustein):
     SYMBOL = "mischkammer.svg"
 
     PARAMETER = [
-        Param("max_umluft", "max. Umluft", "%", 80.0, darstellung=PROZENT, dezimalstellen=1)
+        Param("max_umluft", "max. Umluft", "%", 80.0, darstellung=PROZENT, dezimalstellen=1, minimum=0.0, maximum=100.0)
     ]
 
     PORTS = [

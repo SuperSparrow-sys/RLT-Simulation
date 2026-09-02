@@ -120,6 +120,20 @@ def _karte_schreiben(db, anlage_id, typ, pos_x, pos_y, werte, name, klasse):
     return karte_id
 
 
+class UngueltigeParameter(ValueError):
+    """Beim Speichern einer Karte: mindestens ein Parameterwert ist unzulaessig
+    (siehe core.bausteine.basis.pruefe_parameter).
+
+    `fehler` traegt eine deutsche Meldung je betroffenem Parameterschluessel,
+    damit das Parameterfenster genau das Feld markieren kann, das nicht
+    stimmt - nicht nur, dass irgendetwas nicht stimmt (routes/anlagen.py gibt
+    beides weiter: eine zusammengefasste Meldung und dieses Dict)."""
+
+    def __init__(self, fehler: dict):
+        self.fehler = fehler
+        super().__init__("; ".join(fehler.values()))
+
+
 def karte_aendern(karte_id, pos_x=None, pos_y=None, parameter=None, name=None):
     db = get_db()
     zeile = db.execute("SELECT * FROM karte WHERE id = ?", (karte_id,)).fetchone()
@@ -128,6 +142,10 @@ def karte_aendern(karte_id, pos_x=None, pos_y=None, parameter=None, name=None):
 
     werte = json.loads(zeile["parameter"])
     if parameter:
+        klasse = basis.hole(zeile["typ"])
+        fehlermeldungen = basis.pruefe_parameter(klasse, parameter)
+        if fehlermeldungen:
+            raise UngueltigeParameter(fehlermeldungen)
         werte.update(parameter)
 
     db.execute(
@@ -415,6 +433,30 @@ def _messwert_label(karte, schluessel):
     return getattr(klasse, "AUSGABE_LABEL", {}).get(schluessel, schluessel)
 
 
+def _port_label(karte, port):
+    """Menschenlesbare Beschriftung eines Anschlusses.
+
+    Fuer den Anschluesse-Abschnitt des Parameterfensters (static/js/panel.js,
+    bauePortliste), der bisher nur den rohen Schluessel samt Rolle zeigte
+    (z.B. 'ausgang_2 · stellgroesse'). Reicht dieselben Beschriftungsquellen
+    weiter, die 'Regelt auf' schon benutzt - zuerst AUSGABE_LABEL (siehe
+    _messwert_label), dann ein gleichnamiger Parameter (dessen Label die Karte
+    ohnehin schon fuer das Eingabefeld traegt), zuletzt die uebersetzte Rolle
+    (basis.ROLLEN_LABEL). Kein Kartentyp muss dafuer selbst etwas deklarieren;
+    Mehrdeutigkeiten zwischen gleichartigen Anschluessen (mehrere Stellgroessen,
+    mehrere Protokollspalten) loest das Parameterfenster selbst ueber die
+    laufende Nummer im Schluessel auf.
+    """
+    klasse = basis.hole(karte.typ)
+    label = getattr(klasse, "AUSGABE_LABEL", {}).get(port.basis)
+    if label is not None:
+        return label
+    feld = next((p for p in klasse.PARAMETER if p.schluessel == port.basis), None)
+    if feld is not None:
+        return feld.label
+    return basis.ROLLEN_LABEL.get(port.rolle, port.rolle)
+
+
 def _ueberschreibung(karte, feld, nach_verbindung, g):
     """Ist `feld` ein 'fest, aber durch eine Verbindung ersetzbarer' Parameter?
 
@@ -486,6 +528,7 @@ def als_json(anlage_id):
                     {
                         "id": p.id, "schluessel": p.schluessel, "art": p.art,
                         "richtung": p.richtung, "rolle": p.rolle,
+                        "label": _port_label(karte, p),
                     }
                     for p in karte.ports
                 ],

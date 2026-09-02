@@ -14,9 +14,9 @@ class Heizungspumpen(Baustein):
     SYMBOL = "heizungspumpen.svg"
 
     PARAMETER = [
-        Param("P_allgemein", "Allgemein", "kW", 0.0, darstellung=ZAHL, dezimalstellen=2),
-        Param("P_wwb", "WWB", "kW", 0.0, darstellung=ZAHL, dezimalstellen=2),
-        Param("P_kessel", "Kessel", "kW", 0.0, darstellung=ZAHL, dezimalstellen=2),
+        Param("P_allgemein", "Allgemein", "kW", 0.0, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
+        Param("P_wwb", "WWB", "kW", 0.0, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
+        Param("P_kessel", "Kessel", "kW", 0.0, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
     ]
 
     PORTS = [

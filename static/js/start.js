@@ -701,6 +701,17 @@ const Start = {
     );
   },
 
+  // Zeigt den gewaehlten Dateinamen neben dem eigenen Dateiknopf an (siehe
+  // templates/index.html, .datei-eingabe) - der native Dateiname landet per
+  // textContent auf der Seite, kein innerHTML noetig.
+  wetterDateiAktualisieren() {
+    const dateiFeld = document.getElementById("feld-wetter-datei");
+    const anzeige = document.getElementById("feld-wetter-dateiname");
+    if (!dateiFeld || !anzeige) return;
+    const datei = dateiFeld.files[0];
+    anzeige.textContent = datei ? datei.name : "Keine Datei ausgewählt";
+  },
+
   async wetterHochladen(ereignis) {
     ereignis.preventDefault();
     const dateiFeld = document.getElementById("feld-wetter-datei");
@@ -746,6 +757,7 @@ const Start = {
 
     dateiFeld.value = "";
     nameFeld.value = "";
+    this.wetterDateiAktualisieren();
     knopf.disabled = false;
     knopf.textContent = urspruenglicherText;
 
@@ -900,6 +912,9 @@ window.addEventListener("DOMContentLoaded", () => {
   document
     .getElementById("form-wetter-upload")
     .addEventListener("submit", (e) => Start.wetterHochladen(e));
+  document
+    .getElementById("feld-wetter-datei")
+    .addEventListener("change", () => Start.wetterDateiAktualisieren());
 
   Start.wetterAbrufJahreFuellen();
   document

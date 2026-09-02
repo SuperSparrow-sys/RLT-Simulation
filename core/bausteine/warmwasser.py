@@ -19,8 +19,8 @@ class Warmwasserbereitung(Baustein):
     SYMBOL = "warmwasser.svg"
 
     PARAMETER = [
-        Param("speichervolumen", "Speichervol.", "l", 1000.0, darstellung=ZAHL, dezimalstellen=0),
-        Param("verbrauch", "Verbrauch", "m³/a", 462.0, darstellung=ZAHL, dezimalstellen=0),
+        Param("speichervolumen", "Speichervol.", "l", 1000.0, darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
+        Param("verbrauch", "Verbrauch", "m³/a", 462.0, darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
         Param("sollwert", "Sollwert", "°C", 50.0, darstellung=ZAHL, dezimalstellen=1),
     ]
 

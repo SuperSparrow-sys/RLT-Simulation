@@ -22,9 +22,9 @@ class Luftwaescher(Baustein):
     SYMBOL = "luftwaescher.svg"
 
     PARAMETER = [
-        Param("V_nenn", "V_nenn", "m³/h", 8200.0, darstellung=ZAHL, dezimalstellen=0),
-        Param("dp_nenn", "dp_nenn", "Pa", 50.0, darstellung=ZAHL, dezimalstellen=0),
-        Param("absalzverlust", "Absalzverlust", "%", 10.0, darstellung=PROZENT, dezimalstellen=1),
+        Param("V_nenn", "V_nenn", "m³/h", 8200.0, darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
+        Param("dp_nenn", "dp_nenn", "Pa", 50.0, darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
+        Param("absalzverlust", "Absalzverlust", "%", 10.0, darstellung=PROZENT, dezimalstellen=1, minimum=0.0, maximum=100.0),
         Param(
             "pumpenart", "Ventil/FU/HD", "-", "H",
             auswahl=(

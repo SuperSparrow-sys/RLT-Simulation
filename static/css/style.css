@@ -62,6 +62,13 @@
 
   --font-body: Roboto, Arial, sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace;
+
+  /* Lesebreite fuer Fliesstext-Einleitungen (Startseite, /bausteine) - ein
+     einziger Wert statt je Seite ihr eigenes ch-Mass, damit beide gleich
+     breit umbrechen. 80ch ist die uebliche obere Grenze fuer eine gut lesbare
+     Zeile; die engeren Werte davor (62ch/68ch) wirkten neben den deutlich
+     breiteren Kaesten darunter zufaellig schmal. */
+  --lesebreite: 80ch;
 }
 
 * { box-sizing: border-box; }
@@ -481,6 +488,16 @@ textarea:focus-visible {
 }
 .panel-zeile input[type="number"] { font-variant-numeric: tabular-nums; }
 
+/* Ein vom Server abgelehnter Wert (siehe static/js/panel.js,
+   markiereFeldFehler) - die Meldung selbst steht in der Fehlerleiste, hier
+   geht es nur darum, dass sich das betroffene Feld erkennen laesst. */
+.panel-feld-fehler,
+.panel-feld-fehler:focus-visible {
+  border-color: var(--danger);
+  outline: 2px solid var(--danger);
+  outline-offset: -1px;
+}
+
 /* ---------- Zusammengesetzte Parameter (Zeitreihe, Monatswerte, Zeitraeume,
    Anteile, Textlisten) - je Darstellungsart genau ein Baustein, siehe
    static/js/panel.js. Ein rohes JSON-Feld ist keine Bedienung. ---------- */
@@ -879,7 +896,7 @@ textarea:focus-visible {
    Kartenreihen auf sehr breiten Bildschirmen, keine enge Spalte. */
 .start-abschnitt { max-width: 1400px; margin: 0 auto 44px; }
 .abschnitt-titel { font-size: 18px; font-weight: 500; margin: 0 0 14px; }
-.abschnitt-hinweis { font-size: 13px; color: var(--text-secondary); margin: -6px 0 16px; max-width: 62ch; line-height: 1.5; }
+.abschnitt-hinweis { font-size: 13px; color: var(--text-secondary); margin: -6px 0 16px; max-width: var(--lesebreite); line-height: 1.5; }
 
 .leerhinweis-gross {
   background: var(--surface);

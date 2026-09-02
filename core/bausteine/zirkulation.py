@@ -14,9 +14,9 @@ class Zirkulation(Baustein):
     SYMBOL = "zirkulation.svg"
 
     PARAMETER = [
-        Param("volumenstrom", "Zirkulation", "m³/h", 1.5, darstellung=ZAHL, dezimalstellen=1),
+        Param("volumenstrom", "Zirkulation", "m³/h", 1.5, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
         Param("spreizung", "Zirk. VL-RL", "K", 5.0, darstellung=ZAHL, dezimalstellen=1),
-        Param("P_pumpe", "Zirk_PU", "kW", 0.04, darstellung=ZAHL, dezimalstellen=2),
+        Param("P_pumpe", "Zirk_PU", "kW", 0.04, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
     ]
 
     PORTS = [

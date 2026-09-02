@@ -18,7 +18,7 @@ class HystereseRegler(Baustein):
     SYMBOL = "hysterese_regler.svg"
 
     PARAMETER = [
-        Param("hysterese", "Hysterese", "-", 0.1, darstellung=ZAHL, dezimalstellen=2),
+        Param("hysterese", "Hysterese", "-", 0.1, darstellung=ZAHL, dezimalstellen=2, minimum=0.0),
         Param("sollwert", "Sollwert", "-", 0.0, darstellung=ZAHL, dezimalstellen=2),
         # Anlage!AB56: Beim Waescherregler steht hier eine feste Zahl, und der
         # Sollwert kommt als Raumfeuchte von aussen. Befeuchtet wird, wenn der Raum

@@ -132,6 +132,57 @@ def test_parameter_aendern_wird_gespeichert(app):
     assert next(k for k in daten["karten"] if k["id"] == karte)["parameter"]["QH_max"] == 55.0
 
 
+def test_parameter_aendern_lehnt_negativen_wert_ab(app):
+    """Ein Nennvolumenstrom kann nicht negativ sein (siehe
+    core/bausteine/erhitzer.py, Param V_nenn) - das muss schon beim Speichern
+    auffallen, nicht erst als falsches Rechenergebnis."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        karte = anlagen.karte_anlegen(anlage, "erhitzer", 0.0, 0.0)
+
+        with pytest.raises(anlagen.UngueltigeParameter) as ausnahme:
+            anlagen.karte_aendern(karte, parameter={"V_nenn": -5.0})
+        assert "V_nenn" in ausnahme.value.fehler
+        assert "V_nenn" in str(ausnahme.value)
+
+        # Der unzulaessige Wert wurde nicht gespeichert.
+        daten = anlagen.als_json(anlage)
+    assert next(k for k in daten["karten"] if k["id"] == karte)["parameter"]["V_nenn"] == 8200.0
+
+
+def test_parameter_aendern_lehnt_unbekannten_auswahlwert_ab(app):
+    """Konkretes Beispiel aus dem Bugreport: die Pumpenart eines Luftwaeschers
+    kennt nur V/F/H - ein 'Q' darf nicht still auf einen Ersatzzweig fallen."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        karte = anlagen.karte_anlegen(anlage, "luftwaescher", 0.0, 0.0)
+
+        with pytest.raises(anlagen.UngueltigeParameter) as ausnahme:
+            anlagen.karte_aendern(karte, parameter={"pumpenart": "Q"})
+        assert "pumpenart" in ausnahme.value.fehler
+
+        daten = anlagen.als_json(anlage)
+    assert next(k for k in daten["karten"] if k["id"] == karte)["parameter"]["pumpenart"] == "H"
+
+
+def test_parameter_aendern_erlaubt_grenzwerte(app):
+    """Die Grenzen selbst sind gueltig (>=, <=, nicht > / <) - ein Wirkungsgrad
+    von genau 100% darf nicht faelschlich abgelehnt werden."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        karte = anlagen.karte_anlegen(anlage, "luftwaescher", 0.0, 0.0)
+        anlagen.karte_aendern(karte, parameter={"absalzverlust": 0.0})
+        anlagen.karte_aendern(karte, parameter={"absalzverlust": 100.0})
+        anlagen.karte_aendern(karte, parameter={"V_nenn": 0.0})
+        daten = anlagen.als_json(anlage)
+    parameter = next(k for k in daten["karten"] if k["id"] == karte)["parameter"]
+    assert parameter["absalzverlust"] == 100.0
+    assert parameter["V_nenn"] == 0.0
+
+
 def test_graph_laesst_sich_zurueckladen(app):
     with app.app_context():
         projekt = anlagen.projekt_anlegen("P")
@@ -227,6 +278,31 @@ def test_api_legt_karte_an(app):
     )
     assert antwort.status_code == 201
     assert antwort.get_json()["typ"] == "kuehler"
+
+
+def test_api_patch_meldet_ungueltigen_parameter_als_400(app):
+    """Die Oberflaeche muss den Fehler erkennen koennen: eine deutsche,
+    verstaendliche Meldung UND, welches Feld betroffen war (feldfehler) - nicht
+    nur ein Statuscode (siehe static/js/panel.js, markiereFeldFehler)."""
+    klient = app.test_client()
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        karte = anlagen.karte_anlegen(anlage, "luftwaescher", 0.0, 0.0)
+
+    antwort = klient.patch(
+        f"/api/karten/{karte}", json={"parameter": {"pumpenart": "Q"}}
+    )
+    assert antwort.status_code == 400
+    daten = antwort.get_json()
+    assert "pumpenart" in daten["feldfehler"]
+    assert daten["fehler"]  # nicht leer, verstaendlicher Text auf Deutsch
+    assert "Q" in daten["fehler"]
+
+    with app.app_context():
+        gelesen = anlagen.als_json(anlage)
+    # Der ungueltige Wert steht nicht in der Datenbank.
+    assert next(k for k in gelesen["karten"] if k["id"] == karte)["parameter"]["pumpenart"] == "H"
 
 
 def test_api_patch_erhaelt_parametertypen(app):
@@ -376,6 +452,32 @@ def test_felder_tragen_darstellung_und_dezimalstellen(app):
     # Der gespeicherte Wert bleibt der exakte Tagesanteil - nur die Anzeige
     # rundet, siehe test_basis.py fuer die Umrechnung selbst.
     assert karte["parameter"]["von_montag"] == pytest.approx(5.0 / 24.0)
+
+
+def test_ports_tragen_eine_lesbare_beschriftung(app):
+    """Der Anschluesse-Abschnitt des Parameterfensters zeigte bisher nur den
+    rohen Schluessel samt Rolle (z.B. 'ausgang_2 · stellgroesse') - jeder Port
+    bekommt jetzt ein Label (core.anlagen._port_label)."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+        erhitzer = anlagen.karte_anlegen(anlage, "erhitzer", 0.0, 0.0)
+        bilanz = anlagen.karte_anlegen(anlage, "bilanz", 0.0, 0.0)
+        daten = anlagen.als_json(anlage)
+
+    erhitzer_karte = next(k for k in daten["karten"] if k["id"] == erhitzer)
+    # Kein AUSGABE_LABEL und kein gleichnamiger Parameter -> uebersetzte Rolle.
+    luft_ein = next(p for p in erhitzer_karte["ports"] if p["schluessel"] == "luft_ein")
+    assert luft_ein["label"] == "Zuluft"
+    # AUSGABE_LABEL greift, wo vorhanden.
+    t_aus = next(p for p in erhitzer_karte["ports"] if p["schluessel"] == "T_aus")
+    assert t_aus["label"] == "Austrittstemperatur"
+
+    # 'hochtarif' hat kein passendes Wort in der uebersetzten Rolle
+    # (rolle=messwert) - AUSGABE_LABEL traegt die eigentliche Bedeutung.
+    bilanz_karte = next(k for k in daten["karten"] if k["id"] == bilanz)
+    hochtarif = next(p for p in bilanz_karte["ports"] if p["schluessel"] == "hochtarif")
+    assert hochtarif["label"] == "Hochtarif aktiv"
 
 
 def test_felder_ohne_gleichnamigen_eingang_sind_nicht_ueberschreibbar(app):

@@ -19,9 +19,9 @@ class Beleuchtung(Baustein):
     SYMBOL = "beleuchtung.svg"
 
     PARAMETER = [
-        Param("spez_leistung", "sp. Leistung", "W/m²", 2.0, darstellung=ZAHL, dezimalstellen=1),
-        Param("grundflaeche", "Grundfläche", "m²", 726.0, darstellung=ZAHL, dezimalstellen=1),
-        Param("nennbeleuchtung", "Nennbel.", "lx", 300.0, darstellung=ZAHL, dezimalstellen=0),
+        Param("spez_leistung", "sp. Leistung", "W/m²", 2.0, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
+        Param("grundflaeche", "Grundfläche", "m²", 726.0, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
+        Param("nennbeleuchtung", "Nennbel.", "lx", 300.0, darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
     ]
 
     PORTS = [

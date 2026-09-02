@@ -174,9 +174,15 @@ const Panel = {
     eingabe.addEventListener("blur", async () => {
       const zahl = Number(eingabe.value);
       if (Number.isFinite(zahl) && zahl !== voll) {
-        voll = zahl;
-        karte.parameter[feld.schluessel] = zahl;
-        await this.speichereParameter(feld.schluessel, zahl);
+        const ergebnis = await this.speichereParameter(feld.schluessel, zahl);
+        if (ergebnis.ok) {
+          voll = zahl;
+          karte.parameter[feld.schluessel] = zahl;
+        } else if (ergebnis.feldfehler[feld.schluessel]) {
+          // Abgelehnt (siehe zeigeFehler in speichere() fuer die Meldung) -
+          // der alte, gueltige Wert bleibt stehen statt des unzulaessigen.
+          this.markiereFeldFehler(eingabe);
+        }
       }
       eingabe.value = formatZahl(voll, feld.dezimalstellen);
     });
@@ -215,6 +221,7 @@ const Panel = {
   // Karte mitgibt.
   zeileAuswahl(karte, feld, wert) {
     const eingabe = document.createElement("select");
+    let aktuell = wert;
     for (const moeglichkeit of feld.auswahl) {
       const option = document.createElement("option");
       option.value = moeglichkeit.wert;
@@ -223,8 +230,19 @@ const Panel = {
       eingabe.appendChild(option);
     }
     eingabe.addEventListener("change", async () => {
-      karte.parameter[feld.schluessel] = eingabe.value;
-      await this.speichereParameter(feld.schluessel, eingabe.value);
+      const neu = eingabe.value;
+      const ergebnis = await this.speichereParameter(feld.schluessel, neu);
+      if (!ergebnis.ok) {
+        // Das Auswahlfeld bietet ohnehin nur zulaessige Werte an - eine
+        // Ablehnung kann hier praktisch nur ueber einen fremden Aufruf der
+        // Schnittstelle entstehen. Sicherheitshalber trotzdem auf den zuletzt
+        // gueltigen Wert zurueckstellen statt die Ablehnung zu ignorieren.
+        if (ergebnis.feldfehler[feld.schluessel]) this.markiereFeldFehler(eingabe);
+        eingabe.value = aktuell;
+        return;
+      }
+      aktuell = neu;
+      karte.parameter[feld.schluessel] = neu;
       // Die Ventilator-Rolle (Zuluft/Abluft) aendert, welche Ports die Karte
       // hat - ohne Neuladen zeigte das Panel danach veraltete Anschluesse.
       await this.neuLadenUndAnzeigen();
@@ -863,6 +881,15 @@ const Panel = {
 
   // Anschluesse ohne Sollwert/Istwert - die stehen schon oben im
   // Regelungsabschnitt, hier noch einmal waeren sie doppelt zu sehen.
+  //
+  // Jeder Anschluss kommt vom Server schon mit einer lesbaren Beschriftung
+  // (karte.ports[].label - core.anlagen._port_label: AUSGABE_LABEL, sonst ein
+  // gleichnamiger Parameter, sonst die uebersetzte Rolle), genau wie "Regelt
+  // auf" oben schon vorgemacht hat ("kommt von: <Karte> → <Label>") statt
+  // technischer Schluessel wie "ausgang_2 · stellgroesse". Teilen sich mehrere
+  // Anschluesse dieselbe Beschriftung (mehrere Stellgroessen, mehrere
+  // Protokollspalten), haengt hier - und nur hier, wo die Mehrdeutigkeit
+  // sichtbar wird - die laufende Nummer aus dem Schluessel an.
   bauePortliste(karte) {
     const ports = document.createElement("div");
     ports.className = "panel-ports";
@@ -870,17 +897,39 @@ const Panel = {
     kopf.textContent = "Anschlüsse";
     ports.appendChild(kopf);
     const uebrige = karte.ports.filter((p) => p.rolle !== "istwert" && p.rolle !== "sollwert");
+
+    // Gruppiert nach Beschriftung UND Richtung - ein Eingang und ein Ausgang
+    // mit demselben Label (luft_ein/luft_aus -> beide "Zuluft") sind durch den
+    // Pfeil (◀/▶) schon eindeutig unterschieden und brauchen keine Nummer.
+    const vorkommen = new Map();
+    for (const port of uebrige) {
+      const schluesselGruppe = `${port.richtung}|${port.label}`;
+      vorkommen.set(schluesselGruppe, (vorkommen.get(schluesselGruppe) || 0) + 1);
+    }
+
     for (const port of uebrige) {
       const zeile = document.createElement("div");
       zeile.className = `port-zeile port-zeile-${port.art}`;
-      zeile.textContent = `${port.richtung === "ein" ? "◀" : "▶"} ${port.schluessel} · ${port.rolle}`;
+      let beschriftung = port.label;
+      if (vorkommen.get(`${port.richtung}|${port.label}`) > 1) {
+        const treffer = port.schluessel.match(/_(\d+)$/);
+        beschriftung += ` ${treffer ? treffer[1] : port.schluessel}`;
+      }
+      zeile.textContent = `${port.richtung === "ein" ? "◀" : "▶"} ${beschriftung}`;
+      zeile.title = port.schluessel;
       ports.appendChild(zeile);
     }
     return ports;
   },
 
+  // Rueckgabe: { ok, feldfehler } - "ok" allein reicht Aufrufern wie dem
+  // Bezeichnungsfeld, die keinen konkreten Parameter treffen koennen;
+  // Zahlen-/Auswahlfelder (siehe zeileZahl/zeileAuswahl) werten "feldfehler"
+  // zusaetzlich aus, um GENAU das abgelehnte Feld zu markieren statt nur
+  // irgendeine Fehlermeldung zu zeigen (core.bausteine.basis.pruefe_parameter
+  // liefert diese Zuordnung schon vor).
   async speichereParameter(schluessel, wert) {
-    await this.speichere({ parameter: { [schluessel]: wert } });
+    return this.speichere({ parameter: { [schluessel]: wert } });
   },
 
   async speichere(felder) {
@@ -893,9 +942,35 @@ const Panel = {
       });
     } catch {
       zeigeFehler("Änderung konnte nicht gespeichert werden.");
-      return;
+      return { ok: false, feldfehler: {} };
     }
-    if (!antwort.ok) zeigeFehler("Änderung konnte nicht gespeichert werden.");
+    if (!antwort.ok) {
+      let text = "Änderung konnte nicht gespeichert werden.";
+      let feldfehler = {};
+      try {
+        const daten = await antwort.json();
+        if (daten.fehler) text = daten.fehler;
+        if (daten.feldfehler) feldfehler = daten.feldfehler;
+      } catch { /* Antwort war kein JSON - bei der Vorgabemeldung bleiben. */ }
+      zeigeFehler(text);
+      return { ok: false, feldfehler };
+    }
+    return { ok: true, feldfehler: {} };
+  },
+
+  // Markiert ein abgelehntes Eingabefeld sichtbar (roter Rahmen) - die
+  // Fehlermeldung selbst steht schon, verstaendlich und auf Deutsch, in der
+  // Fehlerleiste (zeigeFehler in speichere() oben); hier geht es nur darum,
+  // dass erkennbar bleibt, WELCHES Feld gemeint war. Verschwindet von selbst
+  // nach kurzer Zeit oder sobald das Feld erneut geaendert wird.
+  markiereFeldFehler(eingabe) {
+    eingabe.classList.add("panel-feld-fehler");
+    eingabe.setAttribute("aria-invalid", "true");
+    window.clearTimeout(eingabe._feldFehlerTimer);
+    eingabe._feldFehlerTimer = window.setTimeout(() => {
+      eingabe.classList.remove("panel-feld-fehler");
+      eingabe.removeAttribute("aria-invalid");
+    }, 5000);
   },
 
   zeigeWerte(werteJeKarte) {

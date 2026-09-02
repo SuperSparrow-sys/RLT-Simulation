@@ -123,6 +123,91 @@ def test_druckverlust_steigt_quadratisch():
     assert basis.druckverlust(4100.0, 8200.0, 240.0) == pytest.approx(60.0)
 
 
+# -- pruefe_wert()/pruefe_parameter() -------------------------------------
+
+def test_pruefe_wert_lehnt_unbekannten_auswahlwert_ab():
+    feld = basis.Param(
+        "pumpenart", "Ventil/FU/HD", "-", "H",
+        auswahl=(basis.wahl("V", "Ventil (V)"), basis.wahl("F", "FU (F)")),
+        darstellung=basis.AUSWAHL,
+    )
+    meldung = basis.pruefe_wert(feld, "Q")
+    assert meldung is not None
+    assert "Ventil/FU/HD" in meldung
+    assert "V, F" in meldung
+
+
+def test_pruefe_wert_erlaubt_bekannten_auswahlwert():
+    feld = basis.Param(
+        "pumpenart", "Ventil/FU/HD", "-", "H",
+        auswahl=(basis.wahl("V", "Ventil (V)"), basis.wahl("F", "FU (F)")),
+        darstellung=basis.AUSWAHL,
+    )
+    assert basis.pruefe_wert(feld, "V") is None
+
+
+def test_pruefe_wert_lehnt_negativen_wert_unter_minimum_ab():
+    feld = basis.Param("V_nenn", "V_nenn", "m³/h", 8200.0, minimum=0.0)
+    meldung = basis.pruefe_wert(feld, -1.0)
+    assert meldung is not None
+    assert "V_nenn" in meldung
+    assert "0" in meldung
+
+
+def test_pruefe_wert_lehnt_wert_ueber_maximum_ab():
+    feld = basis.Param(
+        "absalzverlust", "Absalzverlust", "%", 10.0,
+        darstellung=basis.PROZENT, minimum=0.0, maximum=100.0,
+    )
+    assert basis.pruefe_wert(feld, 150.0) is not None
+    assert basis.pruefe_wert(feld, 100.0) is None
+    assert basis.pruefe_wert(feld, 0.0) is None
+
+
+def test_pruefe_wert_lehnt_nicht_numerischen_wert_ab():
+    feld = basis.Param("V_nenn", "V_nenn", "m³/h", 8200.0, minimum=0.0)
+    meldung = basis.pruefe_wert(feld, "viel")
+    assert meldung is not None
+    assert "Zahl" in meldung
+
+
+def test_pruefe_wert_ohne_grenzen_laesst_alles_durch():
+    """Wo es keine sinnvolle Grenze gibt (z.B. eine Preisangabe), wird keine
+    erfunden - dort ist jeder Wert zulaessig."""
+    feld = basis.Param("preis_waerme", "Wärme", "EUR/MWh", 50.0)
+    assert basis.pruefe_wert(feld, -500.0) is None
+    assert basis.pruefe_wert(feld, 1e9) is None
+
+
+def test_pruefe_parameter_prueft_nur_uebergebene_und_bekannte_schluessel():
+    @basis.registriere
+    class TestPruefung(basis.Baustein):
+        KENNUNG = "test_pruefung"
+        NAME = "Testpruefung"
+        GRUPPE = "Test"
+        SYMBOL = "test.svg"
+        PARAMETER = [
+            basis.Param("V_nenn", "V_nenn", "m³/h", 100.0, minimum=0.0),
+            basis.Param("bezeichnung", "Bezeichnung", "-", "x"),
+        ]
+        PORTS = []
+        AUSGABEN = []
+
+        def berechne(self, ein, p, zustand):
+            return {}, zustand
+
+    # Gueltig -> kein Fehler.
+    assert basis.pruefe_parameter(TestPruefung, {"V_nenn": 50.0}) == {}
+    # Ungueltig -> genau der betroffene Schluessel steht im Ergebnis.
+    fehler = basis.pruefe_parameter(TestPruefung, {"V_nenn": -1.0})
+    assert set(fehler) == {"V_nenn"}
+    # Ein der Karte unbekannter Schluessel wird nicht geprueft (kein KeyError).
+    assert basis.pruefe_parameter(TestPruefung, {"unbekannt": 1}) == {}
+    # Ein Feld ohne Grenzen bleibt unbeanstandet, auch bei einem Fehler daneben.
+    fehler = basis.pruefe_parameter(TestPruefung, {"V_nenn": -1.0, "bezeichnung": "irgendwas"})
+    assert set(fehler) == {"V_nenn"}
+
+
 def test_druckverlust_ohne_nennvolumenstrom_ist_null():
     assert basis.druckverlust(5000.0, 0.0, 240.0) == 0.0
 

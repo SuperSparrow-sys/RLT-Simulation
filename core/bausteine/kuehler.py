@@ -20,9 +20,9 @@ class Kuehler(Baustein):
     SYMBOL = "kuehler.svg"
 
     PARAMETER = [
-        Param("V_nenn", "V_nenn", "m³/h", 8200.0, darstellung=ZAHL, dezimalstellen=0),
-        Param("dp_nenn", "dp_nenn", "Pa", 240.0, darstellung=ZAHL, dezimalstellen=0),
-        Param("QK_nenn", "QK_nenn", "kW", 63.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("V_nenn", "V_nenn", "m³/h", 8200.0, darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
+        Param("dp_nenn", "dp_nenn", "Pa", 240.0, darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
+        Param("QK_nenn", "QK_nenn", "kW", 63.0, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
         Param("T_KW_mittel", "T_KW_mittel", "°C", 6.0, darstellung=ZAHL, dezimalstellen=1),
     ]
 

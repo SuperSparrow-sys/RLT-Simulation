@@ -140,6 +140,8 @@ def karte_aendern(karte_id):
         )
     except KeyError as fehler:
         return jsonify({"fehler": str(fehler)}), 404
+    except anlagen.UngueltigeParameter as fehler:
+        return jsonify({"fehler": str(fehler), "feldfehler": fehler.fehler}), 400
     return jsonify({"ok": True})
 
 

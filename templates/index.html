@@ -34,8 +34,16 @@
         <div class="wetter-wege">
           <div class="wetter-weg">
             <h2 class="wetter-weg-titel">Datei hochladen</h2>
+            <p class="wetter-weg-hinweis">
+              Lädt eine TRY-Wetterdatei von der eigenen Festplatte hoch - etwa
+              eine, die vorher beim DWD oder einem anderen Anbieter besorgt wurde.
+            </p>
             <form id="form-wetter-upload" class="wetter-formular">
-              <input type="file" id="feld-wetter-datei" accept=".xls,.xlsx,.csv">
+              <span class="datei-eingabe">
+                <input type="file" id="feld-wetter-datei" class="datei-eingabe-eingabe" accept=".xls,.xlsx,.csv">
+                <label for="feld-wetter-datei" class="datei-eingabe-knopf">Datei auswählen</label>
+                <span class="datei-eingabe-name" id="feld-wetter-dateiname">Keine Datei ausgewählt</span>
+              </span>
               <input type="text" id="feld-wetter-name" placeholder="Bezeichnung (optional)">
               <button type="submit" class="knopf-haupt" id="btn-wetter-hochladen">Hochladen</button>
             </form>

@@ -14,9 +14,9 @@ class Erhitzer(Baustein):
     SYMBOL = "erhitzer.svg"
 
     PARAMETER = [
-        Param("V_nenn", "V_nenn", "m³/h", 8200.0, darstellung=ZAHL, dezimalstellen=0),
-        Param("dp_nenn", "dp_nenn", "Pa", 240.0, darstellung=ZAHL, dezimalstellen=0),
-        Param("QH_max", "QH_max", "kW", 101.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("V_nenn", "V_nenn", "m³/h", 8200.0, darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
+        Param("dp_nenn", "dp_nenn", "Pa", 240.0, darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
+        Param("QH_max", "QH_max", "kW", 101.0, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
     ]
 
     PORTS = [

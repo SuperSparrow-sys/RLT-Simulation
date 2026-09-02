@@ -17,7 +17,7 @@ class StatischeHeizung(Baustein):
     GRUPPE = "Räume"
     SYMBOL = "statische_heizung.svg"
 
-    PARAMETER = [Param("QH_nenn", "QH_nenn", "kW", 0.0, darstellung=ZAHL, dezimalstellen=1)]
+    PARAMETER = [Param("QH_nenn", "QH_nenn", "kW", 0.0, darstellung=ZAHL, dezimalstellen=1, minimum=0.0)]
 
     PORTS = [
         # Der Anschluss heisst wie die Groesse, die er aufnimmt. Ein namenloser

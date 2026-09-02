@@ -22,8 +22,8 @@ class Dampfbefeuchter(Baustein):
 
     PARAMETER = [
         Param("dampftemperatur", "Dampftemp.", "°C", 180.0, darstellung=ZAHL, dezimalstellen=1),
-        Param("absalzverlust", "Absalzverlust", "%", 10.0, darstellung=PROZENT, dezimalstellen=1),
-        Param("max_leistung", "max. Bef.Leist", "kg/h", 32.0, darstellung=ZAHL, dezimalstellen=1),
+        Param("absalzverlust", "Absalzverlust", "%", 10.0, darstellung=PROZENT, dezimalstellen=1, minimum=0.0, maximum=100.0),
+        Param("max_leistung", "max. Bef.Leist", "kg/h", 32.0, darstellung=ZAHL, dezimalstellen=1, minimum=0.0),
         Param(
             "dampfart", "E-/Fremddampf", "-", "E",
             auswahl=(wahl("E", "Elektrisch (E)"), wahl("F", "Fremddampf (F)")),
