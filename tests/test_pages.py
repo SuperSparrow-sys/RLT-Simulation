@@ -68,6 +68,79 @@ def test_editor_seite_bindet_editor_js_fuer_palette_js_ein(app):
     assert "js/editor.js" in html
 
 
+def test_editor_seite_hat_einen_weg_zurueck_zur_startseite(app):
+    """Vorher fuehrte aus einer geoeffneten Anlage nur die Adresszeile
+    wieder heraus. Links neben dem Anlagennamen, wie im Erklaerbereich
+    (.lehre-zurueck) - hier vor <span class="titel anlagenname-zeile">,
+    damit es sich gleich anfuehlt."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("Referenz")
+        anlage = ax_sim_2_1.baue(projekt, "AX_SIM 2.1")
+
+    klient = app.test_client()
+    html = klient.get(f"/anlage/{anlage}").get_data(as_text=True)
+    assert 'class="editor-zurueck" href="/"' in html
+    assert html.index('class="editor-zurueck"') < html.index('class="titel anlagenname-zeile"')
+
+
+def test_editor_seite_hat_einen_dauerhaften_bericht_weg_in_der_kopfleiste(app):
+    """Vorher stand die Jahresbilanz nur im Dialog - der Bericht war von
+    dort nicht erreichbar, und nach dem Schliessen gar nicht mehr. Zu
+    Beginn immer abgeblendet (id="link-bericht" mit aria-disabled), erst
+    editor.js setzt href, sobald ein Lauf mit Ergebnis vorliegt (siehe
+    dortige Tests)."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("Referenz")
+        anlage = ax_sim_2_1.baue(projekt, "AX_SIM 2.1")
+
+    klient = app.test_client()
+    html = klient.get(f"/anlage/{anlage}").get_data(as_text=True)
+    assert 'id="link-bericht"' in html
+    assert 'aria-disabled="true"' in html
+    # Vor dem Simulieren-Knopf, dauerhaft in der Kopfleiste (nicht im Dialog).
+    assert html.index('id="link-bericht"') < html.index('id="btn-simulieren"')
+
+
+def test_editor_js_ermittelt_und_setzt_den_bericht_weg(app):
+    """Ohne Browserlauf nicht direkt pruefbar (siehe Kommentar bei
+    test_entf_taste...) - haelt nur fest, DASS berichtLinkAktualisieren()
+    den juengsten Lauf MIT Ergebnis waehlt (status 'fertig'/'abgebrochen',
+    core.bericht.STATUS_MIT_ERGEBNIS) und berichtLinkSetzen() href und
+    aria-disabled darauf abstimmt."""
+    klient = app.test_client()
+    js = klient.get("/static/js/editor.js").get_data(as_text=True)
+
+    aktualisieren = js[js.index("async berichtLinkAktualisieren("):]
+    aktualisieren = aktualisieren[: aktualisieren.index("\n  },")]
+    assert "/api/anlagen/${this.anlage.id}/simulationen" in aktualisieren
+    assert '"fertig"' in aktualisieren
+    assert '"abgebrochen"' in aktualisieren
+    assert "this.berichtLinkSetzen(" in aktualisieren
+
+    setzen = js[js.index("berichtLinkSetzen(simulationId)"):]
+    setzen = setzen[: setzen.index("\n  },")]
+    assert '/anlage/${this.anlage.id}/lauf/${simulationId}/bericht`' in setzen
+    assert 'removeAttribute("aria-disabled")' in setzen
+    assert 'setAttribute("aria-disabled", "true")' in setzen
+
+
+def test_simulation_js_setzt_bericht_link_sofort_bei_laufende_ohne_neuladen(app):
+    """Prueft, DASS beobachte() den neu beendeten Lauf sofort an
+    Editor.berichtLinkSetzen() meldet, statt dass der Weg erst nach einem
+    Neuladen der Seite nutzbar wird - und dass ein fehlgeschlagener Lauf
+    (kein Ergebnis) den Weg NICHT setzt."""
+    klient = app.test_client()
+    js = klient.get("/static/js/simulation.js").get_data(as_text=True)
+
+    block = js[js.index('if (["fertig", "abgebrochen", "fehler"].includes(stand.status)) {'):]
+    block = block[: block.index("await this.zeigeBilanz(stand.simulation_id, hinweis);")]
+    assert "Editor.berichtLinkSetzen(stand.simulation_id)" in block
+    # Der fruehe Ausstieg bei "fehler" liegt VOR dem Setzen des Links.
+    assert block.index('stand.status === "fehler"') < block.index(
+        "Editor.berichtLinkSetzen(stand.simulation_id)"
+    )
+
+
 def test_entf_taste_greift_nicht_im_eingabefeld_und_fragt_nach(app):
     """Zwei Befunde in einem Lauscher, beide ohne JS-Testlauf nicht pruefbar.
 

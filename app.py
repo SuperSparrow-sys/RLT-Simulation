@@ -37,11 +37,52 @@ def _protokoll_einrichten(app):
     app.logger.setLevel(getattr(logging, config.LOG_LEVEL.upper(), logging.INFO))
 
 
+def _html_nie_ablegen(app):
+    """Verbietet dem Browser, eine HTML-Seite abzulegen - egal ueber welchen
+    Weg sie entstand (render_template, Flasks eigene Fehlerseiten fuer
+    abort(...), 404 fuer eine falsche/veraltete Adresse).
+
+    Ohne 'Cache-Control' legt der Browser eine Seite nach eigenem Ermessen
+    ab (heuristische Freischaltung, RFC 7234 4.2.2) - beobachtet wurde
+    genau das: die Startseite kam zwei Tage spaeter wortwoertlich aus dem
+    Ablageort zurueck, ohne Fehler und ohne dass ein 'Neu laden' noetig
+    ausgesehen haette. 'no-store' statt nur 'no-cache': die Seite darf gar
+    nicht erst abgelegt werden, nicht nur "ohne Rueckfrage beim Server
+    verwendet werden" - bei vier kleinen Seiten ist der Preis (immer ein
+    voller Abruf) vernachlaessigbar, der Schaden eines veralteten Standes
+    war es nicht.
+
+    Bewusst NICHT fuer statische Dateien (Skripte, Formatvorlagen,
+    Symbole): die laufen weiterhin ueber Flasks eigene Auslieferung mit
+    'Cache-Control: no-cache' plus ETag/Last-Modified (siehe Kommentar in
+    routes/pages.py bzw. den Kopfzeilen in wege-report.md) - das erzwingt
+    laut HTTP-Spezifikation eine Rueckfrage beim Server vor jeder
+    Verwendung, eine geaenderte Datei kommt darueber ebenso sicher wieder
+    frisch. Ein an sich denkbarer zweiter Weg (eine Fassungskennung im
+    Dateiverweis, z.B. ?v=<Hash>) wurde bewusst NICHT gewaehlt: die
+    eigentliche Gefahr - eine Seite trifft auf eine Skriptfassung, fuer
+    die sie nicht geschrieben ist - ist bereits durch 'no-store' auf der
+    Seite selbst gebannt, denn die Seite liefert bei jedem Laden neu genau
+    die Verweise, die zu ihr passen. Ein Registrierungsmechanismus fuer
+    Fassungskennungen haette in JEDER Vorlage angefasst werden muessen
+    (auch templates/index.html, das nicht in diesem Zustaendigkeitsbereich
+    liegt) fuer einen Nutzen, den 'no-cache' + ETag im Normalfall schon
+    liefert.
+    """
+
+    @app.after_request
+    def setze_cache_control(antwort):
+        if antwort.mimetype == "text/html":
+            antwort.headers["Cache-Control"] = "no-store"
+        return antwort
+
+
 def create_app():
     app = Flask(__name__)
     app.config["SECRET_KEY"] = config.SECRET_KEY
 
     _protokoll_einrichten(app)
+    _html_nie_ablegen(app)
 
     app.teardown_appcontext(close_db)
 

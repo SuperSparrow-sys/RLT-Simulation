@@ -198,6 +198,12 @@ const Simulation = {
             liste.replaceWith(hinweis);
           }
         }
+        // Der geloeschte Lauf koennte der war, auf den der Bericht-Weg in
+        // der Kopfleiste gerade zeigte - neu ermitteln statt auf einen
+        // geloeschten Bericht zeigen zu lassen.
+        if (typeof Editor !== "undefined") {
+          Editor.berichtLinkAktualisieren();
+        }
       });
     });
 
@@ -436,6 +442,13 @@ const Simulation = {
           stand.status === "abgebrochen"
             ? `Lauf abgebrochen nach ${stand.fertig || 0} von ${stand.gesamt || 0} Stunden.`
             : null;
+        // Dieser Lauf ist der juengste (gerade erst beendet) und hat ein
+        // Ergebnis ("fertig"/"abgebrochen", siehe oben) - der dauerhafte
+        // Bericht-Weg in der Kopfleiste (editor.js, berichtLinkSetzen())
+        // wird sofort nutzbar, ohne dass die Seite neu geladen werden muss.
+        if (typeof Editor !== "undefined") {
+          Editor.berichtLinkSetzen(stand.simulation_id);
+        }
         await this.zeigeBilanz(stand.simulation_id, hinweis);
         return;
       }

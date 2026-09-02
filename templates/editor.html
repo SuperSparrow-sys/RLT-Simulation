@@ -25,6 +25,12 @@
 
     <main class="buehne">
       <header class="leiste">
+        <!-- Derselbe Weg zurueck wie im Erklaerbereich (templates/bausteine.html,
+             .lehre-zurueck) - links neben dem Anlagennamen, damit es sich
+             gleich anfuehlt. Vorher fuehrte aus einer Anlage nur die
+             Adresszeile wieder heraus. -->
+        <a class="editor-zurueck" href="{{ url_for('pages.index') }}" title="Zur Startseite">← Start</a>
+
         <span class="titel anlagenname-zeile">
           <span id="anlagenname">Anlage</span>
           <button class="knopf-mini" id="btn-anlage-umbenennen" title="Anlage umbenennen">Umbenennen</button>
@@ -84,6 +90,18 @@
         <button class="knopf-sekundaer" id="btn-einpassen" title="Ganze Anlage einpassen" aria-label="Ganze Anlage einpassen">
           Einpassen
         </button>
+
+        <!-- Dauerhaft in der Kopfleiste statt nur im Bilanzdialog (siehe
+             static/js/simulation.js, zeigeBilanz()) - sonst war der
+             Bericht nach dem Schliessen des Dialogs gar nicht mehr
+             erreichbar. Zu Beginn immer abgeblendet (kein Lauf bekannt);
+             Editor.berichtLinkAktualisieren() in editor.js setzt href und
+             hebt die Abblendung auf, sobald ein Lauf mit Ergebnis
+             vorliegt - beim Laden der Seite und sofort, wenn ein Lauf
+             fertig wird (siehe simulation.js, beobachte()), ohne dass
+             neu geladen werden muss. -->
+        <a class="knopf-mini" id="link-bericht" aria-disabled="true"
+           title="Bericht des letzten Laufs">Bericht</a>
 
         <button class="knopf-haupt" id="btn-simulieren">Simulieren</button>
       </header>

@@ -297,6 +297,27 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
+/* Weg zurueck zur Startseite aus dem Editor - dieselbe Optik wie
+   .lehre-zurueck im Erklaerbereich (templates/bausteine.html,
+   static/css/bausteine.css), hier eigenstaendig, weil bausteine.css
+   nicht zu dieser Seite gehoert. */
+.editor-zurueck {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.editor-zurueck:hover { color: var(--blue); }
+
+/* Der Bericht-Weg in der Kopfleiste (templates/editor.html, #link-bericht):
+   ein <a>, kein <button> - kennt darum kein :disabled. Solange noch kein
+   Lauf mit Ergebnis vorliegt, setzt editor.js aria-disabled="true" statt
+   eines href (siehe dort); dieselbe Abblendung wie .knopf-mini:disabled
+   (loeschen.css), zusaetzlich pointer-events:none, weil ein <a> ohne href
+   sonst zwar keine Fahrt antritt, mit der Maus aber trotzdem als klickbar
+   wirkt (Cursor, Fokus). */
+.knopf-mini[aria-disabled="true"] { opacity: .5; cursor: default; pointer-events: none; }
+
 .knopf-haupt {
   border: 1px solid var(--blue);
   background: var(--blue);

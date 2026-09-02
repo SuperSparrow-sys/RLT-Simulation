@@ -256,6 +256,46 @@ const Editor = {
     }
   },
 
+  // Setzt (oder deaktiviert) den dauerhaften Bericht-Weg in der Kopfleiste
+  // (#link-bericht, siehe editor.html). 'simulationId' null/undefined
+  // deaktiviert ihn - kein Lauf mit Ergebnis bekannt.
+  berichtLinkSetzen(simulationId) {
+    const link = document.getElementById("link-bericht");
+    if (!link) return;
+    if (simulationId) {
+      link.href = `/anlage/${this.anlage.id}/lauf/${simulationId}/bericht`;
+      link.removeAttribute("aria-disabled");
+    } else {
+      link.removeAttribute("href");
+      link.setAttribute("aria-disabled", "true");
+    }
+  },
+
+  // Beim Laden der Seite: welcher Lauf ist der juengste mit einem Ergebnis
+  // (Status "fertig" oder "abgebrochen" - siehe core.bericht.STATUS_MIT_ERGEBNIS)?
+  // Die Liste kommt bereits juengster-zuerst (core.ergebnisse.simulationen_von).
+  // Ein frisch beendeter Lauf setzt den Link stattdessen direkt ueber
+  // berichtLinkSetzen() (siehe static/js/simulation.js, beobachte()) - ohne
+  // hierfuer erneut die ganze Liste abzufragen.
+  async berichtLinkAktualisieren() {
+    let antwort;
+    try {
+      antwort = await fetch(`/api/anlagen/${this.anlage.id}/simulationen`);
+    } catch {
+      zeigeFehler("Frühere Läufe konnten nicht geladen werden.");
+      return;
+    }
+    if (!antwort.ok) {
+      zeigeFehler("Frühere Läufe konnten nicht geladen werden.");
+      return;
+    }
+    const laeufe = await antwort.json();
+    const letzterMitBericht = laeufe.find(
+      (l) => l.status === "fertig" || l.status === "abgebrochen"
+    );
+    this.berichtLinkSetzen(letzterMitBericht ? letzterMitBericht.id : null);
+  },
+
   async anlageUmbenennen() {
     const neuerName = await textEingabeDialog("Anlage umbenennen", this.anlage.name);
     if (neuerName === null) return;
@@ -1421,6 +1461,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   await Palette.laden();
   await Editor.laden(window.ANLAGE_ID);
   pfeileBinden(Editor);
+  Editor.berichtLinkAktualisieren();
 
   const btnUmbenennen = document.getElementById("btn-anlage-umbenennen");
   if (btnUmbenennen) {
