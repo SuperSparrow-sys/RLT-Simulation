@@ -93,6 +93,23 @@ const BADGE_TEXT = {
   fehler: () => "Letzter Lauf fehlgeschlagen",
 };
 
+// Laeufe, zu denen es einen Bericht gibt (core/bericht.py: STATUS_MIT_ERGEBNIS)
+// - hier dupliziert wie WETTER_FRUEHESTES_JAHR weiter unten, aus demselben
+// Grund: rein eine Oberflaechenfrage (den Verweis "Bericht" zeigen oder
+// nicht), dafuer lohnt keine eigene Schnittstelle.
+const STATUS_MIT_BERICHT = ["fertig", "abgebrochen"];
+
+// Datum aus "YYYY-MM-DD HH:MM:SS" (core/database.py, datetime('now'), UTC) -
+// nur der Kalendertag, ohne Zeitzonenumrechnung: fuer eine kompakte
+// Anlage-Karte reicht "an welchem Tag zuletzt gerechnet wurde", eine
+// Uhrzeit auf die Minute waere mehr Genauigkeit, als die Karte braucht.
+function formatDatum(zeitstempel) {
+  const treffer = /^(\d{4})-(\d{2})-(\d{2})/.exec(zeitstempel || "");
+  if (!treffer) return zeitstempel || "";
+  const [, jahr, monat, tag] = treffer;
+  return `${tag}.${monat}.${jahr}`;
+}
+
 // Anzeigetext je Quelle eines Wetterdatensatzes - der Rohwert aus der DB
 // ("upload"/"open-meteo") ist fuer den Code praktisch, fuer die Liste aber
 // zu technisch.
@@ -132,8 +149,95 @@ const Start = {
     [this.projekte, this.anlagen, this.wetter, this.vorlagen] =
       await Promise.all(antworten.map((a) => a.json()));
 
+    this.zeichneEinstieg();
     await this.zeichneProjekte();
     this.zeichneWetter();
+  },
+
+  // -- Einstieg -------------------------------------------------------------
+
+  // Nur beim allerersten Besuch (noch kein Projekt): sobald ein Projekt
+  // existiert, beantworten die Projekt-/Anlagenkarten selbst schon "was ist
+  // der naechste Schritt" - ein dauerhafter Kasten waere dann nur noch
+  // Wiederholung. Die drei Schritte stehen in der Reihenfolge, die
+  // tatsaechlich zum ersten Ergebnis fuehrt (Wetter vor Anlage vor Rechnen) -
+  // unabhaengig von der Reihenfolge der Abschnitte darunter, die stattdessen
+  // nach Bedeutung sortiert sind: Projekte (der Zweck) vor Wetterdaten (eine
+  // Voraussetzung, siehe static/css/start.css).
+  zeichneEinstieg() {
+    const bereich = document.getElementById("start-einstieg");
+    bereich.textContent = "";
+    if (this.projekte.length) return;
+
+    const hatWetter = this.wetter.length > 0;
+
+    const kasten = document.createElement("div");
+    kasten.className = "start-einstieg";
+    const titel = document.createElement("h2");
+    titel.className = "start-einstieg-titel";
+    titel.textContent = "Erster Einstieg";
+    const hinweis = document.createElement("p");
+    hinweis.className = "start-einstieg-hinweis";
+    hinweis.textContent =
+      "Eine Lüftungsanlage wird aus Karten zusammengesteckt und mit einem " +
+      "Wetterjahr durchgerechnet. Drei Schritte führen zum ersten Ergebnis:";
+    kasten.append(titel, hinweis);
+
+    const schritte = document.createElement("div");
+    schritte.className = "einstieg-schritte";
+    schritte.append(
+      this._einstiegSchrittElement(
+        1, "Wetterdaten holen", hatWetter,
+        hatWetter
+          ? "Mindestens ein Datensatz ist vorhanden."
+          : "Ort wählen, Jahr(e) ankreuzen – meist in unter einer Sekunde fertig.",
+        hatWetter ? null : { text: "Zu den Wetterdaten", ziel: () => this._zuWetterdaten() }
+      ),
+      this._einstiegSchrittElement(
+        2, "Projekt und Anlage anlegen", false,
+        "Eine Anlage gehört immer zu einem Projekt – leer oder aus einer Vorlage.",
+        null
+      ),
+      this._einstiegSchrittElement(
+        3, "Rechnen lassen", false,
+        "Im Editor der Anlage über „Simulation“ einen Jahreslauf starten.",
+        null
+      ),
+    );
+    kasten.appendChild(schritte);
+    bereich.appendChild(kasten);
+  },
+
+  _einstiegSchrittElement(nummer, titelText, erledigt, hinweisText, aktion) {
+    const schritt = document.createElement("div");
+    schritt.className = "einstieg-schritt" + (erledigt ? " einstieg-schritt-erledigt" : "");
+    const nr = document.createElement("div");
+    nr.className = "einstieg-nummer";
+    nr.textContent = erledigt ? "✓" : String(nummer);
+    const text = document.createElement("div");
+    text.className = "einstieg-text";
+    const h2 = document.createElement("h2");
+    h2.textContent = titelText;
+    const p = document.createElement("p");
+    p.textContent = hinweisText;
+    text.append(h2, p);
+    if (aktion) {
+      const knopf = document.createElement("button");
+      knopf.type = "button";
+      knopf.className = "knopf-sekundaer";
+      knopf.textContent = aktion.text;
+      knopf.addEventListener("click", aktion.ziel);
+      text.appendChild(knopf);
+    }
+    schritt.append(nr, text);
+    return schritt;
+  },
+
+  _zuWetterdaten() {
+    const abschnitt = document.getElementById("wetter-abschnitt");
+    if (abschnitt) abschnitt.scrollIntoView({ behavior: "smooth", block: "start" });
+    const ort = document.getElementById("feld-wetter-abruf-ort");
+    if (ort) ort.focus();
   },
 
   // -- Projekte und Anlagen ------------------------------------------------
@@ -153,6 +257,9 @@ const Start = {
     karten.forEach((karte) => bereich.appendChild(karte));
   },
 
+  // Kurz gehalten (Schritt 2 des Einstiegskastens oben erklaert die
+  // Reihenfolge schon ausfuehrlich) - hier nur noch die eine Handlung, die
+  // an dieser Stelle der Seite tatsaechlich fehlt.
   leerhinweisElement() {
     const div = document.createElement("div");
     div.className = "leerhinweis-gross";
@@ -160,10 +267,9 @@ const Start = {
     titel.textContent = "Noch kein Projekt vorhanden";
     const text = document.createElement("p");
     text.textContent =
-      "Lege zuerst ein Projekt an, dann darin eine Anlage – leer oder aus der " +
+      "Eine Anlage gehört immer zu einem Projekt – leer oder aus der " +
       "mitgelieferten Vorlage AX_SIM 2.1 (zwei Lüftungsgeräte an gemeinsamer " +
-      "Wärmerückgewinnung, ein Raum). Für einen Simulationslauf werden außerdem " +
-      "Wetterdaten gebraucht, weiter unten hochzuladen.";
+      "Wärmerückgewinnung, ein Raum).";
     const knopf = document.createElement("button");
     knopf.className = "knopf-haupt";
     knopf.textContent = "Erstes Projekt anlegen";
@@ -247,13 +353,28 @@ const Start = {
 
     // Umbenennen/Loeschen als eigene Zeile UNTER dem Link statt darin - ein
     // <button> innerhalb eines <a> wuerde beim Klick immer auch navigieren.
+    // "Bericht" in derselben Zeile, aus demselben Grund als eigener <a>
+    // statt als Link im Kartenkoerper - und nur, wenn es zum letzten Lauf
+    // ueberhaupt einen gibt (core/bericht.py: STATUS_MIT_ERGEBNIS).
     const eintrag = document.createElement("div");
     eintrag.className = "anlage-eintrag";
     eintrag.appendChild(link);
-    eintrag.appendChild(this.eintragAktionenElement(
+    const aktionen = this.eintragAktionenElement(
       () => this.anlageUmbenennenDialog(anlage),
       () => this.anlageLoeschenDialog(anlage),
-    ));
+    );
+    if (status.letzter && STATUS_MIT_BERICHT.includes(status.letzter.status)) {
+      // Ans Ende angehaengt (nicht davor): bei einem Zeilenumbruch (siehe
+      // static/css/loeschen.css, .eintrag-aktionen) soll "Bericht" allein
+      // in die zweite Zeile rutschen, nicht "Loeschen" - der informative
+      // Verweis darf vereinzelt stehen, der gefaehrliche Knopf besser nicht.
+      const berichtLink = document.createElement("a");
+      berichtLink.className = "knopf-mini";
+      berichtLink.textContent = "Bericht";
+      berichtLink.href = `/anlage/${anlage.id}/lauf/${status.letzter.id}/bericht`;
+      aktionen.appendChild(berichtLink);
+    }
+    eintrag.appendChild(aktionen);
     return eintrag;
   },
 
@@ -404,14 +525,24 @@ const Start = {
       return;
     }
     const formatiere = BADGE_TEXT[status.letzter.status];
-    badge.textContent = formatiere
+    const haupttext = formatiere
       ? formatiere(status.letzter)
       : `Letzter Lauf: ${status.letzter.status}`;
+    badge.textContent = haupttext;
     badge.classList.add(
       status.letzter.status === "fertig"
         ? "anlage-status-fertig"
         : "anlage-status-warnung"
     );
+    // Zweite, stumme Zeile: wann zuletzt gerechnet und mit welchem
+    // Wetterjahr - sonst sagt die Karte ausser Kosten/Zustand nichts ueber
+    // sich (siehe Task, Befund 3). wetter_name ist ein frei vergebener Name
+    // (Umbenennen/Abruf) - deshalb per textContent statt innerHTML gesetzt,
+    // kein htmlSicher() noetig.
+    const neben = document.createElement("div");
+    neben.className = "anlage-status-neben";
+    neben.textContent = `${formatDatum(status.letzter.gestartet_am)} · ${status.letzter.wetter_name}`;
+    badge.appendChild(neben);
   },
 
   // Ob fuer eine Anlage gerade ein Lauf rechnet, und was der letzte Lauf ergab

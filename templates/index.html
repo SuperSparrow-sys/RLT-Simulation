@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/wetter-abruf.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/loeschen.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/start.css') }}">
 </head>
 <body>
   <div id="fehlermeldung" class="fehlermeldung" role="alert" aria-live="assertive" hidden></div>
@@ -20,40 +21,27 @@
     </header>
 
     <main class="start-haupt">
+      <div id="start-einstieg"></div>
+
       <section class="start-abschnitt">
         <h1 class="abschnitt-titel">Projekte</h1>
         <div id="start-projekte"></div>
       </section>
 
-      <section class="start-abschnitt">
+      <section class="start-abschnitt start-abschnitt-wetter" id="wetter-abschnitt">
         <h1 class="abschnitt-titel">Wetterdaten</h1>
         <p class="abschnitt-hinweis">
-          Für einen Simulationslauf wird ein Wetterdatensatz gebraucht. Gelesen werden
-          TRY-Dateien als .xls, .xlsx oder .csv.
+          Für einen Simulationslauf wird ein Wetterdatensatz gebraucht – ein volles
+          Kalenderjahr für einen Ort.
         </p>
-        <div class="wetter-wege">
-          <div class="wetter-weg">
-            <h2 class="wetter-weg-titel">Datei hochladen</h2>
-            <p class="wetter-weg-hinweis">
-              Lädt eine TRY-Wetterdatei von der eigenen Festplatte hoch - etwa
-              eine, die vorher beim DWD oder einem anderen Anbieter besorgt wurde.
-            </p>
-            <form id="form-wetter-upload" class="wetter-formular">
-              <span class="datei-eingabe">
-                <input type="file" id="feld-wetter-datei" class="datei-eingabe-eingabe" accept=".xls,.xlsx,.csv">
-                <label for="feld-wetter-datei" class="datei-eingabe-knopf">Datei auswählen</label>
-                <span class="datei-eingabe-name" id="feld-wetter-dateiname">Keine Datei ausgewählt</span>
-              </span>
-              <input type="text" id="feld-wetter-name" placeholder="Bezeichnung (optional)">
-              <button type="submit" class="knopf-haupt" id="btn-wetter-hochladen">Hochladen</button>
-            </form>
-          </div>
 
-          <div class="wetter-weg">
+        <div class="wetter-wege">
+          <div class="wetter-weg wetter-weg-hauptweg">
             <h2 class="wetter-weg-titel">Online abrufen</h2>
             <p class="wetter-weg-hinweis">
-              Ruft ein volles Kalenderjahr Wetterdaten für einen Ort von der
-              Open-Meteo-Archive-API ab (kostenlos, ohne Anmeldung).
+              Ort wählen, Jahr(e) ankreuzen, fertig – von der kostenlosen
+              Open-Meteo-Archive-API, ohne Anmeldung, meist in unter einer
+              Sekunde je Jahr.
             </p>
             <form id="form-wetter-abruf" class="wetter-abruf-formular">
               <label class="panel-zeile">
@@ -99,7 +87,25 @@
               <button type="submit" class="knopf-haupt" id="btn-wetter-abrufen">Abrufen</button>
             </form>
           </div>
+
+          <details class="wetter-weg wetter-weg-nebenweg" id="wetter-upload-details">
+            <summary class="wetter-weg-titel">Eigene Datei hochladen (TRY) …</summary>
+            <p class="wetter-weg-hinweis">
+              Für eine TRY-Wetterdatei, die schon vorliegt – etwa vom DWD oder
+              einem anderen Anbieter besorgt. Gelesen werden .xls, .xlsx oder .csv.
+            </p>
+            <form id="form-wetter-upload" class="wetter-formular">
+              <span class="datei-eingabe">
+                <input type="file" id="feld-wetter-datei" class="datei-eingabe-eingabe" accept=".xls,.xlsx,.csv">
+                <label for="feld-wetter-datei" class="datei-eingabe-knopf">Datei auswählen</label>
+                <span class="datei-eingabe-name" id="feld-wetter-dateiname">Keine Datei ausgewählt</span>
+              </span>
+              <input type="text" id="feld-wetter-name" placeholder="Bezeichnung (optional)">
+              <button type="submit" class="knopf-haupt" id="btn-wetter-hochladen">Hochladen</button>
+            </form>
+          </details>
         </div>
+
         <div id="start-wetter-liste"></div>
       </section>
     </main>

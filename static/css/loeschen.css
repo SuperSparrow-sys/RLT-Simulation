@@ -43,7 +43,13 @@
 }
 .knopf-haupt-gefahr:hover { background: #b3261e; border-color: #b3261e; }
 
-.eintrag-aktionen { display: flex; gap: 6px; flex-shrink: 0; }
+/* flex-wrap: eine Anlage-Karte ist 184px breit (siehe .anlage-eintrag
+   unten) - "Umbenennen" und "Loeschen" passen knapp nebeneinander, ein
+   dritter Knopf ("Bericht", siehe static/js/start.js) nicht mehr. Ohne
+   Umbruch wuerde er aus der Karte heraus in die naechste hineinragen, statt
+   sauber in eine zweite Zeile zu rutschen. Bei der Projektkopfzeile (nur
+   zwei Knoepfe, viel Platz) bleibt eine Zeile, da wirkungslos. */
+.eintrag-aktionen { display: flex; flex-wrap: wrap; gap: 6px; flex-shrink: 0; }
 
 /* -- Projektkarte: Titel und Aktionen in einer Zeile -- */
 .projekt-kopf-zeile {
