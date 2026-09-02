@@ -117,8 +117,13 @@ def test_der_gestellte_bedarf_teilt_sich_nach_der_klappenstellung():
     wird - sonst schickt er sie nach seinem eigenen Schlüssel und der Rest
     der Anlage rechnet mit einer Menge, die niemand angefordert hat."""
     p = {"max_umluft": 80.0}
+    # Maßgeblich ist der ANGEFORDERTE Anteil, nicht der wirksame: Stünde hier
+    # der wirksame, forderte die Kammer nur noch das an, was sie ohnehin schon
+    # bekommt, und nähme jeden zu kleinen Wert als neue Vorgabe - sie schnürte
+    # sich selbst ein. Nachgestellt in core/vorlagen/testanlage.py: Sie blieb
+    # bei 40 Prozent stehen, obwohl 60 angefordert waren.
     aufteilung = Mischkammer().bedarf_gestellt(
-        {"luft_aus": 5000.0}, p, {"umluftanteil": 60.0}
+        {"luft_aus": 5000.0}, p, {"umluftanteil_soll": 60.0, "umluftanteil": 40.0}
     )
     assert aufteilung["aussenluft_ein"] == pytest.approx(2000.0)
     assert aufteilung["umluft_ein"] == pytest.approx(3000.0)

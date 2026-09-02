@@ -337,9 +337,17 @@ def _baue_roh(projekt_id, name=NAME):
     erhitzerstellung = karte(
         "maximalwert", 700, 20, "Erhitzerstellung",
     )
+    # 35 statt der urspruenglichen 8 kW: Die Halle hat 500 m² und einen
+    # Waermebedarf um 30 kW bei Auslegungstemperatur. Mit 8 kW konnte die
+    # Frostschutzheizung den Sollwert nie erreichen - der Sequenzregler davor
+    # forderte immer weiter (gemessen bis 29,5 kW), waehrend die Karte still
+    # auf 8 begrenzte. Ein Regler, der gegen einen gesaettigten Stellantrieb
+    # anlaeuft, laesst die Rechnung Durchgang um Durchgang weiterkriechen,
+    # statt sich einzupendeln; das war die Ursache der meisten nicht
+    # konvergierten Stunden dieser Anlage.
     statische_heizung = karte(
         "statische_heizung", 1800, 20, "Statische Heizung (Frostschutz)",
-        QH_nenn=8.0,
+        QH_nenn=35.0,
     )
     enthalpie = karte("enthalpierechner", 1800, 170, "Raumluftzustand")
 

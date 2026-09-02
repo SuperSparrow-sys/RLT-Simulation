@@ -36,6 +36,9 @@ from core.bausteine.basis import Luft
 
 BILANZGROESSEN = ("strom_ht", "strom_nt", "waerme", "kaelte", "wasser")
 
+# Wie oft der Rueckwaertslauf ueber die Karten geht (siehe _rueckwaerts).
+RUECKWAERTS_DURCHLAEUFE = 3
+
 
 @dataclass
 class Lauf:
@@ -121,6 +124,32 @@ class Solver:
         gefordert = {}  # port_id -> m³/h
         abnahme = {}    # port_id eines Luftausgangs -> m³/h
 
+        # Mehrere Durchlaeufe, weil der Luftweg Zyklen enthaelt und die
+        # topologische Reihenfolge sie irgendwo aufbrechen MUSS. In
+        # core/vorlagen/testanlage.py fuehrt eine Umluftschleife vom Verteiler
+        # zurueck zur Mischkammer; rueckwaerts wird der Verteiler dadurch vor
+        # der Mischkammer bearbeitet und kennt deren Umluftforderung noch
+        # nicht. Er teilte seinen Strom deshalb nach seinem festen Schluessel
+        # auf (40 statt der geforderten 60 Prozent Umluft), und die ganze
+        # Anlage rechnete gegen eine Auslegung, die sie nie erreichte.
+        #
+        # Drei Durchlaeufe reichen fuer jede Schleife, die ueber hoechstens
+        # zwei Aufbruchstellen laeuft; 'gefordert' bleibt dabei stehen, sodass
+        # jeder Durchlauf auf dem vorigen aufbaut. Mehr kostet nur Zeit: Der
+        # Rueckwaertslauf ist eine reine Summenrechnung ohne Physik, und bei
+        # einer Anlage ohne Schleife liefert schon der erste Durchlauf das
+        # Endergebnis.
+        for _ in range(RUECKWAERTS_DURCHLAEUFE):
+            gefordert, abnahme = self._ein_rueckwaertsdurchlauf(
+                gefordert, ausgaben, topologie_merken
+            )
+        return gefordert, abnahme
+
+    def _ein_rueckwaertsdurchlauf(self, gefordert, ausgaben, topologie_merken):
+        """Ein einzelner Durchlauf des Rueckwaertslaufs - siehe _rueckwaerts()."""
+        gefordert = dict(gefordert)
+        abnahme = {}
+
         for karte_id in reversed(self.reihenfolge):
             karte = self.graph.karten[karte_id]
             aus_bedarf = {}
@@ -164,9 +193,21 @@ class Solver:
                     for port_id in anschluesse:
                         gefordert[port_id] = anteil
 
-            # Verteiler braucht die Aufteilung im Vorwaertslauf. Sie gehoert zur
-            # Topologie und wird nur im Nenn-Durchgang gesetzt.
-            if topologie_merken and hasattr(karte.baustein, "bedarf_je_abgang"):
+            # Der Verteiler braucht die Aufteilung im Vorwaertslauf: Er teilt
+            # seinen Strom nach dem, was die einzelnen Gaenge anfordern, und
+            # greift nur auf seinen festen Schluessel zurueck, wenn niemand
+            # etwas anfordert.
+            #
+            # Sie wird in BEIDEN Durchgaengen gesetzt, nicht nur im
+            # Nenn-Durchgang. Der Grund ist eine Klappe stromabwaerts: Eine
+            # Mischkammer fordert ihren Umluftanteil erst, wenn ihre
+            # Klappenstellung bekannt ist (bedarf_gestellt), und die entsteht
+            # erst im Vorwaertslauf. Wurde die Aufteilung nur einmal am Anfang
+            # gemerkt, bekam sie dauerhaft das, was der feste Schluessel des
+            # Verteilers hergab - in core/vorlagen/testanlage.py 40 statt der
+            # geforderten 60 Prozent Umluft, und die ganze Anlage rechnete
+            # gegen eine Auslegung, die sie nie erreichte.
+            if hasattr(karte.baustein, "bedarf_je_abgang"):
                 karte.baustein.abgaenge = [
                     schluessel for schluessel, _, _ in self._luftausgaenge[karte_id]
                 ]
@@ -422,6 +463,27 @@ class Solver:
             vorvorher = vorher
             vorherige_zustaende = neue_zustaende
 
+        # Die Grenze ist erreicht, ohne dass sich etwas eingependelt hat.
+        # Auch hier gilt das Mittel der beiden letzten Durchgaenge, aus
+        # demselben Grund wie beim erkannten Zweitakt oben: Der zuletzt
+        # gerechnete Stand ist nicht besser als der davor, aber er haengt
+        # daran, ob MAX_ITERATIONEN gerade oder ungerade ist. Beim reinen
+        # Zweitakt trifft das Mittel den Stundenwert; bei einer Rechnung, die
+        # sich ihrem Wert nur langsam naehert, liegen beide Durchgaenge ohnehin
+        # dicht beieinander, und das Mittel ist so gut wie jeder von ihnen.
+        #
+        # Gemessen ueber das Referenzjahr der Excel-Vorlage: Die Abweichung
+        # der Jahreswaerme faellt damit von 32,8 auf 15,6 Prozent, weil der
+        # taktende Befeuchtungskreis nicht mehr jede Stunde ganz an oder ganz
+        # aus gerechnet wird.
+        if vorvorher is not None:
+            return (
+                self._mittel(vorher, ausgaben),
+                self._mittel(vorherige_zustaende, neue_zustaende),
+                config.MAX_ITERATIONEN,
+                letzte_abweichung,
+                False,
+            )
         return (
             ausgaben,
             neue_zustaende,

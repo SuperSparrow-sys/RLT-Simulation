@@ -56,28 +56,47 @@ class Verteiler(Baustein):
         summe = sum(gefordert.values())
 
         warnung = ""
-        if summe <= 0:
-            anteile = p.get("anteile") or {}
-            rest = [a for a in abgaenge]
-            gesamt_anteil = sum(anteile.get(a, 0.0) for a in rest)
-            if gesamt_anteil > 0:
-                verteilt = {
-                    a: luft.V * anteile.get(a, 0.0) / gesamt_anteil for a in rest
-                }
-            else:
-                verteilt = {a: luft.V / len(rest) for a in rest}
-        elif summe > luft.V:
+        if summe > luft.V:
+            # Mehr gefordert als da ist: alle Gaenge anteilig kuerzen.
             faktor = luft.V / summe   # summe > luft.V >= 0, also nie null
             verteilt = {a: v * faktor for a, v in gefordert.items()}
             warnung = "Volumenstrom reicht nicht für alle Gänge"
         else:
-            verteilt = gefordert
+            # Jeder fordernde Gang bekommt seinen Bedarf. Was uebrig bleibt,
+            # geht an die Gaenge, die nichts fordern - typisch die Fortluft,
+            # die als Senke nie etwas anfordert. Ohne diesen Rest verschwaende
+            # ein Verteiler Luft: In core/vorlagen/testanlage.py forderte die
+            # Mischkammer 3000 von 5000 m³/h als Umluft an, und die restlichen
+            # 2000 loesten sich auf, statt ins Freie zu gehen.
+            verteilt = dict(gefordert)
+            rest = luft.V - summe
+            ohne_bedarf = [a for a in abgaenge if gefordert.get(a, 0.0) <= 0]
+            if rest > 0 and ohne_bedarf:
+                verteilt.update(self._nach_anteilen(rest, ohne_bedarf, p))
+            elif rest > 0:
+                # Alle Gaenge fordern etwas, und es bleibt trotzdem Luft
+                # uebrig: Sie anteilig auf die Forderungen aufschlagen, statt
+                # sie verschwinden zu lassen.
+                verteilt = {a: v + rest * v / summe for a, v in gefordert.items()}
 
         aus = {
             a: Luft(V=v, T=luft.T, x=luft.x, dp=luft.dp) for a, v in verteilt.items()
         }
         aus["warnung"] = warnung
         return aus, zustand
+
+    def _nach_anteilen(self, menge, abgaenge, p):
+        """Verteilt 'menge' auf 'abgaenge' nach dem Parameter 'anteile'.
+
+        Ohne gesetzte Anteile gleichmaessig - das ist die Notaufteilung fuer
+        Gaenge, hinter denen kein Ventilator steht, der die Luftmenge selbst
+        bestimmt.
+        """
+        anteile = p.get("anteile") or {}
+        gesamt = sum(anteile.get(a, 0.0) for a in abgaenge)
+        if gesamt > 0:
+            return {a: menge * anteile.get(a, 0.0) / gesamt for a in abgaenge}
+        return {a: menge / len(abgaenge) for a in abgaenge}
 
     def bedarf(self, aus_bedarf, p):
         return {"luft_ein": sum(aus_bedarf.values())}

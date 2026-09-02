@@ -28,11 +28,12 @@ class Mischkammer(Baustein):
         Port("umluftanteil", SIGNAL, EINGANG, STELLGROESSE),
     ]
 
-    AUSGABEN = ["T_MI", "F_MI", "umluftanteil"]
+    AUSGABEN = ["T_MI", "F_MI", "umluftanteil", "umluftanteil_soll"]
     AUSGABE_LABEL = {
         "T_MI": "Mischtemperatur (°C)",
         "F_MI": "Mischfeuchte, absolut (g/kg)",
         "umluftanteil": "wirksamer Umluftanteil (%)",
+        "umluftanteil_soll": "angeforderter Umluftanteil (%)",
     }
     # Der gleichnamige Eingang traegt den GEFORDERTEN Anteil; wirksam wird er
     # erst nach der Begrenzung auf max_umluft - deshalb hier ein eigener Name
@@ -76,7 +77,16 @@ class Mischkammer(Baustein):
         return (
             {
                 "luft_aus": Luft(V=V_soll, T=T, x=x, dp=0.0),
-                "T_MI": T, "F_MI": x, "umluftanteil": wirksam,
+                "T_MI": T, "F_MI": x,
+                "umluftanteil": wirksam,
+                # Getrennt vom wirksamen Anteil, weil bedarf_gestellt() genau
+                # DIESEN braucht: Wuerde dort der wirksame stehen, forderte die
+                # Kammer nur noch das an, was sie ohnehin schon bekommt, und
+                # naehme jeden zu kleinen Wert als neue Vorgabe - sie schnuerte
+                # sich selbst ein. Nachgestellt: In
+                # core/vorlagen/testanlage.py blieb sie so bei 40 Prozent
+                # stehen, obwohl 60 angefordert waren.
+                "umluftanteil_soll": anteil,
             },
             zustand,
         )
@@ -102,7 +112,9 @@ class Mischkammer(Baustein):
         wo er hingehoert - zur Fortluft.
         """
         gesamt = sum(aus_bedarf.values())
-        anteil = min(float(werte.get("umluftanteil", 0.0)), p["max_umluft"]) / 100.0
+        anteil = min(
+            float(werte.get("umluftanteil_soll", 0.0)), p["max_umluft"]
+        ) / 100.0
         return {
             "aussenluft_ein": gesamt * (1.0 - anteil),
             "umluft_ein": gesamt * anteil,

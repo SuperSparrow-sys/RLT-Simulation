@@ -12,6 +12,12 @@ from core.bausteine.basis import (
 )
 
 
+# Untere Drehzahl, bis zu der die Teillastformel des Wirkungsgrads gilt
+# (siehe berechne()). Darunter bleibt der Wirkungsgrad auf seinem Wert bei
+# dieser Drehzahl stehen.
+TEILLAST_MIN = 30.0
+
+
 @registriere
 class Ventilator(Baustein):
     KENNUNG = "ventilator"
@@ -117,7 +123,26 @@ class Ventilator(Baustein):
             dp = (p["dp_max"] - p["dp_konst"]) * (u / 100.0) ** 2 + p["dp_konst"]
 
         eta = self.wirkungsgrad(p)
-        eta_teil = eta * (u / 100.0) ** 0.8
+        # Teillastwirkungsgrad nach der Excel-Vorlage, aber mit einer unteren
+        # Schranke fuer die Drehzahl.
+        #
+        # Warum die Schranke: Der Druck faellt nur zum Teil mit dem Quadrat der
+        # Drehzahl (dp_konst bleibt stehen), waehrend der Wirkungsgrad mit
+        # u^0,8 faellt. Zusammengesetzt zieht die Formel PE ~ u^0,2 nach sich -
+        # ein Ventilator bei 5 Prozent Drehzahl braeuchte danach noch rund
+        # 42 Prozent seiner Nennleistung und heizte die Luft um 11 K auf
+        # (nachgemessen in core/vorlagen/testanlage.py). Das ist keine Physik
+        # mehr, sondern eine Formel ausserhalb ihres Gueltigkeitsbereichs: Sie
+        # beschreibt einen Ventilator im ueblichen Regelbereich, nicht einen
+        # im Kriechgang.
+        #
+        # Unterhalb von TEILLAST_MIN gilt deshalb der Wirkungsgrad, den die
+        # Formel dort noch hergibt. Die Leistung faellt dann weiter mit der
+        # Drehzahl (linear ueber u/100 * V_max), statt in einen unsinnigen
+        # Wirkungsgrad zu laufen. Anlagen, deren Ventilatoren im ueblichen
+        # Bereich fahren, sind davon nicht betroffen - in der Excel-Vorlage
+        # steht die Stellgroesse fest auf 100 Prozent (Anlage!Y16).
+        eta_teil = eta * (max(u, TEILLAST_MIN) / 100.0) ** 0.8
 
         art = str(p["regelart"]).upper()
         PE = 0.0

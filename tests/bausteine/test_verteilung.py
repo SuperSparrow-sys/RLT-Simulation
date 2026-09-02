@@ -75,3 +75,44 @@ def test_sammler_mischt_seinen_eigenen_ausgang_nicht_mit():
     aus, _ = Sammler().berechne(ein, {}, {})
     assert aus["luft_aus"].V == pytest.approx(10000.0)
     assert aus["luft_aus"].T == pytest.approx((8000 * 20.0 + 2000 * 10.0) / 10000)
+
+
+def test_der_verteiler_laesst_keine_luft_verschwinden():
+    """Was hineinströmt, muss auch herauskommen.
+
+    Fordert ein Gang etwas an (eine Mischkammer ihren Umluftanteil) und ein
+    anderer nichts (die Fortluft ist eine Senke und fordert nie), bekam vorher
+    nur der fordernde Gang seine Menge - der Rest löste sich auf. In
+    core/vorlagen/testanlage.py waren das 2000 von 5000 m³/h.
+    """
+
+
+    v = Verteiler()
+    v.abgaenge = ["luft_aus_1", "luft_aus_2"]
+    v.bedarf_je_abgang = {"luft_aus_1": 0.0, "luft_aus_2": 3000.0}
+    aus, _ = v.berechne(
+        {"luft_ein": Luft(V=5000.0, T=21.0, x=8.0)},
+        {"anteile": {"luft_aus_1": 60.0, "luft_aus_2": 40.0}},
+        {},
+    )
+    assert aus["luft_aus_2"].V == pytest.approx(3000.0)
+    assert aus["luft_aus_1"].V == pytest.approx(2000.0)
+    summe = sum(w.V for s, w in aus.items() if isinstance(w, Luft))
+    assert summe == pytest.approx(5000.0)
+
+
+def test_der_verteiler_schlaegt_ueberschuss_auf_die_forderungen_auf():
+    """Fordern alle Gänge etwas und bleibt trotzdem Luft übrig, wird sie
+    anteilig aufgeschlagen statt fallengelassen."""
+
+
+    v = Verteiler()
+    v.abgaenge = ["luft_aus_1", "luft_aus_2"]
+    v.bedarf_je_abgang = {"luft_aus_1": 1000.0, "luft_aus_2": 3000.0}
+    aus, _ = v.berechne(
+        {"luft_ein": Luft(V=5000.0, T=21.0, x=8.0)}, {"anteile": {}}, {}
+    )
+    summe = sum(w.V for s, w in aus.items() if isinstance(w, Luft))
+    assert summe == pytest.approx(5000.0)
+    assert aus["luft_aus_1"].V == pytest.approx(1250.0)
+    assert aus["luft_aus_2"].V == pytest.approx(3750.0)

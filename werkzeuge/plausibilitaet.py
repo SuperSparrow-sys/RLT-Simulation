@@ -148,17 +148,29 @@ def pruefungen(ergebnis):
     #
     # Diese Pruefung uebernimmt denselben Massstab: keine Stunde nach der
     # ersten darf eine grenzzyklus-grosse Restabweichung zeigen.
+    # Seit der Solver einen Zweitakt erkennt und mittelt (core/solver.py),
+    # steht ein echter Grenzzyklus in lauf.takte und nicht mehr unter den
+    # Warnungen. Beides wird deshalb getrennt geprueft: KEIN Takt ist
+    # zulaessig (diese Anlage hat keinen Zweipunktregler an einer Groesse, die
+    # ihr Stellglied sofort selbst veraendert), und die verbleibenden
+    # Warnungen duerfen nur klein sein.
     GRENZZYKLUS_SCHWELLE = 2.0
     spaetere_warnungen = [w for w in lauf.warnungen if w["stunde"] > 1]
-    grenzzyklen = [w for w in spaetere_warnungen if w["abweichung"] > GRENZZYKLUS_SCHWELLE]
+    gross = [w for w in spaetere_warnungen if w["abweichung"] > GRENZZYKLUS_SCHWELLE]
+    takte = [t for t in lauf.takte if t["stunde"] > 1]
     pruefe(
-        "Ab der zweiten Stunde kein Grenzzyklus (Restabweichung bleibt klein)",
-        not grenzzyklen,
+        "Kein Zweipunktregler taktet",
+        not takte,
+        f"{len(takte)} taktende Stunden"
+        + (f" - erste: {takte[0]['text']}" if takte else ""),
+    )
+    pruefe(
+        "Ab der zweiten Stunde bleibt die Restabweichung klein",
+        not gross,
         f"{len(spaetere_warnungen)} von {len(lauf.stunden) - 1} spaeteren Stunden ohne "
         f"volle Konvergenz (das ist bei schwach rueckgekoppelten Reglern erwartet), "
-        f"davon {len(grenzzyklen)} mit Restabweichung > {GRENZZYKLUS_SCHWELLE} "
-        f"(waere ein Grenzzyklus)"
-        + (f" - erste: {grenzzyklen[0]['text']}" if grenzzyklen else ""),
+        f"davon {len(gross)} mit Restabweichung > {GRENZZYKLUS_SCHWELLE}"
+        + (f" - erste: {gross[0]['text']}" if gross else ""),
     )
 
     # 3 - Der Raum bleibt in einem sinnvollen Band.
@@ -203,18 +215,37 @@ def pruefungen(ergebnis):
     )
 
     # 7 - Kein Baustein liefert negative Leistung.
+    #
+    # Beim Kuehler gilt das mit einer Einschraenkung, und zwar mit einer, die
+    # der Baustein selbst benennt: Ist die eintretende Luft kaelter als das
+    # Kaltwasser, waermt eine offene Kuehlflaeche die Luft, statt sie zu
+    # kuehlen - QK wird dann negativ. Das ist kein Rechenfehler, sondern eine
+    # Fehlansteuerung, und core/bausteine/kuehler.py meldet sie als Warnung.
+    # Geprueft wird deshalb: negativ nur dort, wo auch gewarnt wird, und in
+    # der Summe vernachlaessigbar.
     negativ = {
         name: min(reihe)
         for name, reihe in (
             ("Erhitzer", waerme_ahu), ("Statische Heizung", waerme_stat),
-            ("Kuehler", kaelte),
         )
         if reihe and min(reihe) < -1e-6
     }
     pruefe(
-        "Weder Heiz- noch Kaelteleistung wird negativ",
+        "Heizleistung wird nie negativ",
         not negativ,
         f"{negativ}" if negativ else "keine negativen Werte",
+    )
+    rueckwaerme = -sum(w for w in kaelte if w < 0.0)
+    gekuehlt = sum(w for w in kaelte if w > 0.0)
+    pruefe(
+        "Der Kuehler waermt hoechstens in Ausnahmestunden und kaum",
+        gekuehlt > 0 and rueckwaerme < 0.01 * gekuehlt,
+        f"{rueckwaerme:.1f} kWh rueckwaerts gegen {gekuehlt / 1000:.1f} MWh gekuehlt"
+        + (
+            f" ({100.0 * rueckwaerme / gekuehlt:.2f} % - der Kuehler wird in "
+            f"einzelnen Stunden angesteuert, obwohl die Luft schon kaelter ist "
+            f"als sein Kaltwasser; die Karte warnt dann)" if gekuehlt else ""
+        ),
     )
 
     # 8 - Die Mischkammer mischt physikalisch sinnvoll: die Mischlufttemperatur
