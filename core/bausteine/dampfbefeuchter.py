@@ -81,7 +81,7 @@ class Dampfbefeuchter(Baustein):
         wasser = aufschlag * u / 100.0 * p["max_leistung"]
         QH = wasser * (h_D - 42.0) / 3600.0
 
-        warnung = "Uebersaettigung" if x_roh >= x_grenze else ""
+        warnung = "Übersättigung" if x_roh >= x_grenze else ""
 
         return (
             {

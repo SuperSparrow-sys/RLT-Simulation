@@ -203,7 +203,7 @@ def test_pfeil_zwischen_zwei_anlagen_wird_verweigert(app):
         hier = anlagen.karte_anlegen(eine, "erhitzer", 0.0, 0.0)
         dort = anlagen.karte_anlegen(andere, "kuehler", 0.0, 0.0)
 
-        with pytest.raises(ValueError, match="gehoert nicht zu dieser Anlage"):
+        with pytest.raises(ValueError, match="gehört nicht zu dieser Anlage"):
             anlagen.pfeil_anlegen(eine, hier, dort)
 
 
@@ -410,7 +410,7 @@ def test_handverdrahtung_verzweigt_keinen_luftkanal(app):
 
         ports = {k["id"]: {p["schluessel"]: p["id"] for p in k["ports"]}
                  for k in anlagen.als_json(anlage)["karten"]}
-        with pytest.raises(ValueError, match="fuehrt schon woanders hin"):
+        with pytest.raises(ValueError, match="führt schon woanders hin"):
             anlagen.verbindung_anlegen(
                 anlage, ports[erhitzer]["luft_aus"], ports[zweiter]["luft_ein"]
             )

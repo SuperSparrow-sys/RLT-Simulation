@@ -209,7 +209,7 @@ def simulation_loeschen(simulation_id):
         raise KeyError(f"Simulationslauf {simulation_id} gibt es nicht")
     if zeile["status"] == STATUS_LAEUFT:
         raise ValueError(
-            "Ein laufender Simulationslauf kann nicht geloescht werden - "
+            "Ein laufender Simulationslauf kann nicht gelöscht werden – "
             "zuerst abbrechen."
         )
     db.execute("DELETE FROM simulation WHERE id = ?", (simulation_id,))
@@ -363,7 +363,7 @@ def lade_warnungen(simulation_id, anzahl=5):
 
 def lade_baustein_warnungen(simulation_id):
     """Warnungen, die Bausteine waehrend der Rechnung in ihre Ausgabe
-    geschrieben haben (z.B. 'Kuehlleistung zu niedrig'), gruppiert nach Karte
+    geschrieben haben (z.B. 'Kühlleistung zu niedrig'), gruppiert nach Karte
     und Wortlaut - eine Zeile je Kombination, mit Anzahl und einer Stichprobe
     der betroffenen Stunden. Siehe _ergebnisse_einfuegen(), das die Gruppen
     beim Speichern des Laufs bildet; analog zu lade_warnungen() fuer die

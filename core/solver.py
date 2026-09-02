@@ -379,7 +379,7 @@ class Solver:
                         "abweichung": abweichung,
                         "text": (
                             f"Stunde {nummer} nicht konvergiert, "
-                            f"groesste Aenderung {abweichung:.4f}"
+                            f"größte Änderung {abweichung:.4f}"
                         ),
                     }
                 )

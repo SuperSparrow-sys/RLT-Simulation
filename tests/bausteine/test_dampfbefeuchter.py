@@ -56,7 +56,7 @@ def test_feuchte_wird_bei_saettigung_begrenzt_und_gemeldet():
     ein = {"luft_ein": Luft(V=1000.0, T=20.0, x=5.0), "stellgroesse": 100.0}
     aus, _ = Dampfbefeuchter().berechne(ein, p, {})
     assert aus["luft_aus"].x == pytest.approx(st.x_saett(20.0))
-    assert aus["warnung"] == "Uebersaettigung"
+    assert aus["warnung"] == "Übersättigung"
 
 
 def test_ohne_volumenstrom_passiert_nichts():

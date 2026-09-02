@@ -25,7 +25,7 @@
 
     <dl class="bericht-kopf">
       <div><dt>Projekt</dt><dd>{{ daten.anlage.projekt_name }}</dd></div>
-      <div><dt>Wetterdatensatz</dt><dd>{{ daten.wetter.name if daten.wetter else "–" }}{% if daten.wetter and daten.wetter.ort %} · {{ daten.wetter.ort }}{% endif %}{% if daten.wetter and daten.wetter.jahr %} · {{ daten.wetter.jahr|int }}{% endif %}</dd></div>
+      <div><dt>Wetterdatensatz</dt><dd>{{ daten.wetter_kopfzeile }}</dd></div>
       <div><dt>Lauf gestartet</dt><dd>{{ daten.sim.gestartet_am }}</dd></div>
       <div><dt>Status</dt><dd>{{ daten.status_text }}</dd></div>
       <div><dt>Gerechnete Stunden</dt><dd>{{ daten.stunden_gerechnet }} (Stunde {{ daten.sim.von_stunde }}–{{ daten.sim.bis_stunde }})</dd></div>

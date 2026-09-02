@@ -65,7 +65,7 @@ class Verteiler(Baustein):
         elif summe > luft.V:
             faktor = luft.V / summe   # summe > luft.V >= 0, also nie null
             verteilt = {a: v * faktor for a, v in gefordert.items()}
-            warnung = "Volumenstrom reicht nicht fuer alle Gaenge"
+            warnung = "Volumenstrom reicht nicht für alle Gänge"
         else:
             verteilt = gefordert
 

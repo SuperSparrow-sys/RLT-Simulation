@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from app import create_app
-from core import anlagen, bericht, database, ergebnisse, solver
+from core import anlagen, bericht, database, ergebnisse, pdf as pdfschreiber, solver, zeichnung
 from core.vorlagen import ax_sim_2_1
 from core.wetter import speicher
 
@@ -312,3 +312,124 @@ def test_route_pdf_dateiname_ohne_sonderzeichen(app):
     assert antwort.status_code == 200
     dateiname = re.search(r'filename="([^"]+)"', antwort.headers["Content-Disposition"]).group(1)
     assert '"' not in dateiname and "/" not in dateiname
+
+
+# ---------------------------------------------------------------------------
+# core.bericht._wetter_kopfzeile() - Ort/Jahr nicht doppelt nennen, wenn der
+# (frei vergebene) Name eines Wetterdatensatzes sie schon enthaelt.
+# ---------------------------------------------------------------------------
+
+def test_wetter_kopfzeile_ohne_wetterdatensatz():
+    assert bericht._wetter_kopfzeile(None) == "–"
+    assert bericht._wetter_kopfzeile({}) == "–"
+
+
+def test_wetter_kopfzeile_ergaenzt_ort_und_jahr_wenn_sie_im_namen_fehlen():
+    zeile = bericht._wetter_kopfzeile(
+        {"name": "Testwetter", "ort": "Musterstadt", "jahr": 2024}
+    )
+    assert zeile == "Testwetter · Musterstadt · 2024"
+
+
+def test_wetter_kopfzeile_unterdrueckt_ort_und_jahr_wenn_der_name_sie_schon_traegt():
+    """Regressionstest: 'Dresden 2023' als Name plus Ort 'Dresden' und Jahr
+    2023 ergab vorher 'Dresden 2023 · Dresden · 2023' - dieselbe Angabe
+    dreifach."""
+    zeile = bericht._wetter_kopfzeile({"name": "Dresden 2023", "ort": "Dresden", "jahr": 2023})
+    assert zeile == "Dresden 2023"
+
+
+def test_wetter_kopfzeile_ergaenzt_nur_den_fehlenden_teil():
+    zeile = bericht._wetter_kopfzeile({"name": "Dresden 2023", "ort": "Leipzig", "jahr": 2023})
+    assert zeile == "Dresden 2023 · Leipzig"
+
+
+def test_daten_fuer_liefert_wetter_kopfzeile(app):
+    _anlage_id, simulation_id = _lauf_speichern(app)
+    with app.app_context():
+        daten = bericht.daten_fuer(simulation_id)
+    # _wetter_anlegen() legt einen Namen an, der Ort/Jahr nicht enthaelt -
+    # beides muss also in der Kopfzeile ergaenzt werden.
+    assert daten["wetter_kopfzeile"] == "Testwetter · Musterstadt · 2024"
+
+
+# ---------------------------------------------------------------------------
+# _Schreiber.zwischentitel()/ueberschrift() - eine Ueberschrift darf nicht
+# ohne das erste Stueck ihres Inhalts am Seitenende stehen.
+# ---------------------------------------------------------------------------
+
+def _schreiber_bei_y(y):
+    """Ein frischer _Schreiber mit direkt gesetztem Fuellstand 'y' - praeziser
+    als ihn ueber absatz()-Aufrufe anzunaehern, deren Zeilenhoehe die exakte
+    Position sonst vom Zufall der letzten Restzeile abhaengig macht."""
+    dokument = pdfschreiber.PDF()
+    schreiber = bericht._Schreiber(dokument, "Testkopf")
+    schreiber.y = y
+    return schreiber
+
+
+# Bei dieser y-Position passt eine Ueberschrift allein noch auf die Seite
+# (y + Ueberschrifthoehe <= unterer Rand), eine Ueberschrift plus ein
+# Diagramm (oder die Vorgabe-mindest_folgehoehe) aber nicht mehr - genau der
+# Grenzfall, an dem eine Ueberschrift ohne ihren Inhalt verwaisen kann.
+_Y_KNAPP_VOR_SEITENENDE = 700
+
+
+def test_zwischentitel_haelt_ueberschrift_mit_erstem_diagramm_zusammen():
+    """Regressionstest fuer den gemeldeten Befund: 'Diagramme' stand allein
+    am Seitenende, das erste Diagramm kam erst auf der naechsten Seite."""
+    schreiber = _schreiber_bei_y(_Y_KNAPP_VOR_SEITENENDE)
+    leinwand = zeichnung.Leinwand(200, 180)
+    schreiber.zwischentitel("Diagramme", mindest_folgehoehe=leinwand.hoehe + 14)
+    seite_der_ueberschrift = schreiber.seite
+    schreiber.diagramm(leinwand)
+    assert schreiber.seite is seite_der_ueberschrift, (
+        "Ueberschrift und ihr erstes Diagramm muessen auf derselben Seite landen"
+    )
+
+
+def test_zwischentitel_ohne_reservierung_laesst_die_ueberschrift_verwaisen():
+    """Gegenprobe: OHNE mindest_folgehoehe (der Zustand vor dem Fix) bricht
+    die Seite tatsaechlich zwischen Ueberschrift und Inhalt um - das belegt,
+    dass der obige Test die Reservierung wirklich prueft und nicht zufaellig
+    gruen ist."""
+    schreiber = _schreiber_bei_y(_Y_KNAPP_VOR_SEITENENDE)
+    schreiber.zwischentitel("Diagramme", mindest_folgehoehe=0)
+    seite_der_ueberschrift = schreiber.seite
+    leinwand = zeichnung.Leinwand(200, 180)
+    schreiber.diagramm(leinwand)
+    assert schreiber.seite is not seite_der_ueberschrift
+
+
+def test_zwischentitel_vorgabewert_haelt_ueberschrift_mit_einem_absatz_zusammen():
+    """Ohne ausdruecklich angegebene mindest_folgehoehe (z.B. vor 'Warnungen')
+    muss der Vorgabewert (18pt) trotzdem mindestens einen Absatz danach
+    sichern. y=745 liegt genau in dem Fenster, in dem eine Ueberschrift ALLEIN
+    noch auf die Seite passt (y + 27,5 <= 779,89), Ueberschrift PLUS
+    Vorgabewert (y + 45,5) aber nicht mehr - nur die Reservierung verhindert
+    hier den Seitenwechsel zwischen Ueberschrift und Absatz."""
+    schreiber = _schreiber_bei_y(745)
+    schreiber.zwischentitel("Warnungen")
+    seite_der_ueberschrift = schreiber.seite
+    schreiber.absatz("Alle Stunden konvergiert.")
+    assert schreiber.seite is seite_der_ueberschrift
+
+
+def test_baue_pdf_diagramme_ueberschrift_steht_mit_diagramm_auf_derselben_seite(app):
+    """Ende-zu-Ende-Variante des Regressionstests: im tatsaechlich erzeugten
+    Bericht darf zwischen der Textzeile 'Diagramme' und dem Beginn des ersten
+    Diagramms kein Seitenwechsel liegen."""
+    _anlage_id, simulation_id = _lauf_speichern(app, anzahl_stunden=48)
+    with app.app_context():
+        daten = bericht.daten_fuer(simulation_id)
+        # Wie bei _Y_KNAPP_VOR_SEITENENDE: eine y-Position, an der eine
+        # Ueberschrift allein noch passt, mitsamt einem Diagramm aber nicht.
+        schreiber = _schreiber_bei_y(_Y_KNAPP_VOR_SEITENENDE)
+        diagramme = daten["diagramme"]
+        erstes_diagramm = diagramme["monat"] or diagramme["dauerlinie"]
+        assert erstes_diagramm is not None
+        schreiber.zwischentitel("Diagramme", mindest_folgehoehe=erstes_diagramm.hoehe + 14)
+        seite_der_ueberschrift = schreiber.seite
+        schreiber.diagramm(diagramme["monat"])
+        schreiber.diagramm(diagramme["dauerlinie"])
+    assert schreiber.seite is seite_der_ueberschrift

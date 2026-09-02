@@ -60,12 +60,13 @@ def daten_fuer(simulation_id):
     if sim["status"] not in STATUS_MIT_ERGEBNIS:
         raise BerichtNichtVerfuegbar(
             f"Lauf {simulation_id} ist noch nicht abgeschlossen (Status "
-            f"'{sim['status']}') - der Bericht braucht ein Ergebnis."
+            f"'{sim['status']}') – der Bericht braucht ein Ergebnis."
         )
 
     anlage = anlagen.anlage_kopf(sim["anlage_id"])
     wetter = speicher.datensatz(sim["wetterdatensatz_id"])
     graph = anlagen.lade_graph(sim["anlage_id"])
+    wetter_kopfzeile = _wetter_kopfzeile(wetter)
 
     bilanz = ergebnisse.lade_bilanz(simulation_id)
     bilanz_summe = sum(z["kosten"] for z in bilanz)
@@ -81,6 +82,7 @@ def daten_fuer(simulation_id):
         "sim": sim,
         "stunden_gerechnet": sim["gerechnete_stunden"],
         "status_text": STATUS_LABEL.get(sim["status"], sim["status"]),
+        "wetter_kopfzeile": wetter_kopfzeile,
         "bilanz": [
             {**z, "label": BILANZ_LABEL.get(z["groesse"], z["groesse"])}
             for z in bilanz
@@ -92,6 +94,26 @@ def daten_fuer(simulation_id):
         "diagramme": diagramme,
         "erzeugt_am": datetime.now(),
     }
+
+
+def _wetter_kopfzeile(wetter):
+    """Die eine Kopfzeile 'Name · Ort · Jahr' - ohne Ort/Jahr zu wiederholen,
+    wenn der (frei vergebene) Name sie schon enthaelt, z.B. 'Dresden 2023'.
+    Sonst stuende dort 'Dresden 2023 · Dresden · 2023' - dieselbe Angabe
+    dreifach, nur weil core.wetter.speicher Name, Ort und Jahr getrennt
+    fuehrt (siehe core/database.py, Tabelle wetterdatensatz)."""
+    if not wetter:
+        return "–"
+    name = wetter.get("name") or "–"
+    name_klein = name.lower()
+    teile = [name]
+    ort = wetter.get("ort")
+    if ort and ort.lower() not in name_klein:
+        teile.append(ort)
+    jahr = wetter.get("jahr")
+    if jahr and str(int(jahr)) not in name:
+        teile.append(str(int(jahr)))
+    return " · ".join(teile)
 
 
 def format_zahl(wert, nachkommastellen=2):
@@ -329,14 +351,27 @@ class _Schreiber:
         if self.y + hoehe > pdfschreiber.SEITE_A4_HOEHE - _RAND - 20:
             self._neue_seite()
 
-    def ueberschrift(self, text, groesse=15, abstand_davor=6, abstand_danach=14):
-        self.platz_sichern(groesse + abstand_davor + abstand_danach)
+    def ueberschrift(self, text, groesse=15, abstand_davor=6, abstand_danach=14,
+                      mindest_folgehoehe=0):
+        """'mindest_folgehoehe' ist die Regel gegen eine Ueberschrift allein am
+        Seitenende (siehe zwischentitel() fuer die Begruendung): reserviert
+        zusammen mit der Ueberschrift selbst, sonst bricht die Seite genau
+        zwischen Ueberschrift und ihrem ersten Inhalt um."""
+        self.platz_sichern(groesse + abstand_davor + abstand_danach + mindest_folgehoehe)
         self.y += abstand_davor
         self.seite.text(_RAND, self.y + groesse * 0.8, text, groesse=groesse, fett=True)
         self.y += groesse + abstand_danach
 
-    def zwischentitel(self, text, groesse=11.5):
-        self.platz_sichern(groesse + 16)
+    def zwischentitel(self, text, groesse=11.5, mindest_folgehoehe=18):
+        """Eine Ueberschrift ohne das erste Stueck ihres Inhalts darunter gehoert
+        nicht ans Seitenende - 'mindest_folgehoehe' reserviert darum neben der
+        Ueberschrift selbst auch gleich die Hoehe dessen, was direkt folgt
+        (der Aufrufer kennt sie: eine Tabelle, ein Diagramm, ein Absatz). Der
+        Vorgabewert von 18pt passt fuer eine Ueberschrift vor Fliesstext oder
+        einer Liste (siehe absatz()/liste() - eine Zeile plus Abstand); vor
+        einem Diagramm oder einer Tabelle gibt der Aufrufer die tatsaechliche
+        Hoehe mit."""
+        self.platz_sichern(groesse + 16 + mindest_folgehoehe)
         self.y += 10
         self.seite.text(_RAND, self.y + groesse * 0.8, text, groesse=groesse, fett=True)
         self.y += groesse + 6
@@ -410,12 +445,9 @@ def baue_pdf(daten) -> bytes:
     schreiber = _Schreiber(dokument, kopftitel)
 
     schreiber.ueberschrift(f"Ergebnisbericht – {daten['anlage']['name']}", groesse=17)
-    wetter = daten["wetter"] or {}
     kopfzeilen = [
         f"Projekt: {daten['anlage']['projekt_name']}",
-        f"Wetterdatensatz: {wetter.get('name', '–')}"
-        + (f" · {wetter['ort']}" if wetter.get("ort") else "")
-        + (f" · {int(wetter['jahr'])}" if wetter.get("jahr") else ""),
+        f"Wetterdatensatz: {daten['wetter_kopfzeile']}",
         f"Lauf gestartet: {daten['sim']['gestartet_am']} · "
         f"{daten['status_text']} · {daten['stunden_gerechnet']} Stunden gerechnet "
         f"(Stunde {daten['sim']['von_stunde']}–{daten['sim']['bis_stunde']})",
@@ -424,7 +456,9 @@ def baue_pdf(daten) -> bytes:
     for zeile in kopfzeilen:
         schreiber.absatz(zeile, groesse=9.5, farbe=zeichnung.FARBE_TEXT_SCHWACH)
 
-    schreiber.zwischentitel("Jahresbilanz")
+    # 32pt: Tabellenkopf + erste Zeile (siehe tabelle()) - die Ueberschrift
+    # soll nie ohne mindestens eine Bilanzzeile am Seitenende stehen.
+    schreiber.zwischentitel("Jahresbilanz", mindest_folgehoehe=32)
     spalten = [
         ("Größe", 150, "links"), ("Menge", 90, "rechts"), ("Einheit", 55, "links"),
         ("Preis", 90, "rechts"), ("Kosten", 90, "rechts"),
@@ -462,14 +496,22 @@ def baue_pdf(daten) -> bytes:
         ])
 
     diagramme = daten["diagramme"]
-    if diagramme["monat"] or diagramme["dauerlinie"]:
-        schreiber.zwischentitel("Diagramme")
+    erstes_diagramm = diagramme["monat"] or diagramme["dauerlinie"]
+    if erstes_diagramm is not None:
+        # Dieselbe Hoehe, die diagramm() gleich selbst fuer das erste
+        # Diagramm reservieren wird (Leinwand plus Abstand) - die
+        # Ueberschrift soll nicht ohne ihr erstes Diagramm am Seitenende
+        # stehen (siehe zwischentitel()).
+        schreiber.zwischentitel("Diagramme", mindest_folgehoehe=erstes_diagramm.hoehe + 14)
         schreiber.diagramm(diagramme["monat"])
         schreiber.diagramm(diagramme["dauerlinie"])
     for eintrag in diagramme["datenlogger"]:
         schreiber.diagramm(eintrag["leinwand"])
 
-    schreiber.zwischentitel("Die Anlage")
+    # 14pt: dieselbe Hoehe, die je Karte unten reserviert wird (Name-/Typ-
+    # Zeile) - die Ueberschrift soll nicht ohne die erste Karte am
+    # Seitenende stehen.
+    schreiber.zwischentitel("Die Anlage", mindest_folgehoehe=14)
     for karte in daten["karten"]:
         schreiber.platz_sichern(14)
         schreiber.seite.text(_RAND, schreiber.y + 9, karte["name"], groesse=9.5, fett=True)

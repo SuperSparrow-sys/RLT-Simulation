@@ -27,7 +27,7 @@ def test_verteiler_kuerzt_proportional_bei_unterdeckung():
     aus, _ = verteiler.berechne(ein, p, {})
     assert aus["luft_aus_1"].V == pytest.approx(4000.0)
     assert aus["luft_aus_2"].V == pytest.approx(2000.0)
-    assert aus["warnung"] == "Volumenstrom reicht nicht fuer alle Gaenge"
+    assert aus["warnung"] == "Volumenstrom reicht nicht für alle Gänge"
 
 
 def test_verteiler_nutzt_anteile_wenn_kein_bedarf_gemeldet_wird():

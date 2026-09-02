@@ -94,7 +94,7 @@ def lese_datei(pfad, jahr=None):
     elif endung == ".csv":
         zeilen = _zeilen_aus_csv(pfad)
     else:
-        raise ValueError(f"Format '{endung}' wird nicht unterstuetzt")
+        raise ValueError(f"Format '{endung}' wird nicht unterstützt")
 
     stunden = []
     for zeile in zeilen:

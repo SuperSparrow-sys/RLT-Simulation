@@ -60,7 +60,7 @@ class Kuehler(Baustein):
 
         dp = druckverlust(luft.V, p["V_nenn"], p["dp_nenn"])
 
-        warnung = "Kuehlleistung zu niedrig" if QK > p["QK_nenn"] else ""
+        warnung = "Kühlleistung zu niedrig" if QK > p["QK_nenn"] else ""
         # Die Oberflaechentemperatur T_O liegt WAERMER als die Eintrittsluft,
         # wenn diese schon kaelter ist als das Kaltwasser selbst (T_ein <
         # T_KW_mittel) - derselbe Grenzfall wie in der Excel (Anlage!T3),
@@ -72,9 +72,9 @@ class Kuehler(Baustein):
         # diesem Betriebszustand gar nicht erst ansteuern.
         if u > 0.0 and luft.T < p["T_KW_mittel"]:
             zusatz = (
-                "Kuehler ausserhalb seines Einsatzbereichs angesteuert: "
-                "Eintrittsluft ist kaelter als das Kaltwasser - er waermt "
-                "statt zu kuehlen"
+                "Kühler außerhalb seines Einsatzbereichs angesteuert: "
+                "Eintrittsluft ist kälter als das Kaltwasser – er wärmt "
+                "statt zu kühlen"
             )
             warnung = f"{warnung}; {zusatz}" if warnung else zusatz
 

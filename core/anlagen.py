@@ -234,7 +234,7 @@ def pfeil_anlegen(anlage_id, von_karte_id, nach_karte_id):
     for karte in (von, nach):
         if karte.anlage_id != anlage_id:
             raise ValueError(
-                f"Die Karte '{karte.name}' gehoert nicht zu dieser Anlage"
+                f"Die Karte '{karte.name}' gehört nicht zu dieser Anlage"
             )
 
     belegt = _belegte_ports(anlage_id)
@@ -344,15 +344,15 @@ def verbindung_anlegen(anlage_id, von_port_id, nach_port_id):
             raise KeyError(f"Anschluss {port_id} gibt es nicht")
         if zeile["anlage_id"] != anlage_id:
             raise ValueError(
-                f"Der Anschluss '{zeile['schluessel']}' gehoert nicht zu dieser Anlage"
+                f"Der Anschluss '{zeile['schluessel']}' gehört nicht zu dieser Anlage"
             )
         ports[port_id] = zeile
 
     von, nach = ports[von_port_id], ports[nach_port_id]
     if von["richtung"] != "aus" or nach["richtung"] != "ein":
-        raise ValueError("Ein Pfeil laeuft von einem Ausgang zu einem Eingang")
+        raise ValueError("Ein Pfeil läuft von einem Ausgang zu einem Eingang")
     if von["art"] != nach["art"]:
-        raise ValueError("Luft laesst sich nicht mit einem Signal verbinden")
+        raise ValueError("Luft lässt sich nicht mit einem Signal verbinden")
 
     belegt = _belegte_ports(anlage_id)
     if nach_port_id in belegt:
@@ -365,8 +365,8 @@ def verbindung_anlegen(anlage_id, von_port_id, nach_port_id):
     # beliebig viele Verbraucher speisen.
     if von["art"] == "luft" and von_port_id in belegt:
         raise ValueError(
-            f"Der Luftausgang '{von['schluessel']}' fuehrt schon woanders hin - "
-            "fuer eine Verzweigung gibt es den Verteiler"
+            f"Der Luftausgang '{von['schluessel']}' führt schon woanders hin – "
+            "für eine Verzweigung gibt es den Verteiler"
         )
 
     try:

@@ -94,8 +94,8 @@ def test_baustein_warnungen_werden_nach_karte_und_wortlaut_gruppiert(app):
         graph = anlagen.lade_graph(anlage)
         lauf = solver.Lauf(
             stunden=[
-                {1: {"warnung": "Kuehlleistung zu niedrig"}},
-                {1: {"warnung": "Kuehlleistung zu niedrig"}, 2: {"warnung": "Uebersaettigung"}},
+                {1: {"warnung": "Kühlleistung zu niedrig"}},
+                {1: {"warnung": "Kühlleistung zu niedrig"}, 2: {"warnung": "Übersättigung"}},
                 {1: {"warnung": ""}},
                 {1: {"T_aus": 20.0}},
             ],
@@ -107,9 +107,9 @@ def test_baustein_warnungen_werden_nach_karte_und_wortlaut_gruppiert(app):
         liste = ergebnisse.lade_baustein_warnungen(sim)
 
     liste = {(w["karte_id"], w["text"]): w for w in liste}
-    assert liste[(1, "Kuehlleistung zu niedrig")]["anzahl"] == 2
-    assert liste[(1, "Kuehlleistung zu niedrig")]["beispiele"] == [1, 2]
-    assert liste[(2, "Uebersaettigung")]["anzahl"] == 1
+    assert liste[(1, "Kühlleistung zu niedrig")]["anzahl"] == 2
+    assert liste[(1, "Kühlleistung zu niedrig")]["beispiele"] == [1, 2]
+    assert liste[(2, "Übersättigung")]["anzahl"] == 1
 
 
 def test_baustein_warnungen_leer_wenn_keine_auftreten(app):

@@ -68,4 +68,4 @@ def test_kuehler_meldet_zu_niedrige_leistung():
     p = parameter(V_nenn=8200.0, dp_nenn=240.0, QK_nenn=5.0, T_KW_mittel=6.0)
     ein = {"luft_ein": Luft(V=8200.0, T=30.0, x=12.0), "stellgroesse": 100.0}
     aus, _ = Kuehler().berechne(ein, p, {})
-    assert aus["warnung"] == "Kuehlleistung zu niedrig"
+    assert aus["warnung"] == "Kühlleistung zu niedrig"

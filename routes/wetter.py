@@ -97,7 +97,7 @@ def hochladen():
         # lesen und keine Fehlerseite.
         current_app.logger.exception("Wetterdatei nicht lesbar: %s", datei.filename)
         return jsonify({
-            "fehler": "Die Datei liess sich nicht lesen. Erwartet wird eine "
+            "fehler": "Die Datei ließ sich nicht lesen. Erwartet wird eine "
                       "TRY-Datei im Format des Blattes 'Wetterdaten'."
         }), 400
     finally:

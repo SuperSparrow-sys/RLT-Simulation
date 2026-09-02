@@ -169,9 +169,9 @@ from core import anlagen
 
 NAME = "Testanlage Technikhalle"
 BESCHREIBUNG = (
-    "Ein Luftgeraet mit Umluft-Mischkammer statt WRG, Dampfbefeuchtung, "
+    "Ein Luftgerät mit Umluft-Mischkammer statt WRG, Dampfbefeuchtung, "
     "bauphysikalischem Raum mit Wandspeicher, Kaskaden-/Sequenzregelung und "
-    "eigenstaendiger Verbraucherbilanz - deckt ab, was AX_SIM 2.1 auslaesst"
+    "eigenständiger Verbraucherbilanz – deckt ab, was AX_SIM 2.1 auslässt"
 )
 
 
