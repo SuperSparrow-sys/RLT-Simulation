@@ -68,8 +68,20 @@
 }
 /* Der Haken ist ein SVG, kein Schriftzeichen (siehe start.js, hakenSymbol()).
    Er erbt seine Farbe ueber currentColor von der Nummernflaeche und bekommt
-   dieselbe Groesse, die die Ziffer vorher hatte. */
-.einstieg-haken { width: 15px; height: 15px; display: block; }
+   dieselbe Groesse, die die Ziffer vorher hatte. Strichangaben stehen hier
+   und nicht in der Datei - dieselbe Bauweise wie bei allen uebrigen
+   Bedienzeichen (.knopf-symbol, .aufklapp-zeichen in style.css): die Datei
+   traegt nur die Form, das Aussehen kommt aus dem CSS. */
+.einstieg-haken {
+  width: 15px;
+  height: 15px;
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 
 .einstieg-schritt-erledigt .einstieg-nummer {
   border-color: var(--energie);
