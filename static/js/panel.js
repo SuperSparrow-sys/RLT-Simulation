@@ -47,9 +47,15 @@ function uhrzeitEinlesen(text) {
   return ((stunden || 0) * 60 + (minuten || 0)) / (24 * 60);
 }
 
-// Anzeige-Rundung. Der Rueckgabewert ist ein reiner String fuers Feld - der
-// tatsaechliche, ungerundete Wert lebt weiter in karte.parameter[...] und wird
-// nur beim Fokussieren wieder eingeblendet (siehe zeileZahl()).
+// Anzeige-Rundung fuer <input type="number">. Der Rueckgabewert ist ein reiner
+// String fuers Feld - der tatsaechliche, ungerundete Wert lebt weiter in
+// karte.parameter[...] und wird nur beim Fokussieren wieder eingeblendet
+// (siehe zeileZahl()).
+// Bewusst NICHT Zahlen.fest(): der Wert eines Zahlenfeldes muss ein Punkt-
+// Dezimaltrenner sein, sonst weist der Browser ihn als ungueltig zurueck. Die
+// deutsche Schreibweise mit Komma setzt er selbst, aus dem lang-Attribut der
+// Seite. Fuer Zahlen, die als TEXT auf der Seite landen, ist Zahlen.fest()
+// zustaendig (static/js/zahlen.js).
 function formatZahl(wert, dezimalstellen) {
   const zahl = Number(wert);
   if (!Number.isFinite(zahl)) return "0";
@@ -373,7 +379,7 @@ const Panel = {
     anzeige.className = "panel-ohne-wirkung";
     const zahl = Number(wert);
     anzeige.textContent = Number.isFinite(zahl)
-      ? zahl.toFixed(feld.dezimalstellen ?? 1)
+      ? Zahlen.fest(zahl, feld.dezimalstellen ?? 1)
       : String(wert);
     zeile.appendChild(anzeige);
 
@@ -1098,12 +1104,12 @@ const Panel = {
       if (!ziel) continue;
       const werte = werteJeKarte[karte.id] || {};
       const teile = [];
-      if ("T_aus" in werte) teile.push(`${werte.T_aus.toFixed(1)} °C`);
-      if ("F_aus" in werte) teile.push(`${werte.F_aus.toFixed(1)} g/kg`);
-      if ("T_Raum" in werte) teile.push(`Raum ${werte.T_Raum.toFixed(1)} °C`);
-      if ("QH" in werte) teile.push(`${werte.QH.toFixed(1)} kW`);
-      if ("QK" in werte) teile.push(`${werte.QK.toFixed(1)} kW`);
-      if ("PE" in werte) teile.push(`${werte.PE.toFixed(2)} kW`);
+      if ("T_aus" in werte) teile.push(`${Zahlen.fest(werte.T_aus, 1)} °C`);
+      if ("F_aus" in werte) teile.push(`${Zahlen.fest(werte.F_aus, 1)} g/kg`);
+      if ("T_Raum" in werte) teile.push(`Raum ${Zahlen.fest(werte.T_Raum, 1)} °C`);
+      if ("QH" in werte) teile.push(`${Zahlen.fest(werte.QH, 1)} kW`);
+      if ("QK" in werte) teile.push(`${Zahlen.fest(werte.QK, 1)} kW`);
+      if ("PE" in werte) teile.push(`${Zahlen.fest(werte.PE, 2)} kW`);
       ziel.textContent = teile.join("  ·  ");
     }
   },

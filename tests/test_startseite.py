@@ -193,3 +193,34 @@ def test_start_js_berichtlink_haengt_hinten_an_nicht_vorne():
     funktion = funktion[: funktion.index("\n  },")]
     assert "aktionen.appendChild(berichtLink)" in funktion
     assert "insertBefore" not in funktion
+
+
+def test_zahlen_im_text_stehen_in_deutscher_schreibweise():
+    """Eine Zahl, die als Text auf der Seite landet, trägt ein Komma.
+
+    Der Bericht (core/bericht.py), die Ausgabe (core/ausgabe.py) und die
+    Eingabefelder taten das immer schon - letztere, weil der Browser die
+    Schreibweise aus lang="de" übernimmt. Die per JavaScript geschriebenen
+    Texte daneben zeigten dagegen einen Punkt: „Letzter Lauf: 136.28 EUR"
+    neben einem Feld mit „726,0". Seitdem gibt es dafür eine Stelle
+    (static/js/zahlen.js, Zahlen.fest).
+
+    Zwei Ausnahmen bleiben und sind im Code begründet: der Wert eines
+    <input type="number"> (mit Komma für den Browser ungültig) und eine
+    CSS-Länge. Beide stehen deshalb hier namentlich.
+    """
+    js_ordner = Path(__file__).resolve().parent.parent / "static" / "js"
+    erlaubt = {
+        ("zahlen.js", "return zahl.toFixed"),
+        ("panel.js", "return zahl.toFixed"),
+        ("simulation.js", "style.width"),
+    }
+    verstoesse = []
+    for datei in sorted(js_ordner.glob("*.js")):
+        for nummer, zeile in enumerate(datei.read_text(encoding="utf-8").splitlines(), 1):
+            if "toFixed" not in zeile or zeile.lstrip().startswith("//"):
+                continue
+            if any(datei.name == name and teil in zeile for name, teil in erlaubt):
+                continue
+            verstoesse.append(f"{datei.name}:{nummer}: {zeile.strip()}")
+    assert not verstoesse, "\n".join(verstoesse)

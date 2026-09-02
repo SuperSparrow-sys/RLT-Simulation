@@ -260,7 +260,7 @@ const Simulation = {
         const laeuftNoch = l.status === "laeuft";
         const rechts = laeuftNoch
           ? `<span class="zahl frueherer-lauf-laeuft">läuft …</span>`
-          : `<span class="zahl">${l.kosten_gesamt.toFixed(2)} EUR</span>`;
+          : `<span class="zahl">${Zahlen.fest(l.kosten_gesamt, 2)} EUR</span>`;
         // Stundenwerte gibt es nur fuer einen Lauf mit gespeicherter
         // Zeitreihe (core.ausgabe.STATUS_MIT_ERGEBNIS) - 'laeuft' und
         // 'fehler' haben keine.
@@ -415,6 +415,8 @@ const Simulation = {
   _aktualisiereFortschrittsanzeige(fertig, gesamt) {
     const anteil = gesamt ? fertig / gesamt : 0;
     const balken = document.getElementById("fortschritt-balken");
+    // toFixed und nicht Zahlen.fest(): das hier ist eine CSS-Laenge, kein
+    // angezeigter Text - "12,3%" waere fuer den Browser ungueltig.
     if (balken) balken.style.width = `${(anteil * 100).toFixed(1)}%`;
     const text = document.getElementById("fortschritt-text");
     if (text) {
@@ -499,10 +501,10 @@ const Simulation = {
       .map(
         (z) => `<tr>
           <td>${GROESSEN[z.groesse] || z.groesse}</td>
-          <td class="zahl">${z.menge.toFixed(3)}</td>
+          <td class="zahl">${Zahlen.fest(z.menge, 3)}</td>
           <td>${z.einheit}</td>
-          <td class="zahl">${z.preis.toFixed(2)}</td>
-          <td class="zahl">${z.kosten.toFixed(2)} EUR</td>
+          <td class="zahl">${Zahlen.fest(z.preis, 2)}</td>
+          <td class="zahl">${Zahlen.fest(z.kosten, 2)} EUR</td>
         </tr>`
       )
       .join("");
@@ -525,7 +527,7 @@ const Simulation = {
                      <th class="zahl">Preis</th><th class="zahl">Kosten</th></tr></thead>
           <tbody>${zeilen}</tbody>
           <tfoot><tr><td colspan="4">Summe</td>
-                     <td class="zahl">${summe.toFixed(2)} EUR</td></tr></tfoot>
+                     <td class="zahl">${Zahlen.fest(summe, 2)} EUR</td></tr></tfoot>
         </table>
         ${warnhinweisHtml}
         ${bausteinWarnhinweisHtml}
@@ -588,7 +590,7 @@ const Simulation = {
     const zeilen = [];
     for (let stunde = 0; stunde < stundenzahl; stunde++) {
       const zellen = spalten
-        .map((s) => `<td>${s.werte[stunde].toFixed(2)}</td>`)
+        .map((s) => `<td>${Zahlen.fest(s.werte[stunde], 2)}</td>`)
         .join("");
       zeilen.push(`<tr><td>${stunde + 1}</td>${zellen}</tr>`);
     }
@@ -1030,11 +1032,11 @@ const Vergleich = {
               const klasse =
                 w.abweichung >= 0 ? "vergleich-abweichung-plus" : "vergleich-abweichung-minus";
               const vorzeichen = w.abweichung >= 0 ? "+" : "";
-              abweichungHtml = ` <span class="vergleich-abweichung ${klasse}">${vorzeichen}${(
-                w.abweichung * 100
-              ).toFixed(1)} %</span>`;
+              abweichungHtml = ` <span class="vergleich-abweichung ${klasse}">${vorzeichen}${Zahlen.fest(
+                w.abweichung * 100, 1
+              )} %</span>`;
             }
-            return `<td class="zahl">${w.menge.toFixed(3)}${abweichungHtml}</td>`;
+            return `<td class="zahl">${Zahlen.fest(w.menge, 3)}${abweichungHtml}</td>`;
           })
           .join("");
         const label = `${GROESSEN[zeile.groesse] || zeile.groesse} [${zeile.einheit}]`;
@@ -1044,7 +1046,7 @@ const Vergleich = {
     const kostenZeile = daten.laeufe
       .map(
         (l) =>
-          `<td class="zahl">${l.hat_ergebnis ? `${l.kosten_gesamt.toFixed(2)} EUR` : "–"}</td>`
+          `<td class="zahl">${l.hat_ergebnis ? `${Zahlen.fest(l.kosten_gesamt, 2)} EUR` : "–"}</td>`
       )
       .join("");
     const warnZeile = daten.laeufe

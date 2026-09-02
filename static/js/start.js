@@ -88,7 +88,7 @@ function textEingabeDialog(titel, vorgabe) {
 }
 
 const BADGE_TEXT = {
-  fertig: (l) => `Letzter Lauf: ${l.kosten_gesamt.toFixed(2)} EUR`,
+  fertig: (l) => `Letzter Lauf: ${Zahlen.fest(l.kosten_gesamt, 2)} EUR`,
   abgebrochen: () => "Letzter Lauf abgebrochen",
   fehler: () => "Letzter Lauf fehlgeschlagen",
 };
