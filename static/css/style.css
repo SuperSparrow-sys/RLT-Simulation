@@ -415,7 +415,41 @@ a.knopf-haupt { display: inline-block; text-decoration: none; }
 .legende-muster { width: 32px; height: 8px; flex-shrink: 0; overflow: visible; }
 
 /* ---------- Leinwand ---------- */
-#leinwand { flex: 1; background: var(--bg); touch-action: none; cursor: grab; }
+/* Kein flex:1 mehr auf dem SVG selbst - siehe Bericht: Safari berechnet
+   die tatsaechlich bemalte Flaeche eines SVG, dessen Groesse allein aus
+   einem Flex-Layout kommt, bekanntermassen abweichend von seinem
+   CSS-Kasten, alles darueber hinaus wird beschnitten (die senkrechte
+   Kante quer durch die Leinwand, vom Benutzer markiert).
+   .leinwand-flaeche traegt jetzt die festen Kanten (top: 52px = Hoehe von
+   .leiste, dieselbe Grundlage wie .leinwand-hinweis weiter unten) - ein
+   GEWOEHNLICHER <div>, kein "replaced element" wie ein SVG, spannt sich
+   damit korrekt zwischen den Kanten auf (siehe CSS 2.1, absolut
+   positionierte NICHT-ersetzte Elemente). #leinwand selbst braucht dann
+   nur noch width/height:100% eines damit bereits eindeutig bemessenen
+   Elternbehaelters - derselbe, bereits bewaehrte Aufbau wie
+   #minikarte/.minikarte-huelle weiter unten. Direkt am SVG selbst
+   positioniert (mit ODER ohne width/height="100%"-Attribut) wurde es in
+   beiden Faellen falsch hoch - ein SVG OHNE eigene Groesse ist ein
+   "replaced element": bei "auto" nutzt CSS dafuer die intrinsische
+   Groesse statt zwischen top und bottom aufzuspannen, und ein
+   width/height="100%"-Attribut daran loest sich gegen die volle Hoehe
+   des Elternrahmens auf, nicht gegen die um die Kopfleiste verkleinerte
+   Flaeche. */
+.leinwand-flaeche {
+  position: absolute;
+  top: 52px;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+#leinwand {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: var(--bg);
+  touch-action: none;
+  cursor: grab;
+}
 #leinwand.verbinde-aktiv { cursor: crosshair; }
 .karte-rahmen { fill: var(--surface); stroke: var(--border); stroke-width: 1; }
 .karte.gewaehlt .karte-rahmen { stroke: var(--blue); stroke-width: 2; }

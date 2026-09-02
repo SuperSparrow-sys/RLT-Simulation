@@ -561,3 +561,37 @@ def test_app_hoehe_reagiert_nur_auf_eine_deutliche_verkleinerung_nicht_waehrend_
     gestureend = gestureend[: gestureend.index("{ passive: false });")]
     assert "this._gestenAnker = null;" in gestureend
     assert "aktualisiereAppHoehe();" in gestureend
+
+
+def test_leinwand_svg_hat_eigenen_behaelter_statt_flex_auf_dem_svg_selbst(app):
+    """Safari berechnet die tatsaechlich bemalte Flaeche eines SVG, dessen
+    Groesse allein aus einem Flex-Layout kommt, bekanntermassen abweichend
+    von seinem CSS-Kasten (siehe Bericht: eine senkrechte Kante schnitt die
+    Leinwand mitten durch ab, vom Benutzer im Bild markiert). #leinwand
+    darf deshalb kein flex:1 mehr direkt tragen - ein <div>-Behaelter
+    (.leinwand-flaeche, kein "replaced element") spannt sich stattdessen
+    zwischen festen Kanten auf, das SVG bekommt darin nur noch
+    width/height:100% eines damit bereits eindeutig bemessenen Elternrahmens
+    - derselbe Aufbau wie bei #minikarte/.minikarte-huelle."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("Referenz")
+        anlage = ax_sim_2_1.baue(projekt, "AX_SIM 2.1")
+
+    klient = app.test_client()
+    html = klient.get(f"/anlage/{anlage}").get_data(as_text=True)
+    assert 'class="leinwand-flaeche"' in html
+    assert 'id="leinwand" width="100%" height="100%"' in html
+    assert 'id="minikarte" viewBox="0 0 168 108" width="168" height="108"' in html
+
+    css = klient.get("/static/css/style.css").get_data(as_text=True)
+    flaeche = css[css.index(".leinwand-flaeche {"):]
+    flaeche = flaeche[: flaeche.index("}") + 1]
+    assert "position: absolute;" in flaeche
+    assert "top: 52px;" in flaeche
+
+    leinwand_regel = css[css.index("#leinwand {"):]
+    leinwand_regel = leinwand_regel[: leinwand_regel.index("}") + 1]
+    assert "flex:" not in leinwand_regel
+    assert "position: absolute" not in leinwand_regel
+    assert "width: 100%;" in leinwand_regel
+    assert "height: 100%;" in leinwand_regel

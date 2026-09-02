@@ -87,12 +87,31 @@
 
         <button class="knopf-haupt" id="btn-simulieren">Simulieren</button>
       </header>
-      <svg id="leinwand">
-        <g id="welt">
-          <g id="pfeile"></g>
-          <g id="karten"></g>
-        </g>
-      </svg>
+      <!-- .leinwand-flaeche traegt die Kanten (top/right/bottom/left,
+           siehe style.css), #leinwand selbst nur noch width/height:100%
+           eines damit bereits fest bemessenen Elternbehaelters - genau
+           das "SVG in einen Behaelter legen und absolut auf dessen
+           Flaeche aufziehen" aus dem Bericht, und derselbe Aufbau wie
+           schon bei #minikarte/.minikarte-huelle weiter unten. NICHT
+           direkt am SVG selbst mit top/right/bottom/left positioniert:
+           erst probiert, dann per Nachbau widerlegt - ein SVG ist ein
+           "replaced element", bei "auto" nutzt CSS fuer dessen Hoehe dann
+           die intrinsische Groesse statt zwischen top und bottom
+           aufzuspannen, und mit einem width/height="100%"-Attribut
+           daran geklebt loest sich die Prozentangabe gegen die volle
+           Hoehe des Elternrahmens auf (ohne den Kopfleisten-Abzug) - in
+           beiden Faellen wurde das SVG dadurch falsch hoch. Ein
+           gewoehnlicher <div> als Behaelter "spannt" zwischen den Kanten
+           dagegen ganz normal auf (kein replaced element), das SVG
+           bekommt darin ein bereits eindeutiges, richtiges Mass. -->
+      <div class="leinwand-flaeche">
+        <svg id="leinwand" width="100%" height="100%">
+          <g id="welt">
+            <g id="pfeile"></g>
+            <g id="karten"></g>
+          </g>
+        </svg>
+      </div>
       <div class="leinwand-hinweis" id="leinwand-hinweis" hidden>
         <div class="leinwand-hinweis-kasten">
           <p><strong>Diese Anlage ist noch leer.</strong></p>
@@ -106,7 +125,11 @@
       </div>
       <div class="minikarte-huelle" id="minikarte-huelle" hidden
            title="Ausschnitt der ganzen Anlage - anklicken springt dorthin">
-        <svg id="minikarte" viewBox="0 0 168 108"></svg>
+        <!-- Dieselbe Absicherung wie bei #leinwand (siehe dort) - hier
+             steckt zwar bereits ein fest bemessener Elternbehaelter
+             (.minikarte-huelle, siehe style.css) dahinter, width/height
+             passend zum viewBox schaden trotzdem nicht. -->
+        <svg id="minikarte" viewBox="0 0 168 108" width="168" height="108"></svg>
       </div>
     </main>
 
