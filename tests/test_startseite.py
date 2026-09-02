@@ -83,6 +83,20 @@ def test_startseite_enthaelt_weiterhin_das_upload_formular(app):
     assert 'id="btn-wetter-hochladen"' in html
 
 
+def test_startseite_hat_einen_eingeklappten_lehrmaterial_behaelter(app):
+    """Beispielanlagen (core.lehrinhalte.beispielanlagen) sind Lehrmaterial,
+    kein Arbeitsergebnis des Benutzers (Task-Rueckmeldung) - eigenes,
+    serverseitig verstecktes <details>, das start.js erst einblendet, wenn
+    es tatsaechlich eine Beispielanlage gibt (siehe zeichneLehrmaterial())."""
+    klient = app.test_client()
+    html = klient.get("/").get_data(as_text=True)
+    start = html.index('id="start-lehrmaterial"')
+    tag_ende = html.index(">", start)
+    element_tag = html[max(0, start - 20) : tag_ende]
+    assert "hidden" in element_tag
+    assert 'id="start-lehrmaterial-inhalt"' in html
+
+
 def test_start_js_einstiegskasten_verschwindet_sobald_ein_projekt_existiert():
     """Der Kasten ist nur fuer den allerersten Besuch gedacht (Task, Befund
     1) - sobald ein Projekt existiert, beantworten die eigentlichen
@@ -90,7 +104,7 @@ def test_start_js_einstiegskasten_verschwindet_sobald_ein_projekt_existiert():
     dauerhafter Kasten waere nur noch Wiederholung."""
     funktion = START_JS[START_JS.index("zeichneEinstieg() {") :]
     funktion = funktion[: funktion.index("\n  },")]
-    assert "if (this.projekte.length) return;" in funktion
+    assert "if (this.eigeneProjekte().length) return;" in funktion
 
 
 def test_start_js_einstiegsschritte_stehen_in_der_richtigen_reihenfolge():
@@ -151,6 +165,23 @@ def test_start_js_berichtlink_nur_bei_laeufen_mit_ergebnis():
 
     assert js_werte == py_werte
     assert js_werte == ["fertig", "abgebrochen"]
+
+
+def test_start_js_einstiegskasten_zaehlt_nur_eigene_projekte():
+    """Ein Benutzer, der noch nie ein eigenes Projekt angelegt, aber schon
+    einmal eine Beispielanlage unter /bausteine geoeffnet hat, soll den
+    Einstiegskasten weiterhin sehen - das automatisch entstandene
+    "Bausteine"-Projekt zaehlt dafuer nicht als eigenes."""
+    funktion = START_JS[START_JS.index("zeichneEinstieg() {") :]
+    funktion = funktion[: funktion.index("\n  },")]
+    assert "this.eigeneProjekte().length" in funktion
+
+
+def test_start_js_lehrmaterial_bleibt_versteckt_ohne_beispielanlage():
+    funktion = START_JS[START_JS.index("async zeichneLehrmaterial() {") :]
+    funktion = funktion[: funktion.index("\n  },")]
+    assert "abschnitt.hidden = true" in funktion
+    assert "abschnitt.hidden = false" in funktion
 
 
 def test_start_js_berichtlink_haengt_hinten_an_nicht_vorne():

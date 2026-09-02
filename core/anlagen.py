@@ -8,6 +8,15 @@ from core.database import get_db
 
 lade_alle()
 
+# Name des Sammelprojekts fuer die Beispielanlagen aus dem Erklaerbereich
+# (core.lehrinhalte.beispielanlagen.NAME_PROJEKT) - hier dupliziert statt
+# importiert, um core.anlagen nicht von core.lehrinhalte abhaengig zu
+# machen (core.lehrinhalte.beispielanlagen importiert bereits core.anlagen;
+# ein Import in Gegenrichtung waere ein Zirkelbezug). Nur fuer die Markierung
+# in projekte() gebraucht, die die Startseite nutzt, um Lehrmaterial optisch
+# von den eigenen Projekten des Benutzers zu trennen.
+NAME_PROJEKT_LEHRMATERIAL = "Bausteine"
+
 
 # -- Projekte und Anlagen -------------------------------------------------
 
@@ -639,7 +648,8 @@ def projekte():
     return [
         {"id": z["id"], "name": z["name"], "beschreibung": z["beschreibung"],
          "anlagen": z["anlagen"], "simulationen": z["simulationen"],
-         "geaendert_am": z["geaendert_am"]}
+         "geaendert_am": z["geaendert_am"],
+         "ist_lehrmaterial": z["name"] == NAME_PROJEKT_LEHRMATERIAL}
         for z in db.execute(
             "SELECT p.*, "
             "       (SELECT COUNT(*) FROM anlage a WHERE a.projekt_id = p.id) "

@@ -20,6 +20,7 @@ anlagen.verbindung_anlegen() gezielt verbunden, genau wie in ax_sim_2_1.py.
 """
 
 from core import anlagen
+from core.bausteine import basis
 
 NAME_PROJEKT = "Bausteine"
 NOTIZ_PROJEKT = (
@@ -857,7 +858,47 @@ BAUPLAENE = {
 }
 
 
+def _erwarteter_name(kennung):
+    """Der Anlagenname, den BAUPLAENE[kennung] anlegen wuerde - ohne die
+    Funktion dafuer aufzurufen. Jede bau_<typ>()-Funktion benennt ihre
+    Anlage nach dem Kartentyp selbst (== core.bausteine.basis NAME dieses
+    Kartentyps; alle 34 Uebereinstimmungen sind bei der Einfuehrung dieser
+    Funktion einzeln nachgerechnet worden) - das reicht als stabiler
+    Wiedererkennungsschluessel, ohne dafuer eine eigene Spalte in der
+    Datenbank zu brauchen."""
+    for klasse in basis.alle():
+        if klasse.KENNUNG == kennung:
+            return klasse.NAME
+    return None
+
+
+def _bestehende_beispielanlage(projekt_id, kennung):
+    """Die id einer schon vorhandenen Beispielanlage fuer diesen Kartentyp
+    im Sammelprojekt, falls es sie gibt - sonst None."""
+    erwartet = _erwarteter_name(kennung)
+    if erwartet is None:
+        return None
+    for anlage in anlagen.anlagen_von(projekt_id):
+        if anlage["name"] == erwartet:
+            return anlage["id"]
+    return None
+
+
 def baue_beispiel(kennung, projekt_id):
+    """Legt die Beispielanlage fuer diesen Kartentyp an - oder gibt, falls
+    sie im Sammelprojekt schon existiert, deren id zurueck, statt eine
+    weitere anzulegen. Ohne dieses Wiederverwenden haeufte jedes erneute
+    Oeffnen desselben Beispiels (/bausteine, "Beispielanlage ansehen") eine
+    weitere, identisch benannte Anlage im Projekt "Bausteine" an - beim
+    Entwurf dieser Funktion lagen dort bereits neun Anlagen fuer sieben
+    Kartentypen, darunter "Anlagenbetrieb" und "Heizungspumpen" je zweimal.
+    Eine per Umbenennen veraenderte Anlage wird beim naechsten Aufruf nicht
+    mehr gefunden (ihr Name weicht dann vom erwarteten ab) und dann als
+    neue, wieder frische Beispielanlage angelegt - die umbenannte bleibt
+    unberuehrt liegen, kein stilles Ueberschreiben einer eigenen Aenderung."""
     if kennung not in BAUPLAENE:
         raise KeyError(f"Für den Kartentyp '{kennung}' gibt es keine Beispielanlage")
+    bestehende = _bestehende_beispielanlage(projekt_id, kennung)
+    if bestehende is not None:
+        return bestehende
     return BAUPLAENE[kennung](projekt_id)

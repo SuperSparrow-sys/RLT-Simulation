@@ -161,6 +161,43 @@
    nutzt .knopf-mini unveraendert; a.knopf-mini selbst (Entfernen der
    Unterstreichung) steht schon in style.css. */
 
+/* ---------- Beispielanlagen: eigener, eingeklappter Bereich ----------
+   Lehrmaterial, kein Arbeitsergebnis (Task-Rueckmeldung) - deshalb weder
+   zwischen den eigenen Projekten noch dauerhaft ausgeklappt. Gestrichelter
+   statt durchgezogener Rahmen (wie .leerhinweis-gross, style.css) haelt ihn
+   sichtbar zurueckhaltender als die Projektkarten, die er enthaelt (siehe
+   projektKarteElement() in start.js, unveraendert wiederverwendet). */
+.start-lehrmaterial {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+  padding: 4px 20px 4px;
+}
+.start-lehrmaterial[open] { padding-bottom: 20px; }
+.start-lehrmaterial-titel {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  padding: 12px 0;
+}
+.start-lehrmaterial-titel::-webkit-details-marker { display: none; }
+.start-lehrmaterial-titel::before {
+  content: "▾";
+  display: inline-block;
+  margin-right: 6px;
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+.start-lehrmaterial[open] .start-lehrmaterial-titel::before { content: "▴ "; }
+.start-lehrmaterial-titel:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+.start-lehrmaterial .abschnitt-hinweis { margin-top: 4px; }
+
 @media (max-width: 700px) {
   .einstieg-schritte { flex-direction: column; }
 }

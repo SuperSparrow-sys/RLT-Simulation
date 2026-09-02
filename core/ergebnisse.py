@@ -377,6 +377,18 @@ def lade_baustein_warnungen(simulation_id):
     return json.loads(zeile["baustein_warnungen"])
 
 
+def _anzahl_warnungen(zeile):
+    """Konvergenz- plus Baustein-Warnungen eines Laufs, in einer Zahl -
+    fuer eine Liste wie /api/anlagen/<id>/simulationen (Startseite,
+    Anlage-Karte), wo die vollen Warnungslisten selbst (lade_warnungen(),
+    lade_baustein_warnungen()) zu viel waeren: ein Lauf mit vielen
+    Konvergenzwarnungen soll dort nicht wie ein glatter Erfolg aussehen,
+    nur weil er als 'fertig' markiert ist."""
+    konvergenz = json.loads(zeile["warnungen"]) if zeile["warnungen"] else []
+    baustein = json.loads(zeile["baustein_warnungen"]) if zeile["baustein_warnungen"] else []
+    return len(konvergenz) + len(baustein)
+
+
 def simulationen_von(anlage_id):
     """Die Simulationslaeufe einer Anlage, juengster zuerst."""
     db = get_db()
@@ -399,6 +411,7 @@ def simulationen_von(anlage_id):
             # laufenden Lauf noch nicht vorhandenen) Bilanz wieder aufgreifen.
             "kennung": z["kennung"],
             "kosten_gesamt": z["kosten_gesamt"] or 0.0,
+            "anzahl_warnungen": _anzahl_warnungen(z),
         }
         for z in zeilen
     ]

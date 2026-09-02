@@ -43,12 +43,6 @@
 }
 .knopf-haupt-gefahr:hover { background: #b3261e; border-color: #b3261e; }
 
-/* flex-wrap: eine Anlage-Karte ist 184px breit (siehe .anlage-eintrag
-   unten) - "Umbenennen" und "Loeschen" passen knapp nebeneinander, ein
-   dritter Knopf ("Bericht", siehe static/js/start.js) nicht mehr. Ohne
-   Umbruch wuerde er aus der Karte heraus in die naechste hineinragen, statt
-   sauber in eine zweite Zeile zu rutschen. Bei der Projektkopfzeile (nur
-   zwei Knoepfe, viel Platz) bleibt eine Zeile, da wirkungslos. */
 .eintrag-aktionen { display: flex; flex-wrap: wrap; gap: 6px; flex-shrink: 0; }
 
 /* -- Projektkarte: Titel und Aktionen in einer Zeile -- */
@@ -60,16 +54,42 @@
 }
 .projekt-kopf-zeile h2 { flex: 1; min-width: 0; }
 
-/* -- Anlage-Karte: der Link bleibt unveraendert, darunter eine schmale
-   Aktionszeile mit eigenem Hintergrund statt im Link selbst -- */
-.anlage-eintrag { width: 184px; display: flex; flex-direction: column; gap: 4px; }
-.anlage-eintrag .anlage-karte { width: auto; }
-.anlage-eintrag-aktionen {
+/* -- Anlage-Karte: eine gemeinsame Huelle fuer Link und Aktionszeile --
+   Der Rahmen sass zuvor auf dem Link selbst (.anlage-karte, style.css),
+   die Aktionszeile stand als eigenes, randloses Element mit 4px Abstand
+   DARUNTER - dadurch "schwebten" Umbenennen/Loeschen/Bericht sichtbar
+   ausserhalb des Kastens, statt zu ihm zu gehoeren. Jetzt sitzt der Rahmen
+   auf dieser Huelle (.anlage-eintrag), der Link selbst ist randlos und
+   die Aktionszeile ist eine Fusszeile INNERHALB desselben Kastens, durch
+   eine Trennlinie abgesetzt.
+   230px statt vorher 184px: bei einem abgeschlossenen Lauf stehen bis zu
+   drei Knoepfe in der Fusszeile (Umbenennen, Loeschen, Bericht - siehe
+   static/js/start.js) - die muessen in einer Zeile Platz finden, sonst
+   bleiben Karten mit zwei und mit drei Knoepfen unterschiedlich hoch und
+   das Raster wirkt ausgefranst (gemessene Mindestbreite fuer alle drei
+   Knoepfe in einer Zeile: rund 220px inklusive Fusszeilen-Innenabstand). */
+.anlage-eintrag {
+  width: 230px;
   display: flex;
-  gap: 6px;
-  padding: 0 2px;
+  flex-direction: column;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  background: var(--bg);
+  overflow: hidden;
 }
-.anlage-eintrag-aktionen .knopf-mini { flex: 1; text-align: center; }
+.anlage-eintrag .anlage-karte {
+  width: auto;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+.anlage-eintrag .anlage-karte:hover { background: var(--blue-tint); }
+.anlage-eintrag .eintrag-aktionen {
+  flex-wrap: nowrap;
+  gap: 5px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border-light);
+}
 
 /* -- Wetter-Tabelle: zusaetzliche Aktionsspalte -- */
 .wetter-tabelle-aktionen { display: flex; gap: 6px; justify-content: flex-end; }

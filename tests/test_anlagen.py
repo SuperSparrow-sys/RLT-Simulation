@@ -252,6 +252,20 @@ def test_api_listet_projekte_und_anlagen(app):
     assert liste[0]["projekt_name"] == "Bürohaus"
 
 
+def test_projekte_markiert_das_bausteine_sammelprojekt_als_lehrmaterial(app):
+    """core.lehrinhalte.beispielanlagen.NAME_PROJEKT ("Bausteine") ist kein
+    eigenes Projekt des Benutzers - die Startseite nutzt dieses Feld, um es
+    getrennt von den eigenen Projekten anzuzeigen (siehe static/js/start.js,
+    eigeneProjekte()/lehrmaterialProjekte())."""
+    with app.app_context():
+        anlagen.projekt_anlegen("Bausteine")
+        anlagen.projekt_anlegen("Eigenes Projekt")
+
+    projekte = {p["name"]: p for p in app.test_client().get("/api/projekte").get_json()}
+    assert projekte["Bausteine"]["ist_lehrmaterial"] is True
+    assert projekte["Eigenes Projekt"]["ist_lehrmaterial"] is False
+
+
 def test_api_meldet_unbekannte_karte_als_nicht_gefunden(app):
     antwort = app.test_client().patch("/api/karten/9999", json={"pos_x": 1.0})
     assert antwort.status_code == 404

@@ -151,7 +151,22 @@ const Start = {
 
     this.zeichneEinstieg();
     await this.zeichneProjekte();
+    await this.zeichneLehrmaterial();
     this.zeichneWetter();
+  },
+
+  // Beispielanlagen aus /bausteine landen serverseitig in einem eigenen,
+  // technisch normalen Projekt (core.lehrinhalte.beispielanlagen:
+  // NAME_PROJEKT "Bausteine"), core.anlagen.projekte() markiert es ueber
+  // "ist_lehrmaterial". Getrennt von eigenenProjekte() gehalten, damit
+  // weder der Einstiegskasten noch "Noch kein Projekt vorhanden" dieses
+  // automatisch entstandene Projekt faelschlich als eigene Arbeit zaehlen.
+  eigeneProjekte() {
+    return this.projekte.filter((p) => !p.ist_lehrmaterial);
+  },
+
+  lehrmaterialProjekte() {
+    return this.projekte.filter((p) => p.ist_lehrmaterial);
   },
 
   // -- Einstieg -------------------------------------------------------------
@@ -167,7 +182,7 @@ const Start = {
   zeichneEinstieg() {
     const bereich = document.getElementById("start-einstieg");
     bereich.textContent = "";
-    if (this.projekte.length) return;
+    if (this.eigeneProjekte().length) return;
 
     const hatWetter = this.wetter.length > 0;
 
@@ -246,13 +261,38 @@ const Start = {
     const bereich = document.getElementById("start-projekte");
     bereich.textContent = "";
 
-    if (!this.projekte.length) {
+    const eigene = this.eigeneProjekte();
+    if (!eigene.length) {
       bereich.appendChild(this.leerhinweisElement());
       return;
     }
 
     const karten = await Promise.all(
-      this.projekte.map((p) => this.projektKarteElement(p))
+      eigene.map((p) => this.projektKarteElement(p))
+    );
+    karten.forEach((karte) => bereich.appendChild(karte));
+  },
+
+  // Dasselbe Kartenlayout wie zeichneProjekte() (projektKarteElement()
+  // wiederverwendet, damit eine Beispielanlage genauso aussieht wie eine
+  // eigene) - nur in einem eingeklappten <details> statt zwischen den
+  // eigenen Projekten (siehe templates/index.html, Task-Rueckmeldung: "Sie
+  // sind Lehrmaterial, kein Arbeitsergebnis"). Ganz versteckt (hidden), wenn
+  // es noch nie eine Beispielanlage gab - kein leerer Abschnitt fuer
+  // jemanden, der /bausteine nie geoeffnet hat.
+  async zeichneLehrmaterial() {
+    const abschnitt = document.getElementById("start-lehrmaterial");
+    const bereich = document.getElementById("start-lehrmaterial-inhalt");
+    const lehrmaterial = this.lehrmaterialProjekte();
+
+    if (!lehrmaterial.length) {
+      abschnitt.hidden = true;
+      return;
+    }
+    abschnitt.hidden = false;
+    bereich.textContent = "";
+    const karten = await Promise.all(
+      lehrmaterial.map((p) => this.projektKarteElement(p))
     );
     karten.forEach((karte) => bereich.appendChild(karte));
   },
@@ -528,12 +568,22 @@ const Start = {
     const haupttext = formatiere
       ? formatiere(status.letzter)
       : `Letzter Lauf: ${status.letzter.status}`;
+    // Ein "fertig" markierter Lauf mit Warnungen soll nicht wie ein glatter
+    // Erfolg aussehen (core.ergebnisse.simulationen_von(): anzahl_warnungen
+    // summiert Konvergenz- und Baustein-Warnungen) - dieselbe Warnfarbe wie
+    // bei abgebrochen/fehler, auch wenn der Status selbst "fertig" bleibt.
+    const anzahlWarnungen = status.letzter.anzahl_warnungen || 0;
     badge.textContent = haupttext;
     badge.classList.add(
-      status.letzter.status === "fertig"
+      status.letzter.status === "fertig" && !anzahlWarnungen
         ? "anlage-status-fertig"
         : "anlage-status-warnung"
     );
+    if (anzahlWarnungen) {
+      const warnzusatz = document.createElement("span");
+      warnzusatz.textContent = ` · ${anzahlWarnungen} ${anzahlWarnungen === 1 ? "Warnung" : "Warnungen"}`;
+      badge.appendChild(warnzusatz);
+    }
     // Zweite, stumme Zeile: wann zuletzt gerechnet und mit welchem
     // Wetterjahr - sonst sagt die Karte ausser Kosten/Zustand nichts ueber
     // sich (siehe Task, Befund 3). wetter_name ist ein frei vergebener Name
