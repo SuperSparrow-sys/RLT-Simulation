@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M4 24 H30"/>
-  <polyline points="30,19 35,24 30,29"/>
-  <polygon points="42,14 42,34 32,29 32,19"/>
-  <line x1="39" y1="18" x2="39" y2="30"/>
-  <line x1="35.5" y1="19.5" x2="35.5" y2="28.5"/>
+  <path d="M2 24 H27 M22 19 L27 24 L22 29"/>
+  <rect x="31" y="12" width="14" height="24" rx="1.5"/>
+  <line x1="33.5" y1="21" x2="42.5" y2="16"/>
+  <line x1="33.5" y1="27" x2="42.5" y2="22"/>
+  <line x1="33.5" y1="33" x2="42.5" y2="28"/>
 </svg>
