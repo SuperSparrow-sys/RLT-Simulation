@@ -224,3 +224,17 @@ def test_zahlen_im_text_stehen_in_deutscher_schreibweise():
                 continue
             verstoesse.append(f"{datei.name}:{nummer}: {zeile.strip()}")
     assert not verstoesse, "\n".join(verstoesse)
+
+
+def test_die_fusszeile_einer_anlagenkarte_sitzt_am_kartenboden():
+    """Karten in einer Reihe sind gleich hoch, ihr Text aber verschieden lang:
+    eine Anlage mit Laufergebnis hat drei Zeilen, eine ohne nur eine. Ohne
+    dass der Textteil die überschüssige Höhe aufnimmt, klebt die Knopfreihe
+    am Ende des Textes - drei Karten nebeneinander zeigten ihre Knöpfe dann
+    auf drei verschiedenen Höhen."""
+    css = (
+        Path(__file__).resolve().parent.parent / "static" / "css" / "loeschen.css"
+    ).read_text(encoding="utf-8")
+    stelle = css.index(".anlage-eintrag .anlage-karte {")
+    regel = css[stelle:css.index("}", stelle)]
+    assert re.search(r"flex:\s*1", regel), regel

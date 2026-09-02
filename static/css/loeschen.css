@@ -82,6 +82,12 @@
   border: none;
   border-radius: 0;
   background: transparent;
+  /* Nimmt die ueberschuessige Hoehe der Zeile auf, damit die Fusszeile am
+     Kartenboden sitzt. Ohne das klebt sie am Ende des Textes: eine Anlage mit
+     Laufergebnis hat drei Zeilen Text, eine ohne nur eine - die Knopfreihen
+     standen dann auf drei verschiedenen Hoehen nebeneinander, obwohl die
+     Karten (als Flex-Geschwister) gleich hoch sind. */
+  flex: 1;
 }
 .anlage-eintrag .anlage-karte:hover { background: var(--blue-tint); }
 .anlage-eintrag .eintrag-aktionen {
