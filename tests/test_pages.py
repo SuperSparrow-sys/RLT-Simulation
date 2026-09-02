@@ -373,3 +373,64 @@ def test_style_css_schliesst_touch_action_luecken_fuer_die_kneifgeste(app):
     abgegrenzt = abgegrenzt[: abgegrenzt.index("}") + 1]
     assert ".fehlermeldung" in abgegrenzt
     assert "touch-action: none;" in abgegrenzt
+
+
+def test_editor_js_leinwand_zoomt_ueber_webkit_gesten_statt_sie_nur_zu_sperren(app):
+    """preventDefault() auf gesturestart/-change bricht in Safari die
+    zugehoerige Beruehrungsfolge meist ab (touchcancel) - der
+    zeigerbasierte Kneifpfad (_kneifBewegen()) kaeme auf der Leinwand also
+    gar nicht mehr zum Zug, wuerde man dort nur pauschal sperren wie
+    ueberall sonst. Die Leinwand muss die Geste stattdessen SELBST ueber
+    gesturechange (event.scale/clientX/clientY) bedienen. Ohne
+    Browserlauf nicht direkt pruefbar (siehe Kommentar bei
+    test_entf_taste...) - hier nur festgehalten, DASS die drei
+    Lauscher auf der Leinwand sitzen, event.scale/clientX/clientY nutzen,
+    stopPropagation() gegen Doppelbehandlung durch die allgemeine Sperre
+    aufrufen, und dass sich der zeigerbasierte Pfad waehrend einer
+    laufenden Geste zurueckhaelt."""
+    klient = app.test_client()
+    js = klient.get("/static/js/editor.js").get_data(as_text=True)
+
+    for typ in ("gesturestart", "gesturechange", "gestureend"):
+        stelle = js.index(f'leinwand.addEventListener("{typ}"')
+        block = js[stelle:]
+        block = block[: block.index("{ passive: false });") + 20]
+        assert "e.preventDefault();" in block
+        assert "e.stopPropagation();" in block
+
+    change = js[js.index('leinwand.addEventListener("gesturechange"'):]
+    change = change[: change.index("{ passive: false });")]
+    assert "e.scale" in change
+    assert "e.clientX" in change and "e.clientY" in change
+    assert "this._zoomeUmPunkt(" in change
+
+    # Der zeigerbasierte Pfad haelt sich waehrend einer WebKit-Geste zurueck.
+    kneif = js[js.index("_kneifBewegen() {"):]
+    kneif = kneif[: kneif.index("\n  },")]
+    assert "if (this._gestenAnker) return;" in kneif
+
+
+def test_editor_js_zoomeumpunkt_bleibt_innerhalb_der_zoomgrenzen(app):
+    """_zoomeUmPunkt() (gemeinsam von Zeiger- und Gestenpfad genutzt) muss
+    dieselben Grenzen wie das Mausrad einhalten (ZOOM_MIN/ZOOM_MAX) - sonst
+    liesse sich per Geste ueber "Einpassen" hinaus heraus- oder in absurde
+    Groessen hineinzoomen."""
+    klient = app.test_client()
+    js = klient.get("/static/js/editor.js").get_data(as_text=True)
+    funktion = js[js.index("_zoomeUmPunkt(zoomZiel"):]
+    funktion = funktion[: funktion.index("\n  },")]
+    assert "this.ZOOM_MAX" in funktion
+    assert "this.ZOOM_MIN" in funktion
+
+
+def test_editor_js_mausrad_zoom_unveraendert_ohne_festen_punkt(app):
+    """Ausdruecklich unveraendert lassen (siehe Bericht) - das Mausrad
+    zoomt seit jeher ohne festen Bildschirmpunkt (sicht.x/y bleiben dabei
+    unangetastet), anders als der neue Zeiger-/Gesten-Zoompfad."""
+    klient = app.test_client()
+    js = klient.get("/static/js/editor.js").get_data(as_text=True)
+    rad = js[js.index('leinwand.addEventListener("wheel"'):]
+    rad = rad[: rad.index("{ passive: false });")]
+    assert "_zoomeUmPunkt" not in rad
+    assert "this.sicht.x" not in rad
+    assert "this.sicht.y" not in rad

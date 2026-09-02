@@ -222,6 +222,19 @@ const Editor = {
   _panAnker: null,
   _kneifAnker: null,
 
+  // Zustand der WebKit-eigenen Kneifgeste auf der Leinwand (siehe
+  // bindeLeinwand(), gesturestart/-change/-end) - null, solange keine
+  // solche Geste laeuft. Waehrend sie laeuft, haelt sich der
+  // zeigerbasierte Pfad (_kneifBewegen()) zurueck: Safari bricht bei
+  // preventDefault() auf gesturestart/-change in aller Regel die
+  // zugehoerige Beruehrungsfolge ab (touchcancel), die Zeigerereignisse,
+  // auf denen _kneifBewegen() aufbaut, wuerden also ohnehin mitten in der
+  // Geste abreissen - dieses Feld verhindert zusaetzlich, dass beide Wege
+  // sich in der kurzen Ueberlappung gegenseitig ins Gehege kommen. Bleibt
+  // in Chromium/Firefox fuer immer null (dort feuert gesturestart nie),
+  // der zeigerbasierte Pfad laeuft dort also unveraendert wie bisher.
+  _gestenAnker: null,
+
   async laden(anlageId) {
     let antwort;
     try {
@@ -915,6 +928,23 @@ const Editor = {
     };
   },
 
+  /* Setzt sicht.zoom auf zoomZiel (auf ZOOM_MIN/MAX begrenzt) und
+     verschiebt sicht.x/y so, dass der Weltpunkt (weltX, weltY) unter dem
+     Bildschirmpunkt (punktX, punktY relativ zur Leinwandecke) stehen
+     bleibt - das eigentliche "Zoom um einen Punkt". Gemeinsam von
+     _kneifBewegen() (zeigerbasierter Pfad) und dem WebKit-Gestenpfad
+     (siehe bindeLeinwand(), gesturechange) genutzt, damit beide exakt
+     dasselbe Verhalten zeigen - absichtlich NICHT vom Mausrad-Lauscher
+     mitbenutzt, der zoomt seit jeher ohne festen Punkt (siehe dortiger
+     Kommentar), das soll unveraendert bleiben. */
+  _zoomeUmPunkt(zoomZiel, punktX, punktY, weltX, weltY) {
+    const zoom = Math.min(this.ZOOM_MAX, Math.max(this.ZOOM_MIN, zoomZiel));
+    this.sicht.zoom = zoom;
+    this.sicht.x = punktX - weltX * zoom;
+    this.sicht.y = punktY - weltY * zoom;
+    this.aktualisiereSicht();
+  },
+
   /* Zoomt UND schiebt in einem Zug, solange genau zwei Finger auf der
      Leinwand liegen (siehe Task: "Auf- und Zuziehen zum Zoomen, Schieben zum
      Verschieben" - beides gleichzeitig moeglich, wie auf jedem Touchgeraet
@@ -925,6 +955,13 @@ const Editor = {
      Editor.einpassen() (Weltpunkt -> Bildschirmpunkt), nur umgekehrt
      angewendet. */
   _kneifBewegen() {
+    // Eine WebKit-Kneifgeste laeuft gerade (siehe bindeLeinwand(),
+    // gesturestart) - deren preventDefault() bricht die Beruehrungsfolge in
+    // Safari ohnehin meist ab (touchcancel raeumt _zeiger via
+    // _zeigerEntfernen() auf), dieser fruehe Ausstieg ist die zusaetzliche,
+    // ausdrueckliche Absicherung gegen die kurze Ueberlappung beider Pfade
+    // (siehe Bericht und Kommentar bei _gestenAnker weiter oben).
+    if (this._gestenAnker) return;
     const leinwand = document.getElementById("leinwand");
     const kasten = leinwand.getBoundingClientRect();
     const zeiger = [...this._zeiger.values()].slice(0, 2);
@@ -939,14 +976,11 @@ const Editor = {
       };
       return;
     }
-    const zoom = Math.min(
-      this.ZOOM_MAX,
-      Math.max(this.ZOOM_MIN, this._kneifAnker.zoom * (distanz / this._kneifAnker.distanz))
+    const zoom = this._kneifAnker.zoom * (distanz / this._kneifAnker.distanz);
+    this._zoomeUmPunkt(
+      zoom, mitteX - kasten.left, mitteY - kasten.top,
+      this._kneifAnker.weltX, this._kneifAnker.weltY
     );
-    this.sicht.zoom = zoom;
-    this.sicht.x = (mitteX - kasten.left) - this._kneifAnker.weltX * zoom;
-    this.sicht.y = (mitteY - kasten.top) - this._kneifAnker.weltY * zoom;
-    this.aktualisiereSicht();
   },
 
   /* Entfernt einen losgelassenen/abgebrochenen Zeiger (pointerup ODER
@@ -1074,6 +1108,59 @@ const Editor = {
 
     leinwand.addEventListener("pointerup", (e) => this._zeigerEntfernen(e));
     leinwand.addEventListener("pointercancel", (e) => this._zeigerEntfernen(e));
+
+    /* WebKit-eigene Kneifgeste AUF DER LEINWAND: siehe Bericht - ein
+       preventDefault() auf gesturestart/-change bricht in Safari in aller
+       Regel die zugehoerige Beruehrungsfolge ab (touchcancel), noch bevor
+       der zeigerbasierte Pfad oben (_kneifBewegen()) ueberhaupt zum Zug
+       kaeme. Deshalb hier dieselbe Geste UEBER gesturechange bedienen -
+       event.scale (Faktor gegenueber dem Beginn der Geste) und
+       event.clientX/clientY (Mittelpunkt) sind genau das, was
+       _zoomeUmPunkt() braucht. stopPropagation() verhindert, dass
+       document's allgemeine Sperre (siehe nurBeiBeruehrungVerhindern()
+       weiter unten in dieser Datei) dieselbe Geste zusaetzlich behandelt -
+       preventDefault() steht trotzdem auch hier, die Seite soll sich so
+       oder so nicht mitvergroessern. Nur in WebKit/Safari ueberhaupt
+       vorhanden: in Chromium/Firefox bindet addEventListener() hier
+       folgenlos nichts an Vorhandenes, der zeigerbasierte Pfad oben bleibt
+       dort unveraendert der einzige Weg (Chrome auf Android, Chromium mit
+       Touchscreen am Schreibtisch). */
+    leinwand.addEventListener("gesturestart", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const kasten = leinwand.getBoundingClientRect();
+      this._gestenAnker = {
+        zoom: this.sicht.zoom,
+        weltX: (e.clientX - kasten.left - this.sicht.x) / this.sicht.zoom,
+        weltY: (e.clientY - kasten.top - this.sicht.y) / this.sicht.zoom,
+      };
+    }, { passive: false });
+    leinwand.addEventListener("gesturechange", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // gestureend/-cancel verpasst o.ae. - sicherheitshalber statt eines
+      // Absturzes auf einen fehlenden Anker.
+      if (!this._gestenAnker) return;
+      const kasten = leinwand.getBoundingClientRect();
+      const zoom = this._gestenAnker.zoom * e.scale;
+      this._zoomeUmPunkt(
+        zoom, e.clientX - kasten.left, e.clientY - kasten.top,
+        this._gestenAnker.weltX, this._gestenAnker.weltY
+      );
+    }, { passive: false });
+    leinwand.addEventListener("gestureend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this._gestenAnker = null;
+      // Der zeigerbasierte Zustand ist durch das touchcancel meist schon
+      // geleert (siehe _zeigerEntfernen()) - ausdruecklich nachgezogen,
+      // falls ein Browser hier von der ueblichen Reihenfolge abweicht,
+      // damit kein Geisterzeiger einer abgebrochenen Geste die naechste
+      // beeinflusst.
+      this._kneifAnker = null;
+      this._panAnker = null;
+      this._zeiger.clear();
+    }, { passive: false });
 
     leinwand.addEventListener("wheel", (e) => {
       e.preventDefault();
