@@ -144,6 +144,29 @@ CREATE TABLE IF NOT EXISTS bilanz (
 );
 """
 
+SCHEMA += """
+-- Rueckgaengig/Wiederholen (core/verlauf.py): je Anlage eine Reihe
+-- vollstaendiger Momentaufnahmen, 'nummer' laufend ab 1. 'daten' ist
+-- gzip(JSON) des ganzen Anlagenzustands (Name, Notiz, Karten, Anschluesse,
+-- Pfeile, Verbindungen), rund 7 KiB bei einer grossen Anlage. 'buendel'
+-- markiert Schritte, die zu EINER Handlung gehoeren duerfen (dieselbe Karte
+-- verschoben, dasselbe Parameterfeld getippt) - siehe verlauf._darf_buendeln.
+-- Welcher Zustand gerade gilt, steht als 'verlauf_stand' in der Tabelle
+-- 'anlage' (siehe _migriere) und nicht in einer eigenen Zeile hier: eine
+-- Anlage hat immer genau einen Stand, eine eigene Tabelle haette nur den
+-- Sonderfall 'Zeile fehlt noch' hinzugefuegt.
+-- ON DELETE CASCADE: der Verlauf verschwindet mit der Anlage.
+CREATE TABLE IF NOT EXISTS zustand (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    anlage_id     INTEGER NOT NULL REFERENCES anlage(id) ON DELETE CASCADE,
+    nummer        INTEGER NOT NULL,
+    beschreibung  TEXT NOT NULL DEFAULT '',
+    buendel       TEXT,
+    zeitpunkt     TEXT NOT NULL DEFAULT (datetime('now')),
+    daten         BLOB NOT NULL
+);
+"""
+
 # Getrennt von SCHEMA und erst NACH _migriere() ausgefuehrt (siehe init_db()):
 # ein Index auf einer Spalte, die eine bestehende Datenbank noch nicht hat
 # (z.B. 'kennung' vor dieser Aenderung), schlaegt sofort mit 'no such column'
@@ -161,6 +184,7 @@ CREATE INDEX IF NOT EXISTS idx_bilanz_sim    ON bilanz(simulation_id);
 CREATE INDEX IF NOT EXISTS idx_simulation_kennung ON simulation(kennung);
 CREATE INDEX IF NOT EXISTS idx_simulation_anlage_status ON simulation(anlage_id, status);
 CREATE INDEX IF NOT EXISTS idx_simulation_reihen ON simulation(reihen_kennung);
+CREATE INDEX IF NOT EXISTS idx_zustand_anlage ON zustand(anlage_id, nummer);
 """
 
 
@@ -224,6 +248,16 @@ def _migriere(db):
     if "mehrdeutig" not in spalten:
         db.execute(
             "ALTER TABLE pfeil ADD COLUMN mehrdeutig INTEGER NOT NULL DEFAULT 0"
+        )
+
+    # Der Zeiger auf den gerade geltenden Zustand des Verlaufs
+    # (core/verlauf.py). 0 heisst: fuer diese Anlage ist noch nichts
+    # aufgezeichnet - der erste aufgezeichnete Schritt legt zuerst den
+    # Ausgangszustand (nummer 1) an.
+    spalten = {z["name"] for z in db.execute("PRAGMA table_info(anlage)")}
+    if "verlauf_stand" not in spalten:
+        db.execute(
+            "ALTER TABLE anlage ADD COLUMN verlauf_stand INTEGER NOT NULL DEFAULT 0"
         )
 
     spalten = {z["name"] for z in db.execute("PRAGMA table_info(simulation)")}

@@ -20,6 +20,13 @@
 <body class="seite-editor">
   <div id="fehlermeldung" class="fehlermeldung" role="alert" aria-live="assertive" hidden></div>
 
+  <!-- Ruhige Schwester der Fehlerleiste: sie meldet, was gerade
+       zurueckgenommen oder wiederholt wurde. role="status"/aria-live="polite"
+       statt "alert"/"assertive" - es ist eine Bestaetigung, keine Stoerung.
+       Auf dem iPad ist sie der einzige Ort, an dem die Beschriftung eines
+       Verlaufsschritts ohne Schweben zu lesen ist (siehe editor.html oben). -->
+  <div id="hinweismeldung" class="hinweismeldung" role="status" aria-live="polite" hidden></div>
+
   <div class="app">
     <aside class="palette" id="palette"></aside>
 
@@ -30,6 +37,26 @@
              gleich anfuehlt. Vorher fuehrte aus einer Anlage nur die
              Adresszeile wieder heraus. -->
         <a class="editor-zurueck" href="{{ url_for('pages.index') }}" title="Zur Startseite">← Start</a>
+
+        <!-- Rueckgaengig/Wiederholen (core/verlauf.py, editor.js).
+             Links bei "← Start", weil sie zur Anlage als Ganzem gehoeren
+             und nicht zu einer einzelnen Karte. Zu Beginn beide gesperrt;
+             editor.js hebt die Sperre auf, sobald der Verlauf etwas
+             hergibt, und traegt in title/aria-label ein, WAS der Knopf
+             zuruecknimmt ("Rückgängig: Karte 'Erhitzer' gelöscht"). Auf
+             dem iPad, wo es kein Schweben gibt, nennt der Hinweisstreifen
+             nach dem Druck dasselbe noch einmal (zeigeHinweis() in
+             editor.js). -->
+        <span class="verlauf-knoepfe">
+          <button class="knopf-mini knopf-verlauf" id="btn-zurueck"
+                  title="Rückgängig" aria-label="Rückgängig" disabled>
+            <span aria-hidden="true">↶</span> Rückgängig
+          </button>
+          <button class="knopf-mini knopf-verlauf" id="btn-vor"
+                  title="Wiederholen" aria-label="Wiederholen" disabled>
+            <span aria-hidden="true">↷</span> Wiederholen
+          </button>
+        </span>
 
         <span class="titel anlagenname-zeile">
           <span id="anlagenname">Anlage</span>

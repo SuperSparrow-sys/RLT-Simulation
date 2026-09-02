@@ -102,10 +102,31 @@ function panelLeeren() {
 function zeigeFehler(nachricht) {
   const leiste = document.getElementById("fehlermeldung");
   if (!leiste) return;
+  const hinweis = document.getElementById("hinweismeldung");
+  if (hinweis) hinweis.hidden = true;   // beide sitzen an derselben Stelle
   leiste.textContent = nachricht;
   leiste.hidden = false;
   window.clearTimeout(zeigeFehler.timer);
   zeigeFehler.timer = window.setTimeout(() => { leiste.hidden = true; }, 5000);
+}
+
+/* Die ruhige Schwester von zeigeFehler(): bestaetigt eine Handlung, statt
+   vor etwas zu warnen ("Zurückgenommen: Karte 'Erhitzer' gelöscht"). Sie ist
+   auf dem iPad der einzige Ort, an dem die Beschriftung eines
+   Verlaufsschritts ohne Schweben zu lesen ist - am Schreibtisch steht
+   dasselbe im title der beiden Knoepfe. Kuerzere Standzeit als eine
+   Fehlermeldung: sie muss nur wahrgenommen, nicht gelesen und verstanden
+   werden. Beide Leisten sitzen an derselben Stelle des Bildschirms und
+   blenden einander deshalb gegenseitig aus. */
+function zeigeHinweis(nachricht) {
+  const leiste = document.getElementById("hinweismeldung");
+  if (!leiste) return;
+  const fehler = document.getElementById("fehlermeldung");
+  if (fehler) fehler.hidden = true;
+  leiste.textContent = nachricht;
+  leiste.hidden = false;
+  window.clearTimeout(zeigeHinweis.timer);
+  zeigeHinweis.timer = window.setTimeout(() => { leiste.hidden = true; }, 3500);
 }
 
 /* Eigene Kopie statt Import: simulation.js definiert bereits eine identische
@@ -316,6 +337,100 @@ const Editor = {
     }
     this.anlage.name = neuerName;
     document.getElementById("anlagenname").textContent = neuerName;
+  },
+
+  // -- Rueckgaengig und Wiederholen ---------------------------------------
+  // Der Verlauf selbst liegt in der Datenbank und entsteht in
+  // core/anlagen.py bei JEDER Aenderung (core/verlauf.py) - der Editor
+  // haelt hier nur den zuletzt gelesenen Stand, um die beiden Knoepfe
+  // beschriften und sperren zu koennen.
+  _verlaufStand: null,
+
+  async verlaufAktualisieren() {
+    if (!this.anlage) return;
+    let antwort;
+    try {
+      antwort = await fetch(`/api/anlagen/${this.anlage.id}/verlauf`);
+    } catch {
+      zeigeFehler("Der Verlauf konnte nicht gelesen werden.");
+      return;
+    }
+    if (!antwort.ok) {
+      zeigeFehler("Der Verlauf konnte nicht gelesen werden.");
+      return;
+    }
+    this.verlaufKnoepfeSetzen(await antwort.json());
+  },
+
+  /* Gebuendelt statt sofort: eine einzelne Handlung der Anwenderin kann
+     mehrere Anfragen ausloesen (das Parameterfenster speichert beim
+     Verlassen eines Feldes und laedt danach die Karte neu). Ohne diese
+     kurze Sammelfrist folgte auf jede davon eine eigene Abfrage des
+     Verlaufsstands. */
+  verlaufBaldAktualisieren() {
+    window.clearTimeout(this._verlaufTimer);
+    this._verlaufTimer = window.setTimeout(() => this.verlaufAktualisieren(), 150);
+  },
+
+  verlaufKnoepfeSetzen(stand) {
+    this._verlaufStand = stand;
+    const setze = (id, moeglich, text, wort) => {
+      const knopf = document.getElementById(id);
+      if (!knopf) return;
+      knopf.disabled = !moeglich;
+      // Der Knopf nennt, WAS er tut - nicht nur, dass er etwas tut.
+      const beschriftung = moeglich && text ? `${wort}: ${text}` : wort;
+      knopf.title = beschriftung;
+      knopf.setAttribute("aria-label", beschriftung);
+    };
+    setze("btn-zurueck", stand.kann_zurueck, stand.zurueck_text, "Rückgängig");
+    setze("btn-vor", stand.kann_vor, stand.vor_text, "Wiederholen");
+  },
+
+  /* Ein Schritt zurueck oder vor. Danach baut der Editor die Anlage neu auf;
+     Ausschnitt und Zoomstufe bleiben, wo sie sind (siehe laden() und
+     _nochNichtGeoeffnet) - wer etwas zurueecknimmt, will sehen, was sich
+     aendert, und nicht die Ansicht suchen. */
+  async verlaufSchritt(richtung) {
+    if (!this.anlage) return;
+    const stand = this._verlaufStand || {};
+    const moeglich = richtung === "zurueck" ? stand.kann_zurueck : stand.kann_vor;
+    if (moeglich === false) return;
+    const text = richtung === "zurueck" ? stand.zurueck_text : stand.vor_text;
+    const wort = richtung === "zurueck" ? "Rückgängig" : "Wiederholen";
+
+    let antwort;
+    try {
+      antwort = await fetch(
+        `/api/anlagen/${this.anlage.id}/verlauf/${richtung}`, { method: "POST" }
+      );
+    } catch {
+      zeigeFehler(`${wort} ist fehlgeschlagen.`);
+      return;
+    }
+    if (!antwort.ok) {
+      zeigeFehler(`${wort} ist fehlgeschlagen.`);
+      // Der Stand kann sich in einem zweiten Fenster verschoben haben -
+      // frisch nachlesen statt auf einem ueberholten Stand beharren.
+      await this.verlaufAktualisieren();
+      return;
+    }
+
+    this.verlaufKnoepfeSetzen(await antwort.json());
+    await this.laden(this.anlage.id);
+    // Die gewaehlte Karte kann durch das Einspielen verschwunden (oder mit
+    // anderen Werten wiedergekommen) sein - das Parameterfenster darf keine
+    // Karte zeigen, die es nicht mehr gibt.
+    const gewaehlt = this.auswahl === null ? null : this.karteNach(this.auswahl);
+    if (this.auswahl !== null && !gewaehlt) {
+      this.auswahl = null;
+      panelLeeren();
+    } else if (gewaehlt) {
+      panelZeigen(gewaehlt);
+    }
+    zeigeHinweis(
+      `${richtung === "zurueck" ? "Zurückgenommen" : "Wiederholt"}${text ? ": " + text : ""}`
+    );
   },
 
   karteNach(id) {
@@ -1341,6 +1456,27 @@ const Editor = {
       if (document.querySelector(".dialog-huelle")) return;
       await this.karteLoeschenDialog(this.auswahl);
     });
+
+    /* Strg+Z / Strg+Umschalt+Z, auf dem Mac ⌘Z - und Strg+Y, wie es unter
+       Windows fuer "Wiederholen" ueblich ist. Dieselbe Vorsicht wie beim
+       Entf-Lauscher darueber und aus demselben Anlass: steht der Fokus in
+       einem Eingabefeld, gehoert das Zuruecknehmen DEM FELD, nicht der
+       Anlage - istTexteingabe() entscheidet das an genau einer Stelle fuer
+       beide Tasten. Auch waehrend eines offenen Dialogs bleibt die Taste
+       stumm. preventDefault() erst NACH diesen Pruefungen, damit der
+       Browser sein eigenes Rueckgaengig im Feld unangetastet behaelt. */
+    window.addEventListener("keydown", (e) => {
+      const taste = (e.key || "").toLowerCase();
+      const zurueck = taste === "z" && (e.ctrlKey || e.metaKey) && !e.altKey;
+      const vor =
+        (taste === "y" && e.ctrlKey && !e.altKey) ||
+        (zurueck && e.shiftKey);
+      if (!zurueck && !vor) return;
+      if (istTexteingabe(document.activeElement)) return;
+      if (document.querySelector(".dialog-huelle")) return;
+      e.preventDefault();
+      this.verlaufSchritt(vor ? "vor" : "zurueck");
+    });
   },
 };
 
@@ -1455,6 +1591,52 @@ document.addEventListener("touchend", (e) => {
   _letzteBeruehrungEnde = { zeit: jetzt, x: beruehrung.clientX, y: beruehrung.clientY };
 }, { passive: false });
 
+/* Warum ein Mantel um fetch() statt eines Aufrufs an jeder Aenderungsstelle?
+
+   Aendernde Anfragen gehen nicht nur von editor.js aus: das
+   Parameterfenster (panel.js) speichert Felder und loest Verbindungen,
+   pfeile.js legt Pfeile an und loescht sie. Nach jeder solchen Anfrage muss
+   der Verlaufsstand neu gelesen werden, sonst bleiben die beiden Knoepfe
+   auf einem ueberholten Stand ("nichts zurueckzunehmen", obwohl gerade
+   etwas geschah). Denselben Aufruf in jede dieser Dateien einzeln zu
+   streuen hiesse, ihn beim naechsten neuen Endpunkt zu vergessen - genau
+   der Grund, aus dem das Festhalten der Zustaende in core/anlagen.py sitzt
+   und nicht in den Routen (siehe core/verlauf.py). Ein Ort, der jede
+   aendernde Anfrage sieht, ist hier der richtige Zuschnitt.
+
+   Angefasst wird nichts: der Mantel reicht Argumente und Antwort
+   unveraendert durch und wertet nur aus, WAS gefragt wurde. Nur erfolgreiche
+   (response.ok), nicht-lesende Anfragen an /api/ zaehlen; die
+   Verlaufsendpunkte selbst sind ausgenommen, sonst antwortete jeder
+   Schritt mit einer weiteren Abfrage auf sich selbst. Fehler in dieser
+   Auswertung duerfen die eigentliche Anfrage niemals kippen - deshalb das
+   try/catch um die Auswertung, nicht um den Aufruf. */
+const _fetchOhneVerlauf = window.fetch.bind(window);
+window.fetch = async (...argumente) => {
+  const antwort = await _fetchOhneVerlauf(...argumente);
+  try {
+    const [anfrage, optionen] = argumente;
+    const ziel = String(
+      typeof anfrage === "string" ? anfrage : (anfrage && anfrage.url) || ""
+    );
+    const methode = String(
+      (optionen && optionen.method) || (anfrage && anfrage.method) || "GET"
+    ).toUpperCase();
+    if (
+      antwort.ok
+      && methode !== "GET"
+      && ziel.includes("/api/")
+      && !ziel.includes("/verlauf")
+      && Editor.anlage
+    ) {
+      Editor.verlaufBaldAktualisieren();
+    }
+  } catch {
+    /* Die Auswertung darf die Anfrage nicht kippen - siehe Kommentar oben. */
+  }
+  return antwort;
+};
+
 window.addEventListener("DOMContentLoaded", async () => {
   Editor.bindeLeinwand();
   panelLeeren();
@@ -1462,6 +1644,17 @@ window.addEventListener("DOMContentLoaded", async () => {
   await Editor.laden(window.ANLAGE_ID);
   pfeileBinden(Editor);
   Editor.berichtLinkAktualisieren();
+
+  Editor.verlaufAktualisieren();
+
+  const btnZurueck = document.getElementById("btn-zurueck");
+  if (btnZurueck) {
+    btnZurueck.addEventListener("click", () => Editor.verlaufSchritt("zurueck"));
+  }
+  const btnVor = document.getElementById("btn-vor");
+  if (btnVor) {
+    btnVor.addEventListener("click", () => Editor.verlaufSchritt("vor"));
+  }
 
   const btnUmbenennen = document.getElementById("btn-anlage-umbenennen");
   if (btnUmbenennen) {

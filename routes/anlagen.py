@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 
-from core import anlagen, ergebnisse, laeufe, vorlagen
+from core import anlagen, ergebnisse, laeufe, verlauf, vorlagen
 
 bp = Blueprint("anlagen", __name__, url_prefix="/api")
 
@@ -122,6 +122,46 @@ def messwerte(anlage_id):
     von: <Karte> -> <Messwert>' beim gezielten Verdrahten eines Reglers (siehe
     core.anlagen.messwerte_von)."""
     return jsonify(anlagen.messwerte_von(anlage_id))
+
+
+# -- Rueckgaengig und Wiederholen ----------------------------------------
+# Die Zustaende selbst schreibt core/anlagen.py bei jeder Aenderung mit
+# (core/verlauf.py) - diese drei Endpunkte lesen und bewegen nur den Zeiger.
+# Deshalb steht hier auch nichts von Karten, Pfeilen oder Verbindungen: was
+# ein Zustand ist, weiss allein core/verlauf.py.
+
+@bp.get("/anlagen/<int:anlage_id>/verlauf")
+def verlauf_stand(anlage_id):
+    """Ob es etwas zurueckzunehmen bzw. zu wiederholen gibt, und wie das
+    heisst - fuer die Beschriftung der beiden Knoepfe im Editor."""
+    try:
+        return jsonify(verlauf.stand_lesen(anlage_id))
+    except KeyError as fehler:
+        return jsonify({"fehler": str(fehler)}), 404
+
+
+@bp.post("/anlagen/<int:anlage_id>/verlauf/zurueck")
+def verlauf_zurueck(anlage_id):
+    try:
+        return jsonify(verlauf.zurueck(anlage_id))
+    except verlauf.Leer as fehler:
+        # Kein unbekannter Schluessel, sondern eine Anfrage, die es an
+        # dieser Stelle des Verlaufs nicht geben kann - der Editor blendet
+        # den Knopf dann ab, aber ein zweites Fenster kann ihn noch als
+        # verfuegbar zeigen (siehe Bericht).
+        return jsonify({"fehler": str(fehler)}), 400
+    except KeyError as fehler:
+        return jsonify({"fehler": str(fehler)}), 404
+
+
+@bp.post("/anlagen/<int:anlage_id>/verlauf/vor")
+def verlauf_vor(anlage_id):
+    try:
+        return jsonify(verlauf.vor(anlage_id))
+    except verlauf.Leer as fehler:
+        return jsonify({"fehler": str(fehler)}), 400
+    except KeyError as fehler:
+        return jsonify({"fehler": str(fehler)}), 404
 
 
 @bp.get("/anlagen/<int:anlage_id>/simulationen")

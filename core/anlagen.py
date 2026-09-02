@@ -2,7 +2,7 @@
 
 import json
 
-from core import graph
+from core import graph, verlauf
 from core.bausteine import basis, lade_alle
 from core.database import get_db
 
@@ -68,13 +68,14 @@ def projekt_loeschen(projekt_id):
 
 def anlage_umbenennen(anlage_id, name):
     db = get_db()
-    cur = db.execute(
-        "UPDATE anlage SET name = ?, geaendert_am = datetime('now') WHERE id = ?",
-        (name, anlage_id),
-    )
-    db.commit()
-    if cur.rowcount == 0:
+    if db.execute("SELECT 1 FROM anlage WHERE id = ?", (anlage_id,)).fetchone() is None:
         raise KeyError(f"Anlage {anlage_id} gibt es nicht")
+    with verlauf.schritt(anlage_id, f"Anlage in '{name}' umbenannt"):
+        db.execute(
+            "UPDATE anlage SET name = ?, geaendert_am = datetime('now') WHERE id = ?",
+            (name, anlage_id),
+        )
+        db.commit()
 
 
 def anlage_loeschen(anlage_id):
@@ -107,7 +108,10 @@ def karte_anlegen(anlage_id, typ, pos_x=0.0, pos_y=0.0, parameter=None, name=Non
     if db.execute("SELECT 1 FROM anlage WHERE id = ?", (anlage_id,)).fetchone() is None:
         raise KeyError(f"Anlage {anlage_id} gibt es nicht")
     try:
-        return _karte_schreiben(db, anlage_id, typ, pos_x, pos_y, werte, name, klasse)
+        with verlauf.schritt(anlage_id, f"Karte '{name or klasse.NAME}' angelegt"):
+            return _karte_schreiben(
+                db, anlage_id, typ, pos_x, pos_y, werte, name, klasse
+            )
     except Exception:
         db.rollback()
         raise
@@ -147,6 +151,37 @@ class UngueltigeParameter(ValueError):
         super().__init__("; ".join(fehler.values()))
 
 
+def _aenderung_an_karte(zeile, pos_x, pos_y, parameter, name):
+    """Wie heisst diese Aenderung im Verlauf - und gehoert sie mit der
+    vorhergehenden zu EINER Handlung?
+
+    Der zweite Rueckgabewert ist der Buendelschluessel (siehe
+    core/verlauf.py, _darf_buendeln): Dieselbe Karte mehrmals kurz
+    hintereinander zurechtzuruecken ist eine Handlung, ebenso mehrere
+    schnelle Aenderungen desselben Parameterfeldes. Zwei verschiedene Felder
+    oder zwei verschiedene Karten bleiben zwei Schritte - deshalb steckt die
+    Kennung im Schluessel."""
+    name_neu = zeile["name"] if name is None else name
+    if name is not None and name != zeile["name"]:
+        return f"Karte '{name}' umbenannt", None
+    if parameter:
+        if len(parameter) == 1:
+            schluessel = next(iter(parameter))
+            klasse = basis.hole(zeile["typ"])
+            feld = next(
+                (f for f in klasse.PARAMETER if f.schluessel == schluessel), None
+            )
+            label = feld.label if feld is not None else schluessel
+            return (
+                f"'{label}' an Karte '{name_neu}' geändert",
+                f"parameter:{zeile['id']}:{schluessel}",
+            )
+        return f"Parameter an Karte '{name_neu}' geändert", None
+    if pos_x is not None or pos_y is not None:
+        return f"Karte '{name_neu}' verschoben", f"verschieben:{zeile['id']}"
+    return f"Karte '{name_neu}' geändert", None
+
+
 def karte_aendern(karte_id, pos_x=None, pos_y=None, parameter=None, name=None):
     db = get_db()
     zeile = db.execute("SELECT * FROM karte WHERE id = ?", (karte_id,)).fetchone()
@@ -161,23 +196,40 @@ def karte_aendern(karte_id, pos_x=None, pos_y=None, parameter=None, name=None):
             raise UngueltigeParameter(fehlermeldungen)
         werte.update(parameter)
 
-    db.execute(
-        "UPDATE karte SET pos_x = ?, pos_y = ?, parameter = ?, name = ? WHERE id = ?",
-        (
-            zeile["pos_x"] if pos_x is None else pos_x,
-            zeile["pos_y"] if pos_y is None else pos_y,
-            json.dumps(werte, ensure_ascii=False),
-            zeile["name"] if name is None else name,
-            karte_id,
-        ),
-    )
-    db.commit()
+    beschreibung, buendel = _aenderung_an_karte(zeile, pos_x, pos_y, parameter, name)
+    with verlauf.schritt(zeile["anlage_id"], beschreibung, buendel):
+        db.execute(
+            "UPDATE karte SET pos_x = ?, pos_y = ?, parameter = ?, name = ? "
+            "WHERE id = ?",
+            (
+                zeile["pos_x"] if pos_x is None else pos_x,
+                zeile["pos_y"] if pos_y is None else pos_y,
+                json.dumps(werte, ensure_ascii=False),
+                zeile["name"] if name is None else name,
+                karte_id,
+            ),
+        )
+        db.commit()
 
 
 def karte_loeschen(karte_id):
+    """Loescht eine Karte samt ihren Anschluessen und allen Pfeilen, die an
+    ihr hingen (ON DELETE CASCADE, core/database.py).
+
+    Der Verlauf haelt vorher den ganzen Zustand fest - zurueckgenommen kommt
+    die Karte mit DERSELBEN Kennung wieder, samt Anschluessen, Pfeilen und
+    Verbindungen (core/verlauf.py). Gibt es die Karte nicht (mehr), bleibt
+    das wie bisher folgenlos; verlauf.schritt(None, ...) tut dann nichts."""
     db = get_db()
-    db.execute("DELETE FROM karte WHERE id = ?", (karte_id,))
-    db.commit()
+    zeile = db.execute(
+        "SELECT anlage_id, name FROM karte WHERE id = ?", (karte_id,)
+    ).fetchone()
+    anlage_id = zeile["anlage_id"] if zeile else None
+    with verlauf.schritt(
+        anlage_id, f"Karte '{zeile['name']}' gelöscht" if zeile else ""
+    ):
+        db.execute("DELETE FROM karte WHERE id = ?", (karte_id,))
+        db.commit()
 
 
 # -- Pfeile ---------------------------------------------------------------
@@ -261,10 +313,13 @@ def pfeil_anlegen(anlage_id, von_karte_id, nach_karte_id):
     mehrdeutig = bool(graph.alternativen(von, nach, belegt))
 
     try:
-        return _pfeil_schreiben(
-            db, anlage_id, von_karte_id, nach_karte_id, von, nach, paare, belegt,
-            mehrdeutig,
-        )
+        with verlauf.schritt(
+            anlage_id, f"Pfeil von '{von.name}' nach '{nach.name}' angelegt"
+        ):
+            return _pfeil_schreiben(
+                db, anlage_id, von_karte_id, nach_karte_id, von, nach, paare, belegt,
+                mehrdeutig,
+            )
     except Exception:
         db.rollback()
         raise
@@ -310,9 +365,27 @@ def _pfeil_schreiben(
 
 
 def pfeil_loeschen(pfeil_id):
+    """Loest einen Pfeil samt seinen Verbindungen (ON DELETE CASCADE).
+
+    Die Anschluesse selbst bleiben stehen - nur ihre Verbindung faellt weg.
+    Zurueckgenommen zeigt sie wieder auf dieselben Anschluesse (siehe
+    core/verlauf.py: auch die 'verbindung'-Zeilen behalten ihre Kennung)."""
     db = get_db()
-    db.execute("DELETE FROM pfeil WHERE id = ?", (pfeil_id,))
-    db.commit()
+    zeile = db.execute(
+        "SELECT p.anlage_id, v.name AS von_name, n.name AS nach_name FROM pfeil p "
+        "JOIN karte v ON v.id = p.von_karte_id "
+        "JOIN karte n ON n.id = p.nach_karte_id WHERE p.id = ?",
+        (pfeil_id,),
+    ).fetchone()
+    anlage_id = zeile["anlage_id"] if zeile else None
+    beschreibung = (
+        f"Pfeil von '{zeile['von_name']}' nach '{zeile['nach_name']}' getrennt"
+        if zeile
+        else ""
+    )
+    with verlauf.schritt(anlage_id, beschreibung):
+        db.execute("DELETE FROM pfeil WHERE id = ?", (pfeil_id,))
+        db.commit()
 
 
 def port_id(karte_id, schluessel):
@@ -378,18 +451,23 @@ def verbindung_anlegen(anlage_id, von_port_id, nach_port_id):
             "für eine Verzweigung gibt es den Verteiler"
         )
 
+    beschreibung = (
+        f"'{nach['schluessel']}' an Karte '{nach['karte_name']}' mit "
+        f"'{von['karte_name']}' verbunden"
+    )
     try:
-        cur = db.execute(
-            "INSERT INTO pfeil (anlage_id, von_karte_id, nach_karte_id) "
-            "VALUES (?, ?, ?)",
-            (anlage_id, von["karte_id"], nach["karte_id"]),
-        )
-        db.execute(
-            "INSERT INTO verbindung (pfeil_id, von_port_id, nach_port_id) "
-            "VALUES (?, ?, ?)",
-            (cur.lastrowid, von_port_id, nach_port_id),
-        )
-        db.commit()
+        with verlauf.schritt(anlage_id, beschreibung):
+            cur = db.execute(
+                "INSERT INTO pfeil (anlage_id, von_karte_id, nach_karte_id) "
+                "VALUES (?, ?, ?)",
+                (anlage_id, von["karte_id"], nach["karte_id"]),
+            )
+            db.execute(
+                "INSERT INTO verbindung (pfeil_id, von_port_id, nach_port_id) "
+                "VALUES (?, ?, ?)",
+                (cur.lastrowid, von_port_id, nach_port_id),
+            )
+            db.commit()
     except Exception:
         db.rollback()
         raise

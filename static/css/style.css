@@ -137,7 +137,8 @@ body.seite-editor {
    Voreinstellung "auto" bestehen - dort ist Aufziehen ausdruecklich
    erlaubt. */
 body.seite-editor .dialog-huelle,
-body.seite-editor .fehlermeldung {
+body.seite-editor .fehlermeldung,
+body.seite-editor .hinweismeldung {
   touch-action: none;
 }
 
@@ -308,6 +309,51 @@ textarea:focus-visible {
   flex-shrink: 0;
 }
 .editor-zurueck:hover { color: var(--blue); }
+
+/* Rueckgaengig/Wiederholen (templates/editor.html, core/verlauf.py): ein
+   Paar, das zusammenbleibt - deshalb ein eigener Behaelter mit kleinerem
+   Abstand als der 16px-Abstand der Kopfleiste, sonst stuenden die beiden
+   Knoepfe so weit auseinander wie zwei unabhaengige Handlungen.
+   flex-shrink:0, damit sie ein langer Anlagenname nicht zusammendrueckt. */
+.verlauf-knoepfe {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+/* Die Pfeilzeichen (↶ ↷) sind in vielen Schriften schmal und blass - eine
+   Spur groesser gesetzt, damit sie auf einem iPad-Bildschirm zu erkennen
+   sind, ohne den Knopf hoeher zu machen. */
+/* Zwei Selektoren tief (.verlauf-knoepfe .knopf-verlauf) - NICHT aus
+   Gewohnheit, sondern weil .knopf-mini in loeschen.css steht und diese
+   Datei NACH style.css geladen wird: eine einfache .knopf-verlauf-Regel
+   haette dieselbe Spezifitaet wie .knopf-mini und verloere gegen die
+   spaetere Datei (derselbe Stolperstein ist dort schon einmal kommentiert).
+   Mit dem Elternselektor gewinnt sie unabhaengig von der Ladereihenfolge. */
+.verlauf-knoepfe .knopf-verlauf { white-space: nowrap; }
+.verlauf-knoepfe .knopf-verlauf span { font-size: 15px; line-height: 1; }
+/* Schmale Fenster (iPad-Hochformat ist 810 Punkte breit): nur die Zeichen,
+   ohne Wort - sonst schoebe das Paar die Knoepfe rechts (Vergleich,
+   Simulieren) aus der Kopfleiste hinaus. aria-label und title nennen die
+   Handlung weiterhin vollstaendig, und nach dem Druck sagt der
+   Hinweisstreifen, was geschehen ist (siehe editor.js, zeigeHinweis). */
+@media (max-width: 1100px) {
+  .verlauf-knoepfe { gap: 4px; }
+  .verlauf-knoepfe .knopf-verlauf {
+    font-size: 0;
+    padding-left: 9px;
+    padding-right: 9px;
+  }
+  .verlauf-knoepfe .knopf-verlauf span { font-size: 17px; }
+  /* Die Kopfleiste des Editors war im iPad-Hochformat (810 Punkte) schon
+     ohne die beiden Knoepfe genau ausgereizt - mit ihnen ragte
+     "Simulieren" ueber den rechten Rand hinaus. Auf schmalen Geraeten
+     ruecken deshalb ALLE Eintraege der Leiste enger zusammen, statt einen
+     von ihnen zu opfern. Nur die Leiste des Editors (.app .leiste), nicht
+     die gleichnamige auf Startseite/Bausteine - dieselbe Abgrenzung wie
+     bei touch-action weiter oben. */
+  .app .leiste { gap: 10px; padding: 0 10px; }
+}
 
 /* Der Bericht-Weg in der Kopfleiste (templates/editor.html, #link-bericht):
    ein <a>, kein <button> - kennt darum kein :disabled. Solange noch kein
@@ -923,6 +969,33 @@ a.knopf-mini { display: inline-block; text-decoration: none; }
   font-size: 11px;
   font-weight: 700;
   line-height: 1;
+}
+
+/* ---------- Hinweisleiste ----------
+   Dieselbe Stelle und dieselbe Form wie die Fehlerleiste darueber, nur
+   ruhig statt alarmierend: sie bestaetigt, was gerade zurueckgenommen oder
+   wiederholt wurde (zeigeHinweis() in editor.js). Bewusst dieselben Masse
+   wie .fehlermeldung, damit beide nicht wie zwei verschiedene Systeme
+   wirken - und ohne das "!"-Zeichen, das dort die Warnung traegt. Beide
+   koennen nie gleichzeitig sichtbar sein: zeigeHinweis() und zeigeFehler()
+   blenden jeweils die andere aus. */
+.hinweismeldung {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(80vw, 560px);
+  background: var(--text);
+  color: var(--auf-farbe);
+  padding: 9px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.35;
+  z-index: 40;
+  box-shadow: var(--schatten-2);
 }
 
 /* ---------- Pfeile ----------
