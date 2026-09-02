@@ -434,3 +434,70 @@ def test_editor_js_mausrad_zoom_unveraendert_ohne_festen_punkt(app):
     assert "_zoomeUmPunkt" not in rad
     assert "this.sicht.x" not in rad
     assert "this.sicht.y" not in rad
+
+
+def test_karte_ziehen_uebersteht_pointercancel_ohne_halben_zustand(app):
+    """iOS kann eine Beruehrungsfolge mitten in der Geste abbrechen (siehe
+    Bericht - dieselbe Wechselwirkung mit der Gestenerkennung wie beim
+    Zoomen, vermuteter Grund, warum sich Karten auf dem echten Geraet nicht
+    ziehen liessen). karteGreifen() muss pointercancel genauso behandeln
+    wie pointerup (Position speichern, Lauscher entfernen), sonst blieben
+    Lauscher haengen und die Karte in einem halben Zustand stehen."""
+    klient = app.test_client()
+    js = klient.get("/static/js/editor.js").get_data(as_text=True)
+    greifen = js[js.index("karteGreifen(ereignis, karte) {"):]
+    greifen = greifen[: greifen.index("\n  },\n")]
+    assert "gruppe.setPointerCapture(ereignis.pointerId)" in greifen
+    assert 'window.addEventListener("pointercancel", loslassen)' in greifen
+    assert 'window.removeEventListener("pointercancel", loslassen)' in greifen
+
+
+def test_pfeile_ziehen_uebersteht_pointercancel(app):
+    """Dieselbe Absicherung wie bei karteGreifen() (siehe dort) fuer das
+    Ziehen eines Verbindungspfeils - ein abgebrochener Zug raeumt die
+    Vorschau sauber weg, statt Lauscher haengen zu lassen."""
+    klient = app.test_client()
+    js = klient.get("/static/js/pfeile.js").get_data(as_text=True)
+    assert 'window.addEventListener("pointercancel", abgebrochen)' in js
+    assert 'window.removeEventListener("pointercancel", abgebrochen)' in js
+
+
+def test_karteauswaehlen_oeffnet_panel_nicht_synchron_im_pointerdown(app):
+    """Eine CSS-Klassenaenderung, die eine Schublade mitten in derselben
+    Beruehrung verschiebt, ist ein plausibler touchcancel-Ausloeser (siehe
+    Bericht) - requestAnimationFrame schiebt sie einen Bildwechsel weiter,
+    statt sie synchron im pointerdown-Handler auszufuehren."""
+    klient = app.test_client()
+    js = klient.get("/static/js/editor.js").get_data(as_text=True)
+    auswaehlen = js[js.index("karteAuswaehlen(karte, gruppe) {"):]
+    auswaehlen = auswaehlen[: auswaehlen.index("\n  },")]
+    assert 'requestAnimationFrame(() => this.seitenbereichOeffnen("panel"))' in auswaehlen
+
+
+def test_sicht_aktualisierung_waehrend_gesten_gebuendelt_sonst_sofort(app):
+    """Der vermutete Grund fuer die kurz aufblitzenden weissen Felder bei
+    bestimmten Zoomstufen (siehe Bericht): jedes einzelne Zoom-Ereignis baute
+    bisher sofort eine komplette Minikarte neu auf. _sichtAktualisierenGebuendelt()
+    muss von den drei haeufig feuernden Pfaden (Kneifzoom/Gestenpfad ueber
+    _zoomeUmPunkt(), Ein-Finger-Schieben, Mausrad) genutzt werden - die
+    einmaligen Aktionen (Einpassen, Startansicht, Minikarte anklicken,
+    Neuzeichnen der ganzen Anlage) bleiben bei der vollen, sofortigen
+    aktualisiereSicht(), dort ist eine sofortige Minikarte wichtiger als das
+    Buendeln."""
+    klient = app.test_client()
+    js = klient.get("/static/js/editor.js").get_data(as_text=True)
+    assert "_sichtAktualisierenGebuendelt() {" in js
+    assert "requestAnimationFrame(() => {" in js
+
+    zoomen = js[js.index("_zoomeUmPunkt(zoomZiel"):]
+    zoomen = zoomen[: zoomen.index("\n  },")]
+    assert "this._sichtAktualisierenGebuendelt();" in zoomen
+
+    rad = js[js.index('leinwand.addEventListener("wheel"'):]
+    rad = rad[: rad.index("{ passive: false });")]
+    assert "this._sichtAktualisierenGebuendelt();" in rad
+
+    einpassen = js[js.index("einpassen() {"):]
+    einpassen = einpassen[: einpassen.index("\n  },\n")]
+    assert "this.aktualisiereSicht();" in einpassen
+    assert "_sichtAktualisierenGebuendelt" not in einpassen

@@ -549,8 +549,16 @@ const Editor = {
     // unten) ist das Parameterfenster sonst ein eigener, unsichtbarer
     // Seitenbereich (siehe style.css) - eine Karte auszuwaehlen soll es
     // automatisch aufklappen, genau wie am Schreibtisch, wo es ohnehin
-    // immer offen ist.
-    if (this.seitenbereichSchmal()) this.seitenbereichOeffnen("panel");
+    // immer offen ist. Bewusst NICHT mehr synchron innerhalb des
+    // pointerdown-Handlers (siehe karteGreifen()): eine Klassenaenderung,
+    // die eine CSS-Uebergangsflaeche mitten in derselben Beruehrung
+    // verschiebt/einblendet, ist ein plausibler Ausloeser fuer ein
+    // touchcancel auf iOS (siehe Bericht, dieselbe Wechselwirkung mit der
+    // Gestenerkennung wie beim Zoomen) - requestAnimationFrame schiebt sie
+    // einen Bildwechsel weiter, ohne dass es sichtbar verzoegert wirkt.
+    if (this.seitenbereichSchmal()) {
+      requestAnimationFrame(() => this.seitenbereichOeffnen("panel"));
+    }
   },
 
   /* Tastaturbedienung einer Karte (siehe Task: Karten muessen "fokussierbar
@@ -573,6 +581,18 @@ const Editor = {
     const gruppe = ereignis.currentTarget;
     this.karteAuswaehlen(karte, gruppe);
 
+    // setPointerCapture: derselbe Grund wie bei der Leinwand selbst (siehe
+    // dortiger Kommentar in bindeLeinwand()) - dieser Zeiger bleibt bei
+    // dieser Karte gemeldet, auch wenn er sich schnell ueber ihren
+    // Bildschirmbereich hinaus bewegt. try/catch: kann bei einem vom
+    // Browser nicht mehr gefuehrten Zeiger legitim fehlschlagen, das darf
+    // das Ziehen selbst nicht abbrechen.
+    try {
+      gruppe.setPointerCapture(ereignis.pointerId);
+    } catch {
+      /* Zeiger nicht (mehr) aktiv - kein Abbruch, siehe Kommentar oben. */
+    }
+
     const start = { x: ereignis.clientX, y: ereignis.clientY };
     const anfang = { x: karte.pos_x, y: karte.pos_y };
 
@@ -588,9 +608,19 @@ const Editor = {
       gruppe.setAttribute("transform", `translate(${karte.pos_x} ${karte.pos_y})`);
       pfeileZeichnen(this.anlage);
     };
+    // loslassen() bedient sowohl pointerup (normal losgelassen) als auch
+    // pointercancel (vom Browser abgebrochen, z.B. weil iOS die Beruehrung
+    // gerade doch als Teil einer Systemgeste einstuft - siehe Bericht) -
+    // BEIDE speichern die aktuelle Position, statt bei einem Abbruch in
+    // einem halben Zustand (Lauscher haengen weiter, Position weder
+    // gespeichert noch zurueckgesetzt) stehen zu bleiben. Ein Parameter
+    // unterscheidet nur fuer die Aufraeum-Reihenfolge, nicht das Ergebnis:
+    // die Karte bleibt dort stehen, wo sie beim Abbruch gerade war - das
+    // ist die tatsaechliche, konsistente Position, kein Zwischenstand.
     const loslassen = async () => {
       window.removeEventListener("pointermove", bewegen);
       window.removeEventListener("pointerup", loslassen);
+      window.removeEventListener("pointercancel", loslassen);
       let antwort;
       try {
         antwort = await fetch(`/api/karten/${karte.id}`, {
@@ -610,6 +640,7 @@ const Editor = {
     };
     window.addEventListener("pointermove", bewegen);
     window.addEventListener("pointerup", loslassen);
+    window.addEventListener("pointercancel", loslassen);
   },
 
   async karteHinzufuegen(typ, x, y) {
@@ -683,15 +714,49 @@ const Editor = {
     await this.laden(this.anlage.id);
   },
 
-  aktualisiereSicht() {
+  /* Nur die (billige) Transform-Eigenschaft von #welt setzen - kein
+     Minikarte-Neuaufbau, keine Beschriftungspruefung. Von
+     aktualisiereSicht() UND von _sichtAktualisierenGebuendelt() genutzt
+     (siehe dort), damit beide exakt dieselbe eine Zeile schreiben. */
+  _setzeWeltTransform() {
     document
       .getElementById("welt")
       .setAttribute(
         "transform",
         `translate(${this.sicht.x} ${this.sicht.y}) scale(${this.sicht.zoom})`
       );
+  },
+
+  aktualisiereSicht() {
+    this._setzeWeltTransform();
     this.aktualisiereMinikarte();
     this.aktualisiereBeschriftungen();
+  },
+
+  /* Wie aktualisiereSicht(), aber fuer die haeufigen Zwischenschritte einer
+     LAUFENDEN Geste (Kneifzoom, WebKit-Gestenpfad, Ein-Finger-Schieben,
+     Mausrad-Serie) gedacht: die Transform selbst wird sofort gesetzt (das
+     braucht es fuer die sichtbare Rueckmeldung), aber Minikarte-Neuaufbau
+     und Beschriftungspruefung - beides nicht billig, siehe dort - werden
+     auf den naechsten Bildwechsel gebuendelt statt bei JEDEM einzelnen
+     Ereignis sofort zu laufen. Ohne dieses Buendeln feuert z.B. ein
+     gesturechange auf iOS oft mehrfach pro Bildwechsel, und jeder einzelne
+     Aufruf baute bisher die komplette Minikarte neu auf, noch bevor der
+     Bildschirm ueberhaupt einmal fertig gezeichnet hatte - genau das erzeugt
+     die kurz aufblitzenden weissen/unfertigen Kacheln bei bestimmten
+     Zoomstufen (siehe Bericht). requestAnimationFrame statt z.B.
+     setTimeout: laeuft garantiert vor dem naechsten Bildaufbau, nicht
+     irgendwann danach. */
+  _sichtRahmenAngefordert: false,
+  _sichtAktualisierenGebuendelt() {
+    this._setzeWeltTransform();
+    if (this._sichtRahmenAngefordert) return;
+    this._sichtRahmenAngefordert = true;
+    requestAnimationFrame(() => {
+      this._sichtRahmenAngefordert = false;
+      this.aktualisiereMinikarte();
+      this.aktualisiereBeschriftungen();
+    });
   },
 
   /* Blendet Gruppenzeile und Werte unterhalb einer Zoomstufe aus - die
@@ -942,7 +1007,10 @@ const Editor = {
     this.sicht.zoom = zoom;
     this.sicht.x = punktX - weltX * zoom;
     this.sicht.y = punktY - weltY * zoom;
-    this.aktualisiereSicht();
+    // Gebuendelt (siehe _sichtAktualisierenGebuendelt()): beide Aufrufer
+    // (Kneifzoom, WebKit-Gestenpfad) feuern waehrend einer laufenden Geste
+    // oft mehrfach pro Bildwechsel.
+    this._sichtAktualisierenGebuendelt();
   },
 
   /* Zoomt UND schiebt in einem Zug, solange genau zwei Finger auf der
@@ -1102,7 +1170,11 @@ const Editor = {
       } else if (this._panAnker) {
         this.sicht.x = this._panAnker.sichtX + (e.clientX - this._panAnker.x);
         this.sicht.y = this._panAnker.sichtY + (e.clientY - this._panAnker.y);
-        this.aktualisiereSicht();
+        // Gebuendelt (siehe _sichtAktualisierenGebuendelt()): pointermove
+        // waehrend eines Ein-Finger-Zugs feuert oft mehrfach pro
+        // Bildwechsel, die Minikarte muss nicht bei jedem einzelnen davon
+        // komplett neu aufgebaut werden.
+        this._sichtAktualisierenGebuendelt();
       }
     });
 
@@ -1169,7 +1241,12 @@ const Editor = {
       // (siehe einpassen()) - sonst liesse sich bei einer besonders grossen
       // Anlage nicht so weit herauszoomen, wie "Einpassen" selbst braucht.
       this.sicht.zoom = Math.min(this.ZOOM_MAX, Math.max(this.ZOOM_MIN, this.sicht.zoom * faktor));
-      this.aktualisiereSicht();
+      // Gebuendelt (siehe _sichtAktualisierenGebuendelt()): eine schnelle
+      // Mausrad-/Trackpad-Serie feuert oft mehrfach pro Bildwechsel - bei
+      // grossen Anlagen sonst derselbe kurze weisse Blitzer wie bei der
+      // Kneifgeste (siehe Bericht), am Schreibtisch bisher nur seltener
+      // aufgefallen.
+      this._sichtAktualisierenGebuendelt();
     }, { passive: false });
 
     leinwand.addEventListener("dragover", (e) => e.preventDefault());

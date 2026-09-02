@@ -184,6 +184,7 @@ const Pfeile = {
     const aufraeumen = () => {
       window.removeEventListener("pointermove", bewegen);
       window.removeEventListener("pointerup", loslassen);
+      window.removeEventListener("pointercancel", abgebrochen);
       window.removeEventListener("keydown", beiEscape);
       vorschau.remove();
       if (quellElement) quellElement.classList.remove("verbindet-von");
@@ -261,8 +262,17 @@ const Pfeile = {
       await this.editor.laden(this.editor.anlage.id);
     };
 
+    // pointercancel: derselbe Grund wie bei karteGreifen() in editor.js
+    // (siehe dortiger Kommentar) - iOS kann eine Beruehrungsfolge mitten in
+    // der Geste abbrechen. Hier gibt es keine sinnvolle "Loslassen"-Stelle
+    // mehr (kein echter Zeiger mehr da, an dem eine Zielkarte zu ermitteln
+    // waere) - deshalb nur aufraeumen() statt loslassen(): die Vorschau
+    // verschwindet sauber, ohne einen Pfeil an eine zufaellige letzte
+    // Position anzulegen.
+    const abgebrochen = () => aufraeumen();
     window.addEventListener("pointermove", bewegen);
     window.addEventListener("pointerup", loslassen);
+    window.addEventListener("pointercancel", abgebrochen);
     window.addEventListener("keydown", beiEscape);
   },
 
