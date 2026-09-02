@@ -305,12 +305,28 @@ const Editor = {
       return;
     }
     this.anlage = await antwort.json();
-    document.getElementById("anlagenname").textContent = this.anlage.name;
+    this.anlagennamenZeigen(this.anlage.name);
     this.zeichne();
     if (this._nochNichtGeoeffnet) {
       this._nochNichtGeoeffnet = false;
       this.startAnsicht();
     }
+  },
+
+  /* Der Anlagenname in der Kopfleiste - und an zwei weiteren Stellen, an
+     denen er ganz zu lesen ist. Auf schmalen Geraeten bleibt fuer ihn wenig
+     Platz: die Leiste gibt ihren Raum zuerst den Wegen zum Ergebnis (siehe
+     style.css, "Kopfleiste des Editors"), sodass auf einem iPad quer nur
+     noch rund sechs Zeichen und ein Auslassungszeichen uebrig bleiben
+     (nachgemessen: 66 Punkte). Damit trotzdem beantwortbar bleibt, in
+     welcher Anlage man ist, steht der ganze Name zusaetzlich im title des
+     Elements (Zeigergeraete) und im Titel der Seite (Lesezeichen, Tab,
+     Vorlesehilfen). */
+  anlagennamenZeigen(name) {
+    const feld = document.getElementById("anlagenname");
+    feld.textContent = name;
+    feld.title = name;
+    document.title = `${name} – RLT-Simulation`;
   },
 
   // Setzt (oder deaktiviert) den dauerhaften Bericht-Weg in der Kopfleiste
@@ -372,7 +388,7 @@ const Editor = {
       return;
     }
     this.anlage.name = neuerName;
-    document.getElementById("anlagenname").textContent = neuerName;
+    this.anlagennamenZeigen(neuerName);
   },
 
   // -- Rueckgaengig und Wiederholen ---------------------------------------

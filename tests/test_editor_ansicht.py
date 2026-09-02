@@ -162,3 +162,22 @@ def test_die_oeffnungsansicht_entscheidet_an_einer_eigenen_schwelle():
     assert "EINSTIEG_ZOOM_MIN" in abschnitt
     assert "einpassZoom(" in abschnitt
     assert "DETAIL_ZOOM_SCHWELLE" not in abschnitt
+
+
+def test_der_anlagenname_steht_auch_dort_wo_er_ganz_zu_lesen_ist():
+    """In der Kopfleiste bleibt für den Namen wenig Platz: die Leiste gibt
+    ihren Raum zuerst den Wegen zum Ergebnis, sodass auf einem iPad quer nur
+    rund sechs Zeichen und ein Auslassungszeichen übrig bleiben (nachgemessen:
+    66 Punkte). Das ist eine bewusste Abwägung - aber „in welcher Anlage bin
+    ich" muss beantwortbar bleiben. Deshalb setzt der Editor den ganzen Namen
+    zusätzlich in den title des Elements und in den Titel der Seite."""
+    js = (
+        pathlib.Path(__file__).resolve().parent.parent / "static" / "js" / "editor.js"
+    ).read_text(encoding="utf-8")
+    stelle = js.index("anlagennamenZeigen(name) {")
+    abschnitt = js[stelle:stelle + 400]
+    assert "feld.title = name" in abschnitt
+    assert "document.title" in abschnitt
+
+    # Und niemand setzt den Namen an der Funktion vorbei.
+    assert 'getElementById("anlagenname").textContent =' not in js
