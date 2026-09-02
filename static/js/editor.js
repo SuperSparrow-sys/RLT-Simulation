@@ -1255,6 +1255,13 @@ const Editor = {
       this._kneifAnker = null;
       this._panAnker = null;
       this._zeiger.clear();
+      // --app-hoehe wurde waehrend der Geste nicht nachgefuehrt (siehe
+      // aktualisiereAppHoehe() weiter unten in dieser Datei - eine mit
+      // "function" deklarierte, gehoistete Funktion, hier also schon
+      // aufrufbar) - jetzt, wo Editor._gestenAnker wieder leer ist, den
+      // tatsaechlich aktuellen Wert nachtragen, damit kein zu kleiner
+      // Stand von einer Schwankung waehrend der Geste stehen bleibt.
+      aktualisiereAppHoehe();
     }, { passive: false });
 
     leinwand.addEventListener("wheel", (e) => {
@@ -1311,13 +1318,44 @@ const Editor = {
    editor.js ein, kein Aufwand fuer Startseite/Bausteine noetig.
    window.visualViewport fehlt in aelteren Browsern - dann bleibt die
    CSS-Variable unbenutzt und .app faellt auf 100dvh zurueck (siehe
-   style.css, var(--app-hoehe, 100dvh)). */
-if (window.visualViewport) {
-  const aktualisiereAppHoehe = () => {
+   style.css, var(--app-hoehe, 100dvh)).
+
+   Zwei Nachbesserungen (siehe Bericht: "Sichtfeld wird beim Zoomen manchmal
+   kleiner, rechts erscheint grau"): Safari meldet ueber "resize" auch
+   waehrend einer laufenden Kneifgeste laufend leicht schwankende
+   VisualViewport-Werte - fuer die Gestenerkennung selbst laeuft ja weiter,
+   auch wenn preventDefault() am Ende die eigentliche Seiten-Vergroesserung
+   unterbindet (siehe gesturestart/-change/-end weiter oben). Ohne Schutz
+   schrumpfte .app (und damit die ganze Arbeitsflaeche) mitten in der Geste
+   mit einer solchen Schwankung, und wo sie nicht mehr hinreichte, kam der
+   Seitenhintergrund (--bg, ein helles Grau) zum Vorschein - "manchmal",
+   je nachdem, ob am Ende noch ein "resize" mit dem richtigen, vollen Wert
+   nachkam. --app-hoehe hat GENAU EINEN Zweck (die Bildschirmtastatur),
+   nicht jede Schwankung: 1) ignoriert waehrend Editor._gestenAnker gesetzt
+   ist (eine WebKit-Kneifgeste laeuft) komplett, mit einem erneuten Aufruf
+   am Ende der Geste (siehe gestureend weiter oben), damit kein zu kleiner
+   Wert stehen bleibt. 2) weicht nur bei einer DEUTLICH kleineren
+   VisualViewport von 100dvh ab (SCHWELLE_TASTATUR_PX) - eine Tastatur
+   nimmt immer einen grossen Teil des Bildschirms ein, eine kleine
+   Schwankung waehrend einer Geste nicht annaehernd so viel; darunter wird
+   die Eigenschaft entfernt, .app faellt auf 100dvh zurueck. */
+const SCHWELLE_TASTATUR_PX = 100;
+function aktualisiereAppHoehe() {
+  if (!window.visualViewport) return;
+  // Waehrend einer laufenden WebKit-Kneifgeste gar nicht nachfuehren (siehe
+  // Kommentar oben) - der Aufruf am Ende der Geste (gestureend) holt den
+  // dann aktuellen, echten Wert nach.
+  if (Editor._gestenAnker) return;
+  const luecke = window.innerHeight - window.visualViewport.height;
+  if (luecke > SCHWELLE_TASTATUR_PX) {
     document.documentElement.style.setProperty(
       "--app-hoehe", `${window.visualViewport.height}px`
     );
-  };
+  } else {
+    document.documentElement.style.removeProperty("--app-hoehe");
+  }
+}
+if (window.visualViewport) {
   window.visualViewport.addEventListener("resize", aktualisiereAppHoehe);
   aktualisiereAppHoehe();
 }

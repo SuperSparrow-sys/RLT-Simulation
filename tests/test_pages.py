@@ -535,3 +535,29 @@ def test_aktualisiere_minikarte_kein_fruehausstieg_und_massstab_aus_huelle_plus_
     assert "Math.max(huelle.maxX, sichtX1)" in funktion
     assert "Math.min(huelle.minY, sichtY0)" in funktion
     assert "Math.max(huelle.maxY, sichtY1)" in funktion
+
+
+def test_app_hoehe_reagiert_nur_auf_eine_deutliche_verkleinerung_nicht_waehrend_einer_geste(app):
+    """Safari meldet ueber VisualViewport "resize" auch waehrend einer
+    laufenden Kneifgeste laufend leicht schwankende Werte - die Gesten-
+    erkennung selbst laeuft ja weiter, auch wenn preventDefault() am Ende
+    die Seiten-Vergroesserung unterbindet (siehe Bericht: "Sichtfeld wird
+    beim Zoomen manchmal kleiner, rechts erscheint grau"). --app-hoehe hat
+    GENAU EINEN Zweck (die Bildschirmtastatur) und darf nicht auf jede
+    Schwankung reagieren, muss waehrend Editor._gestenAnker komplett
+    stillstehen, und muss sich nach Gestenende wieder auf den echten Wert
+    einstellen - sonst bleibt ein zu kleiner Stand haengen."""
+    klient = app.test_client()
+    js = klient.get("/static/js/editor.js").get_data(as_text=True)
+
+    funktion = js[js.index("function aktualisiereAppHoehe() {"):]
+    funktion = funktion[: funktion.index("\n}\n")]
+    assert "if (Editor._gestenAnker) return;" in funktion
+    assert "SCHWELLE_TASTATUR_PX" in funktion
+    assert "window.innerHeight - window.visualViewport.height" in funktion
+    assert "removeProperty(\"--app-hoehe\")" in funktion
+
+    gestureend = js[js.index('leinwand.addEventListener("gestureend"'):]
+    gestureend = gestureend[: gestureend.index("{ passive: false });")]
+    assert "this._gestenAnker = null;" in gestureend
+    assert "aktualisiereAppHoehe();" in gestureend
