@@ -1,0 +1,82 @@
+/* Wetterabruf ueber Open-Meteo: eigenes Stylesheet, weil static/css/style.css
+   waehrend dieser Arbeit von einem anderen Agenten bearbeitet wird. Nutzt nur
+   vorhandene CSS-Variablen aus style.css (--border, --text-secondary, ...)
+   und vorhandene Klassen (.panel-zeile, .panel-label, .knopf-haupt) fuer ein
+   einheitliches Bild, ohne die Datei selbst anzufassen. */
+
+.wetter-wege {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  margin-bottom: 18px;
+}
+
+.wetter-weg {
+  flex: 1 1 320px;
+  min-width: 280px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  background: var(--surface-alt);
+}
+
+.wetter-weg-titel {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  margin: 0 0 10px;
+}
+
+.wetter-weg-hinweis {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  margin: 0 0 12px;
+}
+
+.wetter-weg .wetter-formular {
+  margin-bottom: 0;
+}
+
+.wetter-abruf-formular {
+  display: flex;
+  flex-direction: column;
+}
+
+.wetter-abruf-formular .panel-zeile {
+  margin-bottom: 10px;
+}
+
+.wetter-abruf-koordinaten {
+  align-items: flex-start;
+}
+
+.wetter-abruf-formular select[multiple] {
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.wetter-abruf-formular button[type="submit"] {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+/* Quelle in der Datensatzliste - kurzes, farbneutrales Etikett statt des
+   rohen Speicherwerts ("upload" / "open-meteo"). */
+.wetter-quelle-etikett {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  background: var(--surface);
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .wetter-wege {
+    flex-direction: column;
+  }
+}

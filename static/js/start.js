@@ -33,6 +33,19 @@ const BADGE_TEXT = {
   fehler: () => "Letzter Lauf fehlgeschlagen",
 };
 
+// Anzeigetext je Quelle eines Wetterdatensatzes - der Rohwert aus der DB
+// ("upload"/"open-meteo") ist fuer den Code praktisch, fuer die Liste aber
+// zu technisch.
+const WETTER_QUELLE_TEXT = {
+  upload: "Datei-Upload",
+  "open-meteo": "Online-Abruf",
+};
+
+// Erstes Jahr, das die Open-Meteo Archive-API anbietet (core/wetter/openmeteo.py:
+// FRUEHESTES_JAHR) - hier dupliziert, weil die Grenze rein in der Oberflaeche
+// gebraucht wird und dafuer keine eigene Schnittstelle lohnt.
+const WETTER_FRUEHESTES_JAHR = 1940;
+
 const Start = {
   projekte: [],
   anlagen: [],
@@ -386,7 +399,9 @@ const Start = {
         (w) => `
         <tr>
           <td>${htmlSicher(w.name)}</td>
-          <td>${htmlSicher(w.quelle)}</td>
+          <td><span class="wetter-quelle-etikett">${htmlSicher(
+            WETTER_QUELLE_TEXT[w.quelle] || w.quelle
+          )}</span></td>
           <td>${htmlSicher(w.ort)}</td>
           <td>${w.jahr ?? ""}</td>
           <td class="zahl">${w.stunden}</td>
@@ -453,19 +468,147 @@ const Start = {
     knopf.disabled = false;
     knopf.textContent = urspruenglicherText;
 
-    let liste;
+    await this._wetterListeAktualisieren(
+      "Die Datei wurde hochgeladen, die Liste konnte aber nicht aktualisiert werden."
+    );
+  },
+
+  // Nach einem Upload oder Abruf neu von /api/wetter laden, statt den neuen
+  // Datensatz von Hand in this.wetter einzufuegen - die Liste bleibt so immer
+  // deckungsgleich mit dem, was die Datenbank tatsaechlich enthaelt.
+  async _wetterListeAktualisieren(fehlerBeiFehlschlag) {
     try {
-      const listeAntwort = await fetch("/api/wetter");
-      if (!listeAntwort.ok) throw new Error("Antwort nicht ok");
-      liste = await listeAntwort.json();
+      const antwort = await fetch("/api/wetter");
+      if (!antwort.ok) throw new Error("Antwort nicht ok");
+      this.wetter = await antwort.json();
     } catch {
-      zeigeFehler(
-        "Die Datei wurde hochgeladen, die Liste konnte aber nicht aktualisiert werden."
-      );
+      zeigeFehler(fehlerBeiFehlschlag);
       return;
     }
-    this.wetter = liste;
     this.zeichneWetter();
+  },
+
+  // Fuellt das Jahr-Mehrfachauswahlfeld mit allen abgeschlossenen
+  // Kalenderjahren, die die Open-Meteo Archive-API anbietet (1940 bis zum
+  // Vorjahr) - neuestes zuerst, weil das der haeufigste Wunsch ist. So kann
+  // die Oberflaeche gar nicht erst ein unzulaessiges Jahr anbieten, statt den
+  // Benutzer erst beim Absenden auf den Fehler laufen zu lassen.
+  wetterAbrufJahreFuellen() {
+    const feld = document.getElementById("feld-wetter-abruf-jahre");
+    const letztesVollstaendigesJahr = new Date().getFullYear() - 1;
+    feld.textContent = "";
+    for (let jahr = letztesVollstaendigesJahr; jahr >= WETTER_FRUEHESTES_JAHR; jahr--) {
+      const option = document.createElement("option");
+      option.value = String(jahr);
+      option.textContent = String(jahr);
+      feld.appendChild(option);
+    }
+    // Bequemer Einstieg: das juengste verfuegbare Jahr ist vorausgewaehlt.
+    if (feld.options.length) feld.options[0].selected = true;
+  },
+
+  // Zeigt/versteckt die Koordinatenfelder, je nachdem ob ein vorbelegter Ort
+  // oder "Eigene Koordinaten" gewaehlt ist.
+  wetterAbrufOrtGewaehlt() {
+    const auswahl = document.getElementById("feld-wetter-abruf-ort");
+    const koordinatenBereich = document.getElementById("wetter-abruf-koordinaten");
+    koordinatenBereich.hidden = auswahl.value !== "eigene";
+  },
+
+  async wetterAbrufen(ereignis) {
+    ereignis.preventDefault();
+
+    const ortAuswahl = document.getElementById("feld-wetter-abruf-ort");
+    const jahreFeld = document.getElementById("feld-wetter-abruf-jahre");
+    const nameFeld = document.getElementById("feld-wetter-abruf-name");
+    const knopf = document.getElementById("btn-wetter-abrufen");
+
+    let ort;
+    let breite;
+    let laenge;
+    if (ortAuswahl.value === "eigene") {
+      const breiteFeld = document.getElementById("feld-wetter-abruf-breite");
+      const laengeFeld = document.getElementById("feld-wetter-abruf-laenge");
+      const ortsnameFeld = document.getElementById("feld-wetter-abruf-ortsname");
+      breite = parseFloat(breiteFeld.value);
+      laenge = parseFloat(laengeFeld.value);
+      if (!Number.isFinite(breite) || !Number.isFinite(laenge)) {
+        zeigeFehler("Bitte Breite und Länge als Zahl eingeben.");
+        return;
+      }
+      ort = ortsnameFeld.value.trim() || `${breite}, ${laenge}`;
+    } else {
+      const gewaehlteOption = ortAuswahl.selectedOptions[0];
+      breite = parseFloat(gewaehlteOption.dataset.breite);
+      laenge = parseFloat(gewaehlteOption.dataset.laenge);
+      ort = ortAuswahl.value;
+    }
+
+    const jahre = Array.from(jahreFeld.selectedOptions).map((o) => parseInt(o.value, 10));
+    if (!jahre.length) {
+      zeigeFehler("Bitte mindestens ein Jahr auswählen.");
+      return;
+    }
+
+    const eigenerName = nameFeld.value.trim();
+    const urspruenglicherText = knopf.textContent;
+    knopf.disabled = true;
+
+    // Ein Abruf je Jahr, hintereinander statt parallel - der Server schickt
+    // pro Jahr bereits fuenf parallele Teilabfragen an Open-Meteo los,
+    // mehrere Jahre gleichzeitig wuerden das unnoetig vervielfachen. Fehler
+    // bei einem Jahr sollen die uebrigen Jahre nicht verhindern.
+    const fehlgeschlagen = [];
+    let erfolge = 0;
+    for (let i = 0; i < jahre.length; i++) {
+      const jahr = jahre[i];
+      knopf.textContent =
+        jahre.length > 1 ? `Wird abgerufen … (${i + 1}/${jahre.length})` : "Wird abgerufen …";
+
+      const name = eigenerName ? (jahre.length > 1 ? `${eigenerName} ${jahr}` : eigenerName) : "";
+
+      let antwort;
+      try {
+        antwort = await fetch("/api/wetter/abrufen", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ breite, laenge, jahr, ort, name }),
+        });
+      } catch {
+        fehlgeschlagen.push(`${jahr}: Wetterdaten konnten nicht abgerufen werden`);
+        continue;
+      }
+      if (!antwort.ok) {
+        let text = "Wetterdaten konnten nicht abgerufen werden";
+        try {
+          const daten = await antwort.json();
+          if (daten.fehler) text = daten.fehler;
+        } catch {
+          /* Antwort war kein JSON - bei der Vorgabemeldung bleiben. */
+        }
+        fehlgeschlagen.push(`${jahr}: ${text}`);
+        continue;
+      }
+      erfolge++;
+    }
+
+    knopf.disabled = false;
+    knopf.textContent = urspruenglicherText;
+
+    if (fehlgeschlagen.length) {
+      zeigeFehler(
+        erfolge
+          ? `${erfolge} von ${jahre.length} Jahren abgerufen. Fehlgeschlagen: ${fehlgeschlagen.join("; ")}`
+          : `Abruf fehlgeschlagen: ${fehlgeschlagen.join("; ")}`
+      );
+    }
+
+    if (erfolge) {
+      nameFeld.value = "";
+      await this._wetterListeAktualisieren(
+        "Die Wetterdaten wurden abgerufen, die Liste konnte aber nicht aktualisiert werden."
+      );
+    }
   },
 };
 
@@ -476,5 +619,14 @@ window.addEventListener("DOMContentLoaded", () => {
   document
     .getElementById("form-wetter-upload")
     .addEventListener("submit", (e) => Start.wetterHochladen(e));
+
+  Start.wetterAbrufJahreFuellen();
+  document
+    .getElementById("feld-wetter-abruf-ort")
+    .addEventListener("change", () => Start.wetterAbrufOrtGewaehlt());
+  document
+    .getElementById("form-wetter-abruf")
+    .addEventListener("submit", (e) => Start.wetterAbrufen(e));
+
   Start.laden();
 });

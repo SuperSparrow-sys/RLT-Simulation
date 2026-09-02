@@ -71,6 +71,30 @@ def test_startseite_bindet_ihr_eigenes_script_ein(app):
     assert "js/start.js" in html
 
 
+def test_startseite_bindet_wetter_abruf_css_ein(app):
+    """Das eigene Stylesheet des Wetterabrufs - ohne dieses Tag bleibt das
+    Formular unformatiert (siehe Kommentar in wetter-abruf.css, weshalb es
+    eine eigene Datei statt style.css ist)."""
+    klient = app.test_client()
+    html = klient.get("/").get_data(as_text=True)
+    assert "css/wetter-abruf.css" in html
+
+
+def test_startseite_enthaelt_das_abrufformular(app):
+    """Formularfelder fuer den Online-Abruf (Ort, Jahr-Mehrfachauswahl,
+    Absenden) - ohne sie kann start.js nichts an sie binden und der zweite
+    Weg zu Wetterdaten (neben dem Datei-Upload) fehlt stillschweigend."""
+    klient = app.test_client()
+    html = klient.get("/").get_data(as_text=True)
+    assert 'id="form-wetter-abruf"' in html
+    assert 'id="feld-wetter-abruf-ort"' in html
+    assert 'id="feld-wetter-abruf-jahre"' in html
+    assert 'id="btn-wetter-abrufen"' in html
+    # mindestens ein vorbelegter Ort und die Option fuer eigene Koordinaten
+    assert 'value="Dresden"' in html
+    assert 'value="eigene"' in html
+
+
 def test_startseite_bindet_kein_editor_script_ein(app):
     """start.js ist eigenstaendig (siehe dortiger Kommentar) - laedt die
     Startseite trotzdem editor.js/panel.js/simulation.js mit, waere das ein

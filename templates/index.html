@@ -6,6 +6,7 @@
   <title>RLT-Simulation</title>
   <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/wetter-abruf.css') }}">
 </head>
 <body>
   <div id="fehlermeldung" class="fehlermeldung" role="alert" aria-live="assertive" hidden></div>
@@ -29,11 +30,67 @@
           Für einen Simulationslauf wird ein Wetterdatensatz gebraucht. Gelesen werden
           TRY-Dateien als .xls, .xlsx oder .csv.
         </p>
-        <form id="form-wetter-upload" class="wetter-formular">
-          <input type="file" id="feld-wetter-datei" accept=".xls,.xlsx,.csv">
-          <input type="text" id="feld-wetter-name" placeholder="Bezeichnung (optional)">
-          <button type="submit" class="knopf-haupt" id="btn-wetter-hochladen">Hochladen</button>
-        </form>
+        <div class="wetter-wege">
+          <div class="wetter-weg">
+            <h2 class="wetter-weg-titel">Datei hochladen</h2>
+            <form id="form-wetter-upload" class="wetter-formular">
+              <input type="file" id="feld-wetter-datei" accept=".xls,.xlsx,.csv">
+              <input type="text" id="feld-wetter-name" placeholder="Bezeichnung (optional)">
+              <button type="submit" class="knopf-haupt" id="btn-wetter-hochladen">Hochladen</button>
+            </form>
+          </div>
+
+          <div class="wetter-weg">
+            <h2 class="wetter-weg-titel">Online abrufen</h2>
+            <p class="wetter-weg-hinweis">
+              Ruft ein volles Kalenderjahr Wetterdaten für einen Ort von der
+              Open-Meteo-Archive-API ab (kostenlos, ohne Anmeldung).
+            </p>
+            <form id="form-wetter-abruf" class="wetter-abruf-formular">
+              <label class="panel-zeile">
+                <span class="panel-label">Ort</span>
+                <select id="feld-wetter-abruf-ort">
+                  <option value="Berlin" data-breite="52.5200" data-laenge="13.4050">Berlin</option>
+                  <option value="Hamburg" data-breite="53.5511" data-laenge="9.9937">Hamburg</option>
+                  <option value="München" data-breite="48.1351" data-laenge="11.5820">München</option>
+                  <option value="Köln" data-breite="50.9375" data-laenge="6.9603">Köln</option>
+                  <option value="Frankfurt am Main" data-breite="50.1109" data-laenge="8.6821">Frankfurt am Main</option>
+                  <option value="Stuttgart" data-breite="48.7758" data-laenge="9.1829">Stuttgart</option>
+                  <option value="Leipzig" data-breite="51.3397" data-laenge="12.3731">Leipzig</option>
+                  <option value="Dresden" data-breite="51.0504" data-laenge="13.7373">Dresden</option>
+                  <option value="eigene">Eigene Koordinaten …</option>
+                </select>
+              </label>
+
+              <div class="panel-zeile panel-zeile-nebeneinander wetter-abruf-koordinaten" id="wetter-abruf-koordinaten" hidden>
+                <label class="panel-zeile">
+                  <span class="panel-label">Breite</span>
+                  <input type="number" id="feld-wetter-abruf-breite" step="0.0001" min="-90" max="90" placeholder="z. B. 52.52">
+                </label>
+                <label class="panel-zeile">
+                  <span class="panel-label">Länge</span>
+                  <input type="number" id="feld-wetter-abruf-laenge" step="0.0001" min="-180" max="180" placeholder="z. B. 13.40">
+                </label>
+                <label class="panel-zeile">
+                  <span class="panel-label">Ortsname (optional)</span>
+                  <input type="text" id="feld-wetter-abruf-ortsname" placeholder="z. B. Rostock">
+                </label>
+              </div>
+
+              <label class="panel-zeile">
+                <span class="panel-label">Jahr(e) – Strg/Cmd-Klick für mehrere</span>
+                <select id="feld-wetter-abruf-jahre" multiple size="6"></select>
+              </label>
+
+              <label class="panel-zeile">
+                <span class="panel-label">Bezeichnung (optional)</span>
+                <input type="text" id="feld-wetter-abruf-name" placeholder="Bezeichnung (optional)">
+              </label>
+
+              <button type="submit" class="knopf-haupt" id="btn-wetter-abrufen">Abrufen</button>
+            </form>
+          </div>
+        </div>
         <div id="start-wetter-liste"></div>
       </section>
     </main>
