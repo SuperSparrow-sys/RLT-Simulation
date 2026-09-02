@@ -582,6 +582,45 @@ def test_endpunkt_meldet_unbekannte_anlage_mit_404(app):
     assert klient.post("/api/anlagen/999999/verlauf/vor").status_code == 404
 
 
+def test_pfeil_mit_mehreren_verbindungen_kommt_vollstaendig_zurueck(app):
+    """Ein Pfeil kann mehr als eine Anschlussverbindung tragen (in AX_SIM 2.1
+    sieben von 61) - zurueckgenommen muessen ALLE wieder da sein, mit ihren
+    eigenen Kennungen, nicht nur der Pfeil selbst.
+
+    Das ist die Pruefung, die das Loeschen eines Pfeils (Auswahl im Editor,
+    static/js/editor.js) mit dem Verlauf zusammenbringt."""
+    from core.vorlagen import ax_sim_2_1
+
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = ax_sim_2_1.baue(projekt, "AX_SIM 2.1")
+        daten = anlagen.als_json(anlage)
+        pfeil = next(p for p in daten["pfeile"] if len(p["verbindungen"]) > 1)
+        db = database.get_db()
+        vorher = [
+            dict(z) for z in db.execute(
+                "SELECT * FROM verbindung WHERE pfeil_id = ? ORDER BY id", (pfeil["id"],)
+            )
+        ]
+        assert len(vorher) > 1
+
+        anlagen.pfeil_loeschen(pfeil["id"])
+        assert db.execute(
+            "SELECT 1 FROM pfeil WHERE id = ?", (pfeil["id"],)
+        ).fetchone() is None
+
+        verlauf.zurueck(anlage)
+        _fremdschluessel_pruefen()
+
+        nachher = [
+            dict(z) for z in db.execute(
+                "SELECT * FROM verbindung WHERE pfeil_id = ? ORDER BY id", (pfeil["id"],)
+            )
+        ]
+        assert nachher == vorher
+        assert len(anlagen.als_json(anlage)["pfeile"]) == len(daten["pfeile"])
+
+
 def test_editorseite_bringt_die_beiden_knoepfe_mit(app):
     """Die Bedienung haengt an zwei festen Kennungen (siehe
     static/js/editor.js) - fehlt eine davon in der Vorlage, bleibt der
@@ -593,3 +632,17 @@ def test_editorseite_bringt_die_beiden_knoepfe_mit(app):
     assert 'id="btn-zurueck"' in seite
     assert 'id="btn-vor"' in seite
     assert "Rückgängig" in seite
+
+
+def test_editorseite_bringt_das_pfeilwerkzeug_mit(app):
+    """Ein Pfeil laesst sich auswaehlen und dann ueber diesen Knopf loeschen
+    (static/js/editor.js, pfeilAuswahlZeichnen) - der einzige Weg, der auf
+    dem iPad ohne Entf-Taste funktioniert. Fehlt er in der Vorlage, bleibt
+    eine falsche Verbindung dort unloeschbar, ohne dass es auffiele."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("P")
+        anlage = anlagen.anlage_anlegen(projekt, "A")
+    seite = app.test_client().get(f"/anlage/{anlage}").get_data(as_text=True)
+    assert 'id="pfeil-werkzeug"' in seite
+    assert 'id="btn-pfeil-loeschen"' in seite
+    assert "Verbindung löschen" in seite

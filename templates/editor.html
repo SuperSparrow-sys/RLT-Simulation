@@ -164,6 +164,21 @@
           </g>
         </svg>
       </div>
+      <!-- Werkzeug eines ausgewaehlten Pfeils (editor.js,
+           pfeilAuswahlZeichnen): schwebt an der Mitte der Verbindung, nennt
+           sie ("Erhitzer → Kühler") und traegt den Loeschknopf. Als
+           HTML-Element neben der Leinwand statt als SVG-Gruppe darin: so
+           behaelt es beim Hineinzoomen seine Groesse und seine
+           Beruehrungsflaeche, statt mitzuwachsen oder zu schrumpfen. Der
+           Weg fuer den Finger - auf dem iPad gibt es weder Entf-Taste noch
+           einen zuverlaessig treffbaren Doppeltipp auf einen 1,5 Pixel
+           breiten Signalpfeil. -->
+      <div class="pfeil-werkzeug" id="pfeil-werkzeug" hidden>
+        <span class="pfeil-werkzeug-text" id="pfeil-werkzeug-text"></span>
+        <button class="knopf-mini knopf-mini-gefahr" id="btn-pfeil-loeschen"
+                title="Diese Verbindung löschen">Verbindung löschen</button>
+      </div>
+
       <div class="leinwand-hinweis" id="leinwand-hinweis" hidden>
         <div class="leinwand-hinweis-kasten">
           <p><strong>Diese Anlage ist noch leer.</strong></p>

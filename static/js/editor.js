@@ -66,11 +66,27 @@ function zeilenUmbrechen(text, maxBreite, font) {
   return zeilen;
 }
 
+/* Nach JEDEM Neuzeichnen der Pfeile zwei Nachtraege, die pfeile.js nicht
+   selbst kennt: die breiteren, unsichtbaren Trefferbahnen (damit ein Finger
+   einen 1,5 Pixel schmalen Signalpfeil ueberhaupt treffen kann) und die
+   Markierung des ausgewaehlten Pfeils. Beides haengt hier statt in
+   pfeile.js, weil die Auswahl zum Editor gehoert (wie die Auswahl einer
+   Karte) - zeichneAlle() baut die Ebene bei jedem Aufruf neu auf und wuesste
+   sonst nichts davon. */
 function pfeileZeichnen(anlage) {
   Pfeile.zeichneAlle(anlage);
+  Editor.pfeilTrefferbahnenNachtragen();
+  Editor.pfeilAuswahlZeichnen();
 }
 function pfeileBinden(editor) {
   Pfeile.binde(editor);
+}
+/* Loeschen ueber pfeile.js, statt hier ein zweites fetch() zu schreiben:
+   Pfeile.loeschen() meldet Fehlschlaege bereits selbst und laedt die Anlage
+   danach neu. Ob es geklappt hat, liest pfeilLoeschen() danach an der neu
+   geladenen Anlage ab. */
+function pfeilLoeschenServerseitig(pfeilId) {
+  return Pfeile.loeschen(pfeilId);
 }
 function panelZeigen(karte) {
   Panel.zeige(karte);
@@ -433,6 +449,132 @@ const Editor = {
     );
   },
 
+  // -- Einen Pfeil auswaehlen und loeschen ---------------------------------
+  /* Bis hierher liess sich ein Pfeil nur per Doppelklick loeschen - und
+     genau das ging nicht mehr: der pointerdown-Lauscher der Leinwand
+     (bindeLeinwand weiter unten) erfasst den Zeiger, und ein erfasster
+     Zeiger lenkt auch die nachfolgenden Maus-Ersatzereignisse (click,
+     dblclick) auf das erfassende Element um - pfeile.js sah den Pfeil nie.
+     Der Doppelklick ist jetzt wieder heil UND nur noch die Abkuerzung: ein
+     Pfeil laesst sich anwaehlen wie eine Karte, hebt sich dann hervor und
+     traegt einen Knopf zum Loeschen. Das ist mit dem Finger bedienbar (auf
+     dem iPad gibt es keine Entf-Taste und keinen zuverlaessigen
+     Doppeltipp) und mit der Tastatur (Entf, Esc). */
+  pfeilAuswahl: null,
+
+  pfeilNach(id) {
+    return (this.anlage.pfeile || []).find((p) => p.id === id);
+  },
+
+  pfeilBeschreibung(pfeil) {
+    const von = this.karteNach(pfeil.von_karte_id);
+    const nach = this.karteNach(pfeil.nach_karte_id);
+    return `${von ? von.name : "?"} → ${nach ? nach.name : "?"}`;
+  },
+
+  /* Eine zweite, deutlich breitere Bahn je Pfeil, mit derselben Kennung und
+     derselben .pfeil-Klasse, aber durchsichtig (siehe style.css,
+     .pfeil-treffer). Sie liegt HINTER der eigentlichen Bahn, damit deren
+     eigene Lauscher (pfeile.js laesst beim Ueberfahren die beteiligten
+     Anschluesse aufleuchten) unveraendert zuerst greifen - die Trefferbahn
+     faengt nur, was daneben liegt. Ein Signalpfeil ist 1,5 Pixel breit; ein
+     Finger trifft rund 9 Millimeter breit. */
+  pfeilTrefferbahnenNachtragen() {
+    const ebene = document.getElementById("pfeile");
+    if (!ebene) return;
+    for (const bahn of Array.from(ebene.querySelectorAll("path.pfeil"))) {
+      if (bahn.classList.contains("pfeil-treffer")) continue;
+      if (!bahn.dataset.id) continue;   // die Vorschau beim Ziehen hat keine
+      const treffer = document.createElementNS(NS, "path");
+      treffer.setAttribute("d", bahn.getAttribute("d"));
+      treffer.setAttribute("class", "pfeil pfeil-treffer");
+      treffer.setAttribute("data-id", bahn.dataset.id);
+      ebene.insertBefore(treffer, bahn);
+    }
+  },
+
+  pfeilAuswaehlen(id) {
+    this.pfeilAuswahl = id;
+    this.pfeilAuswahlZeichnen();
+  },
+
+  pfeilAbwaehlen() {
+    this.pfeilAuswahl = null;
+    this.pfeilAuswahlZeichnen();
+  },
+
+  /* Traegt die Markierung auf die (bei jedem Neuzeichnen frischen) Bahnen
+     auf und fuehrt den Loeschknopf mit. Ist der ausgewaehlte Pfeil nicht
+     mehr da - geloescht, oder durch ein Rueckgaengig/Wiederholen
+     verschwunden -, faellt die Auswahl von selbst weg. */
+  pfeilAuswahlZeichnen() {
+    document.querySelectorAll("#pfeile path.gewaehlt").forEach((b) =>
+      b.classList.remove("gewaehlt")
+    );
+    if (this.pfeilAuswahl !== null && !this.pfeilNach(this.pfeilAuswahl)) {
+      this.pfeilAuswahl = null;
+    }
+    const werkzeug = document.getElementById("pfeil-werkzeug");
+    if (this.pfeilAuswahl === null) {
+      if (werkzeug) werkzeug.hidden = true;
+      return;
+    }
+    document
+      .querySelectorAll(`#pfeile path.pfeil[data-id="${this.pfeilAuswahl}"]`)
+      .forEach((b) => b.classList.add("gewaehlt"));
+    const text = document.getElementById("pfeil-werkzeug-text");
+    if (text) text.textContent = this.pfeilBeschreibung(this.pfeilNach(this.pfeilAuswahl));
+    if (werkzeug) werkzeug.hidden = false;
+    this.pfeilWerkzeugPositionieren();
+  },
+
+  /* Setzt das Werkzeug auf die Mitte des ausgewaehlten Pfeils - in
+     Bildschirmkoordinaten, nicht in Weltkoordinaten: als HTML-Element neben
+     der Leinwand behaelt es beim Hineinzoomen seine Groesse, statt zu einer
+     unlesbaren Briefmarke zu schrumpfen. Deshalb muss es bei jeder
+     Sichtaenderung nachgefuehrt werden (siehe _setzeWeltTransform). */
+  pfeilWerkzeugPositionieren() {
+    const werkzeug = document.getElementById("pfeil-werkzeug");
+    if (!werkzeug || this.pfeilAuswahl === null) return;
+    const bahn = document.querySelector(
+      `#pfeile path.pfeil[data-id="${this.pfeilAuswahl}"]:not(.pfeil-treffer)`
+    );
+    const buehne = werkzeug.offsetParent;
+    if (!bahn || !buehne) return;
+    let punkt;
+    try {
+      punkt = bahn.getPointAtLength(bahn.getTotalLength() / 2);
+    } catch {
+      return;   // Bahn (noch) ohne Laenge - kein Grund, irgendetwas zu kippen
+    }
+    const leinwand = document.getElementById("leinwand");
+    const kasten = leinwand.getBoundingClientRect();
+    const rahmen = buehne.getBoundingClientRect();
+    const x = kasten.left - rahmen.left + this.sicht.x + punkt.x * this.sicht.zoom;
+    const y = kasten.top - rahmen.top + this.sicht.y + punkt.y * this.sicht.zoom;
+    werkzeug.style.left = `${x}px`;
+    werkzeug.style.top = `${y}px`;
+    /* ÜBER dem Pfeil, nicht auf ihm (siehe .pfeil-werkzeug in style.css) -
+       und dicht am oberen Rand darunter. Das ist keine Kosmetik: eine
+       Blase genau unter dem Zeiger verdeckt den Pfeil, den sie beschreibt.
+       Der zweite Klick eines Doppelklicks landete dann auf ihr statt auf
+       dem Pfeil (nachgemessen: der Doppelklick loeschte deshalb nichts
+       mehr), und mit dem Finger saesse ein LOESCHKNOPF genau dort, wo
+       gerade getippt wurde. */
+    werkzeug.classList.toggle("pfeil-werkzeug-unten", y < 64);
+  },
+
+  async pfeilLoeschen(pfeilId) {
+    const pfeil = this.pfeilNach(pfeilId);
+    const beschreibung = pfeil ? this.pfeilBeschreibung(pfeil) : "";
+    await pfeilLoeschenServerseitig(pfeilId);
+    if (this.pfeilNach(pfeilId)) return;   // fehlgeschlagen, Meldung kam schon
+    this.pfeilAbwaehlen();
+    zeigeHinweis(
+      `Verbindung ${beschreibung} gelöscht – „Rückgängig" holt sie zurück.`
+    );
+  },
+
   karteNach(id) {
     return this.anlage.karten.find((k) => k.id === id);
   },
@@ -696,6 +838,7 @@ const Editor = {
      - der gemeinsame Kern von karteGreifen() (Maus) und karteTaste()
      (Tastatur). */
   karteAuswaehlen(karte, gruppe) {
+    this.pfeilAbwaehlen();   // immer nur eines von beiden ausgewaehlt
     this.auswahl = karte.id;
     panelZeigen(karte);
     this.entferneAuswahlKlasse();
@@ -880,6 +1023,11 @@ const Editor = {
         "transform",
         `translate(${this.sicht.x} ${this.sicht.y}) scale(${this.sicht.zoom})`
       );
+    // Der Loeschknopf eines ausgewaehlten Pfeils haengt in
+    // Bildschirmkoordinaten und muss jeder Verschiebung und jeder Zoomstufe
+    // folgen - hier, weil das die eine Zeile ist, die JEDE Sichtaenderung
+    // schreibt (siehe Kommentar oben).
+    this.pfeilWerkzeugPositionieren();
   },
 
   aktualisiereSicht() {
@@ -1302,6 +1450,26 @@ const Editor = {
         return;
       }
       if (e.target.closest(".karte")) return;
+
+      /* Ein Tipp oder Klick auf einen Pfeil waehlt ihn aus - und die
+         Leinwand haelt sich dabei vollstaendig heraus: kein
+         setPointerCapture, kein Schieben. Genau diese Erfassung war der
+         Grund, warum der Doppelklick auf einen Pfeil nie bei pfeile.js
+         ankam (ein erfasster Zeiger lenkt auch click/dblclick auf das
+         erfassende Element um) - mit diesem frueheren Ausstieg ist auch die
+         Abkuerzung wieder heil. Dass sich die Leinwand nicht mehr von einem
+         Pfeil aus schieben laesst, faellt nicht ins Gewicht: ein Pfeil ist
+         ein paar Pixel breit, daneben ist ueberall freie Flaeche. */
+      const pfeilElement = e.target.closest(".pfeil");
+      if (pfeilElement && pfeilElement.dataset.id) {
+        this.auswahl = null;
+        panelLeeren();
+        this.entferneAuswahlKlasse();
+        this.pfeilAuswaehlen(Number(pfeilElement.dataset.id));
+        return;
+      }
+      this.pfeilAbwaehlen();
+
       // Auf schmalem Hochformat schliesst ein Tipp auf die leere Leinwand
       // beide Seitenbereiche wieder - sie waeren sonst nur ueber die
       // Umschaltknoepfe wieder loszuwerden.
@@ -1451,9 +1619,23 @@ const Editor = {
        wo der Fokus steht - sonst loescht Entf beim Tippen im Feld
        "Bezeichnung" die ganze Karte statt eines Zeichens. */
     window.addEventListener("keydown", async (e) => {
-      if (e.key !== "Delete" || this.auswahl === null) return;
+      if (e.key === "Escape" && this.pfeilAuswahl !== null) {
+        if (istTexteingabe(document.activeElement)) return;
+        this.pfeilAbwaehlen();
+        return;
+      }
+      if (e.key !== "Delete") return;
       if (istTexteingabe(document.activeElement)) return;
       if (document.querySelector(".dialog-huelle")) return;
+      // Ein ausgewaehlter Pfeil geht ohne Rueckfrage - anders als eine
+      // Karte, die Pfeile mitreisst: hier faellt genau das weg, was
+      // markiert vor einem liegt, und der Verlauf holt es mit einem Druck
+      // zurueck ("Pfeil von 'A' nach 'B' getrennt", siehe core/verlauf.py).
+      if (this.pfeilAuswahl !== null) {
+        await this.pfeilLoeschen(this.pfeilAuswahl);
+        return;
+      }
+      if (this.auswahl === null) return;
       await this.karteLoeschenDialog(this.auswahl);
     });
 
@@ -1646,6 +1828,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   Editor.berichtLinkAktualisieren();
 
   Editor.verlaufAktualisieren();
+
+  const btnPfeilLoeschen = document.getElementById("btn-pfeil-loeschen");
+  if (btnPfeilLoeschen) {
+    btnPfeilLoeschen.addEventListener("click", () => {
+      if (Editor.pfeilAuswahl !== null) Editor.pfeilLoeschen(Editor.pfeilAuswahl);
+    });
+  }
 
   const btnZurueck = document.getElementById("btn-zurueck");
   if (btnZurueck) {

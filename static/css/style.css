@@ -1011,6 +1011,72 @@ a.knopf-mini { display: inline-block; text-decoration: none; }
 .pfeil-vorschau { stroke: var(--blue); stroke-width: 2; stroke-dasharray: 4 4; }
 .pfeil:hover { stroke: var(--blue); }
 
+/* Trefferbahn: eine zweite, durchsichtige Bahn hinter jedem Pfeil, damit
+   ein Finger ihn ueberhaupt treffen kann (ein Signalpfeil ist 1,5 Pixel
+   breit, eine Fingerkuppe rund 9 Millimeter). editor.js traegt sie nach
+   jedem Neuzeichnen nach (pfeilTrefferbahnenNachtragen) und gibt ihr
+   dieselbe data-id, damit Auswahl UND der Doppelklick in pfeile.js sie wie
+   den Pfeil selbst behandeln. Zwei Klassen tief, damit sie die Farbe und
+   das Muster der Pfeilart (.pfeil-luft & Co., je eine Klasse) sicher
+   uebersteuert. */
+.pfeil.pfeil-treffer {
+  stroke: transparent;
+  stroke-width: 22;
+  stroke-dasharray: none;
+}
+/* Ausgewaehlter Pfeil: kraeftige durchgezogene Linie UND ein breiter,
+   heller Saum ueber die Trefferbahn - nicht Farbe allein, sondern auch
+   Breite und Muster, wie bei den Pfeilarten selbst (siehe Kommentar bei
+   --luft). Der Saum ist das, was auf einem iPad-Bildschirm aus einem Meter
+   Entfernung ueberhaupt auffaellt. */
+.pfeil.gewaehlt {
+  stroke: var(--blue);
+  stroke-width: 5;
+  stroke-dasharray: none;
+}
+/* Drei Klassen tief, damit BEIDE Eigenschaften der Trefferbahn gewinnen:
+   .pfeil.gewaehlt (zwei Klassen, weiter oben) setzt stroke-width 5 und
+   traefe sonst auch den Saum - der waere dann genauso schmal wie die Linie
+   selbst und faellt hinter ihr gar nicht auf (nachgemessen: 5px statt 22px,
+   unsichtbar). */
+.pfeil.pfeil-treffer.gewaehlt {
+  stroke: var(--blue-tint);
+  stroke-width: 22;
+}
+
+/* Das Werkzeug an der Mitte des ausgewaehlten Pfeils (templates/editor.html,
+   #pfeil-werkzeug). pointer-events nur auf den Kindern: der durchsichtige
+   Rand des Behaelters soll die Leinwand darunter nicht abfangen. */
+.pfeil-werkzeug {
+  position: absolute;
+  /* Ueber dem Pfeil, mit Abstand - nicht auf ihm: die Blase darf weder den
+     Pfeil verdecken, den sie beschreibt, noch mit ihrem Loeschknopf genau
+     dort liegen, wo gerade geklickt oder getippt wurde (siehe
+     pfeilWerkzeugPositionieren in editor.js). Am oberen Rand der Leinwand
+     klappt sie nach unten. */
+  transform: translate(-50%, calc(-100% - 14px));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--schatten-2);
+  white-space: nowrap;
+  z-index: 6;
+  pointer-events: none;
+}
+.pfeil-werkzeug-unten { transform: translate(-50%, 14px); }
+.pfeil-werkzeug > * { pointer-events: auto; }
+.pfeil-werkzeug-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  max-width: 40vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ---------- Dialoge (Simulation, Projekt/Anlage anlegen) ---------- */
 .dialog-huelle {
   position: fixed;
