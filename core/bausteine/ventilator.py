@@ -8,7 +8,7 @@ der Ausgangspunkt.
 from core.bausteine.basis import (
     ABLUFT, AUSGANG, AUSWAHL, EINGANG, LUFT, MESSWERT, PROZENT, SIGNAL,
     STELLGROESSE, STROM, ZAHL, ZULUFT,
-    Baustein, Luft, Param, Port, registriere,
+    Baustein, Luft, Param, Port, registriere, wahl,
 )
 
 
@@ -20,12 +20,24 @@ class Ventilator(Baustein):
     SYMBOL = "ventilator.svg"
 
     PARAMETER = [
-        Param("rolle", "Zuluft/Abluft", "-", "zuluft", auswahl=("zuluft", "abluft"), darstellung=AUSWAHL),
+        Param(
+            "rolle", "Zuluft/Abluft", "-", "zuluft",
+            auswahl=(wahl("zuluft", "Zuluft"), wahl("abluft", "Abluft")),
+            darstellung=AUSWAHL,
+        ),
         Param("V_max", "V_max", "m³/h", 8200.0, darstellung=ZAHL, dezimalstellen=0),
         Param("dp_max", "dp_max", "Pa", 1400.0, darstellung=ZAHL, dezimalstellen=0),
         Param("dp_konst", "dp_konst", "Pa", 1400.0, darstellung=ZAHL, dezimalstellen=0),
         Param("PE_max", "PE_max", "kW", 4.9, darstellung=ZAHL, dezimalstellen=1),
-        Param("regelart", "FU/DD/-", "-", "F", auswahl=("F", "D", "-"), darstellung=AUSWAHL),
+        Param(
+            "regelart", "FU/DD/-", "-", "F",
+            auswahl=(
+                wahl("F", "Frequenzumrichter (F)"),
+                wahl("D", "Drallregler (D)"),
+                wahl("-", "ungeregelt (-)"),
+            ),
+            darstellung=AUSWAHL,
+        ),
         # Wirkt nur, solange der Anschluss 'stellgroesse' unverbunden ist - das
         # Parameterfenster zeigt das anhand der Verbindungsauskunft aus
         # core.anlagen.als_json() an (siehe dortiges 'ueberschrieben_von').

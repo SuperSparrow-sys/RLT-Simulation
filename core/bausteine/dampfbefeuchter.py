@@ -9,7 +9,7 @@ from core.bausteine import stoffdaten as st
 from core.bausteine.basis import (
     AUSGANG, AUSWAHL, EINGANG, LUFT, MESSWERT, PROZENT, SIGNAL, STELLGROESSE,
     WAERME, WASSER, ZAHL, ZULUFT,
-    Baustein, Luft, Param, Port, registriere,
+    Baustein, Luft, Param, Port, registriere, wahl,
 )
 
 
@@ -24,7 +24,11 @@ class Dampfbefeuchter(Baustein):
         Param("dampftemperatur", "Dampftemp.", "°C", 180.0, darstellung=ZAHL, dezimalstellen=1),
         Param("absalzverlust", "Absalzverlust", "%", 10.0, darstellung=PROZENT, dezimalstellen=1),
         Param("max_leistung", "max. Bef.Leist", "kg/h", 32.0, darstellung=ZAHL, dezimalstellen=1),
-        Param("dampfart", "E-/Fremddampf", "-", "E", auswahl=("E", "F"), darstellung=AUSWAHL),
+        Param(
+            "dampfart", "E-/Fremddampf", "-", "E",
+            auswahl=(wahl("E", "Elektrisch (E)"), wahl("F", "Fremddampf (F)")),
+            darstellung=AUSWAHL,
+        ),
     ]
 
     PORTS = [

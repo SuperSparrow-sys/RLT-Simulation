@@ -221,3 +221,61 @@ def test_alle_parameter_deklarieren_eine_darstellung_und_ganzzahlige_dezimalstel
             assert p.darstellung in gueltig, f"{klasse.KENNUNG}.{p.schluessel}"
             assert isinstance(p.dezimalstellen, int)
     assert anzahl == 136
+
+
+def test_alle_auswahl_parameter_tragen_wert_und_label():
+    """Jeder Auswahlparameter deklariert seine Kuerzel SELBST mit lesbarer
+    Beschriftung (wahl()) - das Parameterfenster liest nur noch feld.auswahl
+    und braucht kein Sonderwissen ueber einzelne Kartentypen mehr."""
+    from core.bausteine import lade_alle
+
+    lade_alle()
+    gefunden = 0
+    for klasse in basis.alle():
+        for p in klasse.PARAMETER:
+            if p.darstellung != basis.AUSWAHL:
+                continue
+            assert p.auswahl, f"{klasse.KENNUNG}.{p.schluessel} hat keine Auswahl"
+            for eintrag in p.auswahl:
+                gefunden += 1
+                assert set(eintrag) == {"wert", "label"}, (
+                    f"{klasse.KENNUNG}.{p.schluessel}: {eintrag!r}"
+                )
+                assert eintrag["wert"] and eintrag["label"]
+    assert gefunden == 10  # 2 (Dampfart) + 3 (Pumpenart) + 3 (Regelart) + 2 (Rolle)
+
+
+def test_wahl_erzeugt_ein_json_taugliches_dict():
+    assert basis.wahl("E", "Elektrisch (E)") == {"wert": "E", "label": "Elektrisch (E)"}
+
+
+def test_pumpenart_hd_heisst_hochdruck():
+    """Anlage!AA12 beschriftet die drei Werte 'Ventil/FU/HD' in dieser
+    Reihenfolge - H steht fuer Hochdruck, nicht geraten."""
+    from core.bausteine.luftwaescher import Luftwaescher
+
+    feld = next(p for p in Luftwaescher.PARAMETER if p.schluessel == "pumpenart")
+    beschriftungen = {e["wert"]: e["label"] for e in feld.auswahl}
+    assert beschriftungen == {
+        "V": "Ventil (V)",
+        "F": "Frequenzumrichter (F)",
+        "H": "HD (Hochdruck)",
+    }
+
+
+def test_auswahlwerte_stimmen_mit_dem_erlaubten_bereich_der_berechnung_ueberein():
+    """Jeder in der Karte erlaubte Wert (auswahl) muss auch tatsaechlich einer
+    der Werte sein, den berechne() unterscheidet - sonst waere eine Auswahl im
+    Fenster moeglich, die die Karte gar nicht kennt."""
+    from core.bausteine.dampfbefeuchter import Dampfbefeuchter
+    from core.bausteine.luftwaescher import Luftwaescher
+    from core.bausteine.ventilator import Ventilator
+
+    def werte(klasse, schluessel):
+        feld = next(p for p in klasse.PARAMETER if p.schluessel == schluessel)
+        return {e["wert"] for e in feld.auswahl}
+
+    assert werte(Dampfbefeuchter, "dampfart") == {"E", "F"}
+    assert werte(Luftwaescher, "pumpenart") == {"V", "F", "H"}
+    assert werte(Ventilator, "regelart") == {"F", "D", "-"}
+    assert werte(Ventilator, "rolle") == {"zuluft", "abluft"}

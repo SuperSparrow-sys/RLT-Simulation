@@ -16,21 +16,6 @@
 
 const MONATE = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
 
-// Lesbare Beschriftungen fuer die kryptischen Kuerzel mancher Auswahlfelder.
-// Nach Parameter-Schluessel, nicht nach Kartentyp - jeder dieser Schluessel
-// kommt im ganzen Programm nur an einer einzigen Kartenart vor (siehe
-// core/bausteine/*.py), eine Verwechslung ist deshalb ausgeschlossen.
-const AUSWAHL_LABEL = {
-  dampfart: { E: "Elektrisch (E)", F: "Fremddampf (F)" },
-  pumpenart: { V: "Ventil (V)", F: "Frequenzumrichter (F)", H: "HD (H)" },
-  regelart: { F: "Frequenzumrichter (F)", D: "Drallregler (D)", "-": "ungeregelt (-)" },
-  rolle: { zuluft: "Zuluft", abluft: "Abluft" },
-};
-function auswahlLabel(schluessel, wert) {
-  const eintrag = AUSWAHL_LABEL[schluessel];
-  return (eintrag && eintrag[wert]) || wert;
-}
-
 // Tagesanteil (0..1, wie core/bausteine/basis.py rechnet) <-> "HH:MM". Muss
 // mit basis.uhrzeit_anzeigen()/uhrzeit_einlesen() uebereinstimmen - siehe dort.
 function uhrzeitAnzeigen(tagesanteil) {
@@ -224,13 +209,17 @@ const Panel = {
     return this._huelle(feld.label, eingabe, "");
   },
 
+  // feld.auswahl kommt fertig als Liste von {wert, label} von der Karte
+  // (core/bausteine/basis.py: Param.auswahl, gefuellt ueber wahl()) - das
+  // Fenster kennt keine kartenspezifischen Kuerzel, es zeigt nur, was die
+  // Karte mitgibt.
   zeileAuswahl(karte, feld, wert) {
     const eingabe = document.createElement("select");
     for (const moeglichkeit of feld.auswahl) {
       const option = document.createElement("option");
-      option.value = moeglichkeit;
-      option.textContent = auswahlLabel(feld.schluessel, moeglichkeit);
-      if (moeglichkeit === wert) option.selected = true;
+      option.value = moeglichkeit.wert;
+      option.textContent = moeglichkeit.label;
+      if (moeglichkeit.wert === wert) option.selected = true;
       eingabe.appendChild(option);
     }
     eingabe.addEventListener("change", async () => {

@@ -83,6 +83,18 @@ ZEITRAEUME = "zeitraeume"
 ANTEILE = "anteile"
 
 
+def wahl(wert, label):
+    """Ein moeglicher Wert eines Auswahlparameters, mit lesbarer Beschriftung
+    fuer das Parameterfenster (z.B. wahl("E", "Elektrisch (E)")).
+
+    Reines dict statt eines eigenen Typs: core.anlagen.als_json() und
+    routes/lehre.py reichen Param.auswahl unveraendert als JSON weiter
+    (list(f.auswahl)) - ein eigener Python-Typ liesse sich dort nicht
+    serialisieren, ein dict schon.
+    """
+    return {"wert": wert, "label": label}
+
+
 @dataclass(frozen=True)
 class Param:
     """Ein einstellbarer Parameter einer Karte.
@@ -90,6 +102,11 @@ class Param:
     `darstellung` und `dezimalstellen` steuern ausschliesslich die Anzeige im
     Parameterfenster (siehe die Konstanten oben) - der Wert selbst, der in der
     Datenbank steht und in berechne() ankommt, ist davon unberuehrt.
+
+    `auswahl` traegt bei AUSWAHL-Parametern die moeglichen Werte SAMT ihrer
+    lesbaren Beschriftung (siehe wahl() oben) - die Karte kennt ihre eigenen
+    Kuerzel, das Parameterfenster nicht. Damit muss niemand static/js/panel.js
+    anfassen, nur weil ein neuer Kartentyp ein Auswahlfeld bekommt.
     """
 
     schluessel: str

@@ -8,7 +8,7 @@ from core.bausteine import stoffdaten as st
 from core.bausteine.basis import (
     AUSGANG, AUSWAHL, EINGANG, LUFT, MESSWERT, PROZENT, SIGNAL, STELLGROESSE,
     STROM, WASSER, ZAHL, ZULUFT,
-    Baustein, Luft, Param, Port, druckverlust, registriere,
+    Baustein, Luft, Param, Port, druckverlust, registriere, wahl,
 )
 
 SAETTIGUNGSWIRKUNGSGRAD = 0.9
@@ -25,7 +25,15 @@ class Luftwaescher(Baustein):
         Param("V_nenn", "V_nenn", "m³/h", 8200.0, darstellung=ZAHL, dezimalstellen=0),
         Param("dp_nenn", "dp_nenn", "Pa", 50.0, darstellung=ZAHL, dezimalstellen=0),
         Param("absalzverlust", "Absalzverlust", "%", 10.0, darstellung=PROZENT, dezimalstellen=1),
-        Param("pumpenart", "Ventil/FU/HD", "-", "H", auswahl=("V", "F", "H"), darstellung=AUSWAHL),
+        Param(
+            "pumpenart", "Ventil/FU/HD", "-", "H",
+            auswahl=(
+                wahl("V", "Ventil (V)"),
+                wahl("F", "Frequenzumrichter (F)"),
+                wahl("H", "HD (Hochdruck)"),
+            ),
+            darstellung=AUSWAHL,
+        ),
     ]
 
     PORTS = [
