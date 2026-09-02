@@ -95,3 +95,19 @@
   min-width: 0;
 }
 .anlagenname-zeile .knopf-mini { flex-shrink: 0; }
+
+/* -- Beruehrungsziele: dieselbe Regel wie in style.css (dort begruendet),
+   hier noch einmal fuer .knopf-mini/.knopf-haupt-gefahr, weil diese Datei
+   NACH style.css eingebunden wird - eine Regel in style.css wuerde von der
+   ungebundenen .knopf-mini-Regel oben in dieser Datei ueberschrieben
+   (gleiche Spezifitaet, spaeter in der Kaskade gewinnt). -- */
+@media (pointer: coarse) {
+  .knopf-mini {
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+  .knopf-haupt-gefahr {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+}

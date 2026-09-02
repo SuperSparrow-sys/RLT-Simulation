@@ -89,6 +89,13 @@ html, body {
   font-family: var(--font-body);
   font-size: 14px;
   line-height: 1.4;
+  /* Schaltet das Gummiband-Ueberscrollen ab (siehe Task, Befund 3): ohne
+     das hier schiebt sich auf iOS die ganze Seite mit, wenn man ueber den
+     Rand eines Bereichs hinaus zieht - auch wenn der Bereich selbst (z.B.
+     #leinwand, siehe dort touch-action:none) gar nicht mitgeschoben werden
+     sollte. Wurzel UND Koerper, weil je nach Browser der eine oder der
+     andere die eigentliche Scroll-Wurzel ist. */
+  overscroll-behavior: none;
 }
 
 h1, h2, h3, p { margin: 0; }
@@ -119,7 +126,25 @@ textarea:focus-visible {
   border-color: var(--blue);
 }
 
-.app { display: flex; height: 100vh; }
+/* 100dvh statt 100vh: auf iOS zaehlt 100vh die Hoehe MIT eingefahrener
+   Werkzeugleiste, also mehr, als gerade wirklich zu sehen ist - der
+   Editor ragte dadurch immer ein Stueck unter den Bildschirmrand, und genau
+   dieses ueberschiessende Stueck liess sich als Seite "gummibandartig"
+   herunterziehen (siehe Task, Befund 3 und "100vh ist auf iOS ... falsch").
+   100vh bleibt als erste, redundante Deklaration stehen - ein Rueckfallwert
+   fuer Browser, die dvh nicht kennen; sie ueberspringen die zweite Zeile
+   einfach. env(safe-area-inset-*) braucht viewport-fit=cover in der
+   Viewport-Angabe (siehe templates/editor.html) und ist ohne echtes Geraet
+   mit Rundung/Notch als 0 zu lesen - schadet auf einem Bildschirm ohne
+   solche Bereiche nicht (dann alles 0), traegt sie aber nach, sobald es
+   welche gibt. */
+.app {
+  display: flex;
+  height: 100vh;
+  height: 100dvh;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+           env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
 
 /* ---------- Palette ---------- */
 .palette {
@@ -129,6 +154,12 @@ textarea:focus-visible {
   border-right: 1px solid var(--border-light);
   overflow-y: auto;
   padding: 10px 10px 20px;
+  /* "contain" statt "none": die Palette darf innerhalb ihrer selbst ganz
+     gewoehnlich zu Ende scrollen (kein hartes Abschneiden der Animation),
+     nur soll ein Ueberscrollen an ihrem eigenen Rand nicht an die Seite
+     weitergereicht werden - das uebernimmt schon overscroll-behavior auf
+     html/body, contain ist hier die zweite, lokale Sicherung. */
+  overscroll-behavior: contain;
 }
 .gruppe {
   font-size: 11px;
@@ -153,6 +184,15 @@ textarea:focus-visible {
 }
 .palette-eintrag:hover { background: var(--surface-alt); }
 .palette-eintrag:active { cursor: grabbing; }
+/* "Bewaffnet" fuer den naechsten Tipp auf die Leinwand (siehe palette.js,
+   Palette.armieren()) - dieselbe Blaufaerbung wie eine ausgewaehlte Karte
+   (.karte.gewaehlt), damit sofort erkennbar ist: diese Auswahl wartet noch
+   auf einen Tipp, sie ist nicht schon erledigt. */
+.palette-eintrag-bereit,
+.palette-eintrag-bereit:hover {
+  background: var(--blue-tint);
+  color: var(--blue);
+}
 .palette-eintrag img {
   width: 20px;
   height: 20px;
@@ -226,6 +266,12 @@ a.knopf-haupt { display: inline-block; text-decoration: none; }
    damit sie als Paar zusammenbleiben statt sich den freien Platz zu teilen.
    */
 .leiste .knopf-sekundaer { margin-left: auto; }
+
+/* Seitenbereich-Umschalter (Palette/Parameter): nur im schmalen
+   Hochformat mit Finger sichtbar (siehe @media (max-width: 900px) and
+   (pointer: coarse) weiter unten) - am Schreibtisch unnoetig, weil dort
+   ohnehin immer beide Seitenbereiche zu sehen sind. */
+.knopf-seitenbereich { display: none; }
 
 /* Legende der Pfeilarten: eine natives <details> - klickbar und per Tastatur
    bedienbar (Enter/Leertaste) ganz ohne Skript. */
@@ -378,8 +424,14 @@ a.knopf-haupt { display: inline-block; text-decoration: none; }
 /* ---------- Anknuepfpunkt zum Verbinden ----------
    Der einzige, deutliche Griff am Kartenrand (siehe Task und Kommentar bei
    Editor.zeichneVerbindungsgriff() in editor.js). Standardmaessig
-   unsichtbar, erscheint bei :hover/:focus-visible der Karte und waehrend
-   des Ziehens. */
+   unsichtbar, erscheint bei :hover/:focus-visible der Karte, waehrend des
+   Ziehens - UND sobald die Karte ausgewaehlt ist (.gewaehlt, von
+   Editor.karteAuswaehlen() gesetzt). Der Finger kennt kein :hover (siehe
+   Task, Befund 2: der Griff blieb auf einem Touchscreen deshalb fuer immer
+   unsichtbar) - Antippen waehlt die Karte aus wie ueberall sonst auf der
+   Leinwand, und genau dieser bereits vorhandene Zustand blendet den Griff
+   jetzt zusaetzlich ein. Fuer die Maus aendert sich nichts: :hover bleibt
+   der schnellere Weg, ohne die Karte erst anzuklicken. */
 .verbindungs-griff {
   opacity: 0;
   pointer-events: none;
@@ -388,11 +440,12 @@ a.knopf-haupt { display: inline-block; text-decoration: none; }
 }
 .karte:hover .verbindungs-griff,
 .karte:focus-visible .verbindungs-griff,
+.karte.gewaehlt .verbindungs-griff,
 .karte.verbindet-von .verbindungs-griff {
   opacity: 1;
   pointer-events: auto;
 }
-.verbindungs-griff-kreis { fill: var(--surface); stroke: var(--blue); stroke-width: 2; }
+.verbindungs-griff-kreis { fill: var(--surface); stroke: var(--blue); stroke-width: 2; r: 9px; }
 .verbindungs-griff-kreuz { stroke: var(--blue); stroke-width: 1.6; }
 .verbindungs-griff:hover .verbindungs-griff-kreis,
 .karte.verbindet-von .verbindungs-griff-kreis { fill: var(--blue); }
@@ -466,6 +519,7 @@ a.knopf-haupt { display: inline-block; text-decoration: none; }
   background: var(--surface);
   border-left: 1px solid var(--border-light);
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 16px;
 }
 .panel-kopf {
@@ -912,9 +966,17 @@ a.knopf-haupt { display: inline-block; text-decoration: none; }
 .warn-beispiele li { margin-bottom: 3px; }
 
 /* ---------- Startseite ---------- */
-.start { display: flex; flex-direction: column; height: 100vh; }
+/* dvh/safe-area: dieselbe Begruendung wie bei .app weiter oben. */
+.start {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+           env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
 .start .leiste { flex-shrink: 0; }
-.start-haupt { flex: 1; overflow-y: auto; padding: 28px 32px 48px; }
+.start-haupt { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 28px 32px 48px; }
 /* Begrenzte Lesebreite gilt fuer Fliesstext (siehe .abschnitt-hinweis,
    .leerhinweis-gross p - beide mit eigenem ch-Mass), nicht fuer den
    Abschnitt selbst: Listen, Karten und Tabellen duerfen die verfuegbare
@@ -1007,4 +1069,92 @@ a.knopf-haupt { display: inline-block; text-decoration: none; }
 @media (max-width: 900px) {
   .palette { width: 190px; }
   .panel { width: 270px; }
+}
+
+/* ---------- Beruehrungsziele (Finger statt Maus) ----------
+   Apples Richtwert ist 44 Punkte Kantenlaenge (siehe Task, Befund 5). Am
+   Schreibtisch bleiben die Knoepfe kompakt - "pointer: coarse" trifft nur
+   Geraete ohne praezisen Zeiger (Finger), nicht ein schmales Mausfenster.
+   Nur das Innenmass (padding) waechst, nicht Schrift oder Rahmenfarbe -
+   dieselbe Optik, nur eine groessere Trefferflaeche. */
+@media (pointer: coarse) {
+  .knopf-haupt,
+  .knopf-sekundaer,
+  .dialog-knoepfe button,
+  .fortschritt button,
+  .projekt-aktionen button {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+  /* .knopf-mini/.knopf-haupt-gefahr: siehe loeschen.css, nicht hier - das
+     dortige @media (pointer: coarse) muss NACH der eigenen, unconditional
+     .knopf-mini-Regel derselben Datei stehen, sonst gewinnt bei gleicher
+     Spezifitaet die spaetere, unconditional Regel und die Vergroesserung
+     hier bliebe wirkungslos. */
+  .palette-eintrag {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+  .panel-knopf-klein {
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+  .panel-monat-knopf {
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+  .legende summary {
+    padding-top: 13px;
+    padding-bottom: 13px;
+  }
+  /* Generische Parameterfelder - NICHT die eng gepackten Gitter (Zeitreihe
+     Stundenwerte, Zeitraeume, Textlisten): deren eigene, spezifischere
+     Regeln (z.B. .panel-zeitreihe-zelle input) bleiben unangetastet, weil
+     eine hoehere Selektor-Spezifitaet sie unabhaengig von der Reihenfolge
+     gewinnen laesst - dort wuerde ein aufgeblasenes Feld das enge Gitter
+     sprengen. */
+  .panel-zeile input,
+  .panel-zeile select,
+  .panel-zeile textarea {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+  /* Der Anknuepfpunkt zum Verbinden (siehe .verbindungs-griff weiter oben):
+     r=9px trifft an einem Kartenrand kaum ein Fingerspitzenzentrum - 16px
+     Radius ergibt eine 32px-Flaeche, dazu zaehlt bei einer Beruehrung
+     ueblicherweise noch ein paar Pixel Toleranz der Plattform selbst. */
+  .verbindungs-griff-kreis { r: 16px; }
+}
+
+/* ---------- Editor im Hochformat ----------
+   Drei Spalten (Palette 190/228px + Leinwand + Parameterfenster 270/320px)
+   passen auf einem Hochformat-iPad (834 Punkte, siehe Task) nicht mehr
+   nebeneinander, ohne der Leinwand fast allen Platz zu nehmen. Nur bei
+   SCHMAL UND FINGERBEDIENUNG (nicht bei einem schmalen Mausfenster am
+   Schreibtisch - siehe Kommentar oben bei "pointer: coarse") werden Palette
+   und Parameterfenster zu ein-/ausblendbaren Seitenbereichen: standardmaessig
+   beide zu, die Leinwand bekommt die volle Breite (siehe Task: "Die
+   Leinwand ist das Wichtigste"). static/js/editor.js schaltet sie ueber
+   #btn-palette-umschalten/#btn-panel-umschalten sowie automatisch beim
+   Auswaehlen/Abwaehlen einer Karte (Parameterfenster) bzw. beim Antippen
+   eines Paletteneintrags (Palette, siehe dort Palette.armieren()). */
+@media (max-width: 900px) and (pointer: coarse) {
+  .knopf-seitenbereich { display: inline-block; }
+
+  .app { position: relative; }
+  .palette,
+  .panel {
+    position: absolute;
+    top: 52px; /* Hoehe von .leiste, siehe auch .leinwand-hinweis */
+    bottom: 0;
+    z-index: 12;
+    box-shadow: var(--schatten-2);
+    transition: transform .18s ease;
+  }
+  .palette { left: 0; transform: translateX(-100%); }
+  .panel { right: 0; transform: translateX(100%); }
+  .palette.seitenbereich-offen,
+  .panel.seitenbereich-offen {
+    transform: translateX(0);
+  }
 }

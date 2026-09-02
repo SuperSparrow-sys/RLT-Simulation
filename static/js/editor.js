@@ -205,6 +205,23 @@ const Editor = {
   // loeschen, Pfeil anlegen) den Bildausschnitt der Anwenderin unter ihr weg.
   _nochNichtGeoeffnet: true,
 
+  // Untere/obere Schranke fuer die Zoomstufe - ein einziger Ort fuer Mausrad
+  // (wheel) UND Kneifgeste (Pinch, siehe _kneifBewegen() weiter unten)
+  // statt derselben zwei Zahlen an zwei Stellen.
+  ZOOM_MIN: 0.08,
+  ZOOM_MAX: 3,
+
+  // Mehrfingerzustand der Leinwand (Schieben/Kneifen, siehe bindeLeinwand()
+  // weiter unten): eine Map ueber alle gerade aktiven Zeiger (Finger oder
+  // die eine Maustaste) statt eines einzelnen Satzes Ereignis-Lauscher pro
+  // Geste (wie karteGreifen() und Pfeile.ziehenStarten() es machen) - nur so
+  // kann ein zweiter, waehrend des Schiebens dazukommender Finger nahtlos in
+  // eine Kneifgeste uebergehen, statt dass die Leinwand nur den ersten
+  // Finger kennt.
+  _zeiger: new Map(),
+  _panAnker: null,
+  _kneifAnker: null,
+
   async laden(anlageId) {
     let antwort;
     try {
@@ -515,6 +532,12 @@ const Editor = {
     panelZeigen(karte);
     this.entferneAuswahlKlasse();
     gruppe.classList.add("gewaehlt");
+    // Auf schmalem Hochformat mit Finger (siehe seitenbereichSchmal() weiter
+    // unten) ist das Parameterfenster sonst ein eigener, unsichtbarer
+    // Seitenbereich (siehe style.css) - eine Karte auszuwaehlen soll es
+    // automatisch aufklappen, genau wie am Schreibtisch, wo es ohnehin
+    // immer offen ist.
+    if (this.seitenbereichSchmal()) this.seitenbereichOeffnen("panel");
   },
 
   /* Tastaturbedienung einer Karte (siehe Task: Karten muessen "fokussierbar
@@ -841,12 +864,127 @@ const Editor = {
     svg.appendChild(rahmen);
   },
 
+  /* Trifft SCHMAL (Hochformat-iPad, siehe Task Befund 6) UND FINGER
+     zusammen zu - dieselbe Bedingung wie style.css' @media (max-width: 900px)
+     and (pointer: coarse), hier noch einmal in JS gebraucht (Palette/Panel
+     automatisch auf-/zuklappen), deshalb an einer einzigen Stelle benannt
+     statt an mehreren Aufrufstellen dieselben zwei matchMedia-Strings zu
+     wiederholen. Ein schmales MAUS-Fenster am Schreibtisch bleibt bewusst
+     aussen vor (siehe dortiger Kommentar). */
+  seitenbereichSchmal() {
+    return window.matchMedia("(max-width: 900px) and (pointer: coarse)").matches;
+  },
+
+  /* Klappt Palette oder Parameterfenster auf/zu (bereich: "palette" oder
+     "panel") - nur wirksam, wenn die zugehoerige CSS-Regel greift (siehe
+     seitenbereichSchmal()); anderswo bleibt die Klasse folgenlos, weil dort
+     kein transform darauf reagiert. Oeffnen des einen schliesst automatisch
+     den anderen: fuer beide Seitenbereiche gleichzeitig ist auf 834 Punkten
+     kein Platz neben der Leinwand (siehe Task). */
+  seitenbereichOeffnen(bereich) {
+    const anderer = bereich === "palette" ? "panel" : "palette";
+    this.seitenbereichSchliessen(anderer);
+    const el = document.getElementById(bereich);
+    const knopf = document.getElementById(`btn-${bereich}-umschalten`);
+    if (el) el.classList.add("seitenbereich-offen");
+    if (knopf) knopf.setAttribute("aria-expanded", "true");
+  },
+  seitenbereichSchliessen(bereich) {
+    const el = document.getElementById(bereich);
+    const knopf = document.getElementById(`btn-${bereich}-umschalten`);
+    if (el) el.classList.remove("seitenbereich-offen");
+    if (knopf) knopf.setAttribute("aria-expanded", "false");
+  },
+  seitenbereichSchalten(bereich) {
+    const el = document.getElementById(bereich);
+    if (el && el.classList.contains("seitenbereich-offen")) {
+      this.seitenbereichSchliessen(bereich);
+    } else {
+      this.seitenbereichOeffnen(bereich);
+    }
+  },
+
+  /* Fasst die zwei aktiven Zeiger einer Kneifgeste zu Mittelpunkt und
+     Abstand zusammen - von _kneifBewegen() gebraucht, siehe dort. */
+  _kneifMasse(zeiger) {
+    const [a, b] = zeiger;
+    return {
+      distanz: Math.hypot(a.x - b.x, a.y - b.y) || 1,
+      mitteX: (a.x + b.x) / 2,
+      mitteY: (a.y + b.y) / 2,
+    };
+  },
+
+  /* Zoomt UND schiebt in einem Zug, solange genau zwei Finger auf der
+     Leinwand liegen (siehe Task: "Auf- und Zuziehen zum Zoomen, Schieben zum
+     Verschieben" - beides gleichzeitig moeglich, wie auf jedem Touchgeraet
+     ueblich). Beim ersten Aufruf einer neuen Kneifgeste (_kneifAnker noch
+     leer) wird nur der Ankerpunkt gemerkt - derselbe Weltpunkt bleibt dann
+     bei jeder folgenden Bewegung exakt unter der aktuellen Fingermitte
+     stehen, das ergibt Zoom UND Schieben zugleich aus derselben Formel wie
+     Editor.einpassen() (Weltpunkt -> Bildschirmpunkt), nur umgekehrt
+     angewendet. */
+  _kneifBewegen() {
+    const leinwand = document.getElementById("leinwand");
+    const kasten = leinwand.getBoundingClientRect();
+    const zeiger = [...this._zeiger.values()].slice(0, 2);
+    const { distanz, mitteX, mitteY } = this._kneifMasse(zeiger);
+
+    if (!this._kneifAnker) {
+      this._kneifAnker = {
+        distanz,
+        zoom: this.sicht.zoom,
+        weltX: (mitteX - kasten.left - this.sicht.x) / this.sicht.zoom,
+        weltY: (mitteY - kasten.top - this.sicht.y) / this.sicht.zoom,
+      };
+      return;
+    }
+    const zoom = Math.min(
+      this.ZOOM_MAX,
+      Math.max(this.ZOOM_MIN, this._kneifAnker.zoom * (distanz / this._kneifAnker.distanz))
+    );
+    this.sicht.zoom = zoom;
+    this.sicht.x = (mitteX - kasten.left) - this._kneifAnker.weltX * zoom;
+    this.sicht.y = (mitteY - kasten.top) - this._kneifAnker.weltY * zoom;
+    this.aktualisiereSicht();
+  },
+
+  /* Entfernt einen losgelassenen/abgebrochenen Zeiger (pointerup ODER
+     pointercancel - Touch-Gesten koennen vom Betriebssystem abgebrochen
+     werden, z.B. durch eine Systemgeste, siehe MDN zu pointercancel) aus der
+     Zeiger-Map und setzt den Anker fuer das verbleibende Schieben/Kneifen
+     neu, damit die Ansicht nicht mit einem Sprung weiterspringt. */
+  _zeigerEntfernen(e) {
+    if (!this._zeiger.has(e.pointerId)) return;
+    this._zeiger.delete(e.pointerId);
+    this._kneifAnker = null;
+    if (this._zeiger.size === 1) {
+      const [[, position]] = this._zeiger;
+      this._panAnker = { x: position.x, y: position.y, sichtX: this.sicht.x, sichtY: this.sicht.y };
+    } else {
+      this._panAnker = null;
+    }
+  },
+
   bindeLeinwand() {
     const leinwand = document.getElementById("leinwand");
 
     const einpassenKnopf = document.getElementById("btn-einpassen");
     if (einpassenKnopf) {
       einpassenKnopf.addEventListener("click", () => this.einpassen());
+    }
+
+    // Umschaltknoepfe fuer Palette/Parameterfenster (siehe style.css, @media
+    // (max-width: 900px) and (pointer: coarse)) - ausserhalb dieser
+    // Bedingung unsichtbar, aber ungefaehrlich verdrahtet, "click" statt
+    // "pointerdown" reicht hier, es gibt nichts zu ziehen.
+    const paletteKnopf = document.getElementById("btn-palette-umschalten");
+    if (paletteKnopf) {
+      paletteKnopf.addEventListener("click", () => this.seitenbereichSchalten("palette"));
+    }
+    const panelKnopf = document.getElementById("btn-panel-umschalten");
+    if (panelKnopf) {
+      panelKnopf.addEventListener("click", () => this.seitenbereichSchalten("panel"));
     }
 
     // Minikarte anklicken springt an die entsprechende Stelle - macht den
@@ -868,24 +1006,74 @@ const Editor = {
     }
 
     leinwand.addEventListener("pointerdown", (e) => {
+      // Ein per Finger "bewaffneter" Paletteneintrag (siehe palette.js,
+      // Palette.armieren()) wartet auf genau diesen Tipp - er legt die Karte
+      // an der angetippten Stelle an, statt die Leinwand zu schieben oder
+      // die Auswahl aufzuheben. Mit der Maus bleibt Palette.bereit immer
+      // leer (armieren() prueft dort selbst schon den pointerType), dieser
+      // Zweig greift also nie bei einem Mausklick.
+      if (Palette.bereit) {
+        const kasten = leinwand.getBoundingClientRect();
+        const x = (e.clientX - kasten.left - this.sicht.x) / this.sicht.zoom;
+        const y = (e.clientY - kasten.top - this.sicht.y) / this.sicht.zoom;
+        const kennung = Palette.bereit.kennung;
+        Palette.entwaffnen();
+        this.karteHinzufuegen(kennung, Math.round(x), Math.round(y));
+        return;
+      }
       if (e.target.closest(".karte")) return;
+      // Auf schmalem Hochformat schliesst ein Tipp auf die leere Leinwand
+      // beide Seitenbereiche wieder - sie waeren sonst nur ueber die
+      // Umschaltknoepfe wieder loszuwerden.
+      if (this.seitenbereichSchmal()) {
+        this.seitenbereichSchliessen("palette");
+        this.seitenbereichSchliessen("panel");
+      }
       this.auswahl = null;
       panelLeeren();
       this.entferneAuswahlKlasse();
-      const start = { x: e.clientX, y: e.clientY };
-      const anfang = { ...this.sicht };
-      const bewegen = (m) => {
-        this.sicht.x = anfang.x + (m.clientX - start.x);
-        this.sicht.y = anfang.y + (m.clientY - start.y);
-        this.aktualisiereSicht();
-      };
-      const loslassen = () => {
-        window.removeEventListener("pointermove", bewegen);
-        window.removeEventListener("pointerup", loslassen);
-      };
-      window.addEventListener("pointermove", bewegen);
-      window.addEventListener("pointerup", loslassen);
+
+      // setPointerCapture: dieser Zeiger meldet sich weiter bei der
+      // Leinwand, auch wenn er den Bildschirmbereich des Elements verlaesst
+      // (schneller Zug ueber den Rand hinaus) - ohne das braeuchte es dafuer
+      // wieder Lauscher auf window wie vor diesem Umbau. Fuer Touch macht das
+      // ohnehin schon die implizite Erfassung des Browsers, fuer die Maus
+      // erst dieser Aufruf. try/catch: die Spezifikation laesst den Aufruf
+      // ausdruecklich fehlschlagen, wenn der Browser diesen Zeiger nicht
+      // (mehr) als aktiv fuehrt (z.B. schon losgelassen, bevor dieser
+      // Handler dran kommt) - das darf das Schieben/Kneifen selbst nicht
+      // abbrechen, es geht dann nur ohne den zusaetzlichen Schutz weiter.
+      try {
+        leinwand.setPointerCapture(e.pointerId);
+      } catch {
+        /* Zeiger nicht (mehr) aktiv - siehe Kommentar oben, kein Abbruch. */
+      }
+      this._zeiger.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (this._zeiger.size === 1) {
+        this._panAnker = { x: e.clientX, y: e.clientY, sichtX: this.sicht.x, sichtY: this.sicht.y };
+        this._kneifAnker = null;
+      } else {
+        // Zweiter Finger waehrend des Schiebens dazugekommen: ab jetzt
+        // Kneifgeste statt Ein-Finger-Schieben (siehe _kneifBewegen()).
+        this._panAnker = null;
+        this._kneifAnker = null;
+      }
     });
+
+    leinwand.addEventListener("pointermove", (e) => {
+      if (!this._zeiger.has(e.pointerId)) return;
+      this._zeiger.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (this._zeiger.size >= 2) {
+        this._kneifBewegen();
+      } else if (this._panAnker) {
+        this.sicht.x = this._panAnker.sichtX + (e.clientX - this._panAnker.x);
+        this.sicht.y = this._panAnker.sichtY + (e.clientY - this._panAnker.y);
+        this.aktualisiereSicht();
+      }
+    });
+
+    leinwand.addEventListener("pointerup", (e) => this._zeigerEntfernen(e));
+    leinwand.addEventListener("pointercancel", (e) => this._zeigerEntfernen(e));
 
     leinwand.addEventListener("wheel", (e) => {
       e.preventDefault();
@@ -893,7 +1081,7 @@ const Editor = {
       // Untere Schranke bewusst unter der ueblichen Einpassen-Zoomstufe
       // (siehe einpassen()) - sonst liesse sich bei einer besonders grossen
       // Anlage nicht so weit herauszoomen, wie "Einpassen" selbst braucht.
-      this.sicht.zoom = Math.min(3, Math.max(0.08, this.sicht.zoom * faktor));
+      this.sicht.zoom = Math.min(this.ZOOM_MAX, Math.max(this.ZOOM_MIN, this.sicht.zoom * faktor));
       this.aktualisiereSicht();
     }, { passive: false });
 

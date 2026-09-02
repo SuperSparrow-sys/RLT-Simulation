@@ -151,6 +151,19 @@ const Pfeile = {
   ziehenStarten(karte, ereignis) {
     const NSS = "http://www.w3.org/2000/svg";
     const leinwand = document.getElementById("leinwand");
+
+    // Auf schmalem Hochformat mit Finger (siehe editor.js,
+    // seitenbereichSchmal()) haengt das Parameterfenster als Schublade offen
+    // ueber der Leinwand, sobald die Quellkarte ausgewaehlt wurde (genau der
+    // Zustand, aus dem heraus ueberhaupt gezogen wird) - eine Zielkarte
+    // koennte darunter liegen und waere fuer den Zug unerreichbar. Beide
+    // Seitenbereiche schliessen, bevor die Zielsuche beginnt, gibt der
+    // ganzen Leinwand den Platz zurueck.
+    if (this.editor.seitenbereichSchmal()) {
+      this.editor.seitenbereichSchliessen("palette");
+      this.editor.seitenbereichSchliessen("panel");
+    }
+
     const vorschau = document.createElementNS(NSS, "path");
     vorschau.setAttribute("class", "pfeil pfeil-vorschau");
     document.getElementById("pfeile").appendChild(vorschau);

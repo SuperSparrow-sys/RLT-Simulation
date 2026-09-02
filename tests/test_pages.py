@@ -167,3 +167,96 @@ def test_startseite_bindet_kein_editor_script_ein(app):
     assert "js/simulation.js" not in html
     assert "js/pfeile.js" not in html
     assert "js/palette.js" not in html
+
+
+# ---------- iPad: Ueberscrollen, sichere Bereiche, Beruehrung ----------
+# Nachgestellt mit Playwright (echtes iPad Pro 11 in Chromium, siehe
+# ipad-report.md) - hier nur die billig, ohne Browserlauf pruefbaren
+# Voraussetzungen dafuer: die Vorlage traegt viewport-fit=cover, und das
+# ausgelieferte CSS schaltet das Gummiband-Ueberscrollen ab.
+
+def test_alle_vier_vorlagen_setzen_viewport_fit_cover(app):
+    """Ohne viewport-fit=cover ignoriert iOS env(safe-area-inset-*) komplett
+    (siehe style.css/bausteine.css) - die Kopfleiste liefe dann unter einer
+    Notch/Rundung durch, ohne dass irgendein Polster das verhindern koennte."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("Referenz")
+        anlage = ax_sim_2_1.baue(projekt, "AX_SIM 2.1")
+
+    klient = app.test_client()
+    for pfad in ("/", "/bausteine", f"/anlage/{anlage}", "/anlage/9999"):
+        html = klient.get(pfad).get_data(as_text=True)
+        assert 'viewport-fit=cover' in html, pfad
+
+
+def test_style_css_schaltet_das_ueberscrollen_ab(app):
+    """overscroll-behavior auf Wurzel UND Koerper (siehe Task, Befund 3) -
+    ohne das schiebt sich auf iOS die ganze Seite mit, wenn man ueber den
+    Rand eines Bereichs hinaus zieht."""
+    klient = app.test_client()
+    css = klient.get("/static/css/style.css").get_data(as_text=True)
+    block = css[css.index("html, body {"):]
+    block = block[:block.index("}")]
+    assert "overscroll-behavior: none;" in block
+
+
+def test_style_css_verwendet_dvh_mit_vh_rueckfallwert(app):
+    """100vh zaehlt auf iOS die Hoehe MIT eingefahrener Werkzeugleiste mit
+    (siehe Task) - 100dvh muss als zweite, ueberschreibende Deklaration nach
+    100vh stehen (Browser ohne dvh-Unterstuetzung ueberspringen die zweite
+    Zeile und behalten den vh-Wert)."""
+    klient = app.test_client()
+    css = klient.get("/static/css/style.css").get_data(as_text=True)
+    for regel in (".app {", ".start {"):
+        block = css[css.index(regel):]
+        block = block[:block.index("}")]
+        assert "height: 100vh;" in block
+        assert "height: 100dvh;" in block
+        assert block.index("height: 100vh;") < block.index("height: 100dvh;")
+
+
+def test_editor_seite_hat_umschaltknoepfe_fuer_palette_und_panel(app):
+    """Auf schmalem Hochformat mit Finger passen drei Spalten nicht
+    nebeneinander (siehe Task, Befund 6) - Palette und Parameterfenster
+    werden zu Seitenbereichen, die diese zwei Knoepfe umschalten (siehe
+    static/js/editor.js, seitenbereichSchalten())."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("Referenz")
+        anlage = ax_sim_2_1.baue(projekt, "AX_SIM 2.1")
+
+    klient = app.test_client()
+    html = klient.get(f"/anlage/{anlage}").get_data(as_text=True)
+    assert 'id="btn-palette-umschalten"' in html
+    assert 'aria-controls="palette"' in html
+    assert 'id="btn-panel-umschalten"' in html
+    assert 'aria-controls="panel"' in html
+
+
+def test_palette_js_bewaffnet_nur_bei_finger_nicht_bei_maus(app):
+    """Der Zwei-Tipp-Weg (Eintrag antippen, Leinwand antippen - siehe Task)
+    darf das bestehende Maus-Drag&Drop nicht anfassen: dragstart bleibt
+    bedingungslos, das Bewaffnen prueft ausdruecklich pointerType !== 'mouse'."""
+    klient = app.test_client()
+    js = klient.get("/static/js/palette.js").get_data(as_text=True)
+    assert 'e.pointerType === "mouse"' in js
+    assert 'this.armieren(typ.kennung, eintrag)' in js
+    # dragstart selbst bleibt unveraendert - keine pointerType-Pruefung davor.
+    dragstart = js[js.index('"dragstart"'):]
+    dragstart = dragstart[:dragstart.index(");")]
+    assert "pointerType" not in dragstart
+
+
+def test_editor_js_leinwand_beachtet_bewaffnete_palette_und_kneifgeste(app):
+    """Zwei Handgriffe, beide ohne Browserlauf nicht direkt pruefbar (siehe
+    Kommentar bei test_entf_taste...) - hier nur festgehalten, DASS der
+    Leinwand-Lauscher auf eine bewaffnete Palette reagiert (Karte per Tipp
+    anlegen) und dass eine Kneifgeste (zwei Zeiger) den Zoom aendert."""
+    klient = app.test_client()
+    js = klient.get("/static/js/editor.js").get_data(as_text=True)
+    assert "if (Palette.bereit)" in js
+    assert "_kneifBewegen" in js
+    assert "this._zeiger.size >= 2" in js
+    # setPointerCapture darf einen synthetischen/inaktiven Zeiger nicht mit
+    # einer unbehandelten Ausnahme zum Abbruch bringen (siehe Bericht).
+    aufruf = js[js.index("try {\n        leinwand.setPointerCapture"):]
+    assert "} catch {" in aufruf[: aufruf.index("this._zeiger.set")]

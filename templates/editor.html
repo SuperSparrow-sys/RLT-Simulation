@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>RLT-Simulation</title>
   <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
@@ -21,13 +21,25 @@
           <button class="knopf-mini" id="btn-anlage-umbenennen" title="Anlage umbenennen">Umbenennen</button>
         </span>
 
+        <!-- Nur auf schmalem Hochformat mit Finger (@media (max-width: 900px)
+             and (pointer: coarse), siehe style.css) sichtbar: dort ist neben
+             der Leinwand kein Platz mehr fuer Palette UND Parameterfenster
+             gleichzeitig (siehe Task, Befund 6) - beide werden zu
+             ein-/ausblendbaren Seitenbereichen, dieser Knopf und
+             btn-panel-umschalten weiter unten schalten sie. Am Schreibtisch
+             (auch bei schmalem Fenster) bleiben Palette und Parameterfenster
+             wie bisher immer sichtbar. -->
+        <button class="knopf-mini knopf-seitenbereich" id="btn-palette-umschalten"
+                aria-controls="palette" aria-expanded="false">Palette</button>
+
         <details class="legende">
           <summary>Verbindungen</summary>
           <div class="legende-inhalt">
             <p class="legende-titel">Karten verbinden</p>
             <p class="legende-hinweistext">
-              Karte überfahren, den Punkt an ihrem Rand auf die Zielkarte
-              ziehen. Oder mit Umschalt+Ziehen von einer Karte zur anderen.
+              Karte überfahren oder antippen – am Rand erscheint ein Punkt –
+              und ihn auf die Zielkarte ziehen. Oder mit Umschalt+Ziehen von
+              einer Karte zur anderen.
             </p>
             <p class="legende-titel">Pfeilarten</p>
             <div class="legende-zeile">
@@ -57,6 +69,9 @@
           </div>
         </details>
 
+        <button class="knopf-mini knopf-seitenbereich" id="btn-panel-umschalten"
+                aria-controls="panel" aria-expanded="false">Parameter</button>
+
         <button class="knopf-sekundaer" id="btn-einpassen" title="Ganze Anlage einpassen" aria-label="Ganze Anlage einpassen">
           Einpassen
         </button>
@@ -72,9 +87,12 @@
       <div class="leinwand-hinweis" id="leinwand-hinweis" hidden>
         <div class="leinwand-hinweis-kasten">
           <p><strong>Diese Anlage ist noch leer.</strong></p>
-          <p>Karten aus der Palette links auf die Leinwand ziehen.
-          Zwei Karten verbinden: an den Rand einer Karte fahren – dort
-          erscheint ein Punkt – und ihn auf die Zielkarte ziehen.</p>
+          <p>Karten aus der Palette links auf die Leinwand ziehen, oder eine
+          Karte in der Palette antippen und danach die Zielstelle auf der
+          Leinwand antippen.
+          Zwei Karten verbinden: an den Rand einer Karte fahren oder sie
+          antippen – dort erscheint ein Punkt – und ihn auf die Zielkarte
+          ziehen.</p>
         </div>
       </div>
       <div class="minikarte-huelle" id="minikarte-huelle" hidden
