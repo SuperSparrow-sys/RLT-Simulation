@@ -682,6 +682,18 @@ const Editor = {
   // ausdrueckliche Uebersicht ueber die ganze Anlage (siehe einpassen()).
   START_ZOOM: 1,
 
+  // Bis zu dieser Zoomstufe herunter lohnt es sich, eine Anlage beim Oeffnen
+  // GANZ zu zeigen statt nur ihren Anfang (siehe startAnsicht()). Sie ist
+  // bewusst nicht DETAIL_ZOOM_SCHWELLE: dort geht es darum, ab wann die
+  // Zusatzzeilen einer Karte (Gruppe, Werte) mehr stoeren als helfen -
+  // hier darum, ab wann der NAME einer Karte nicht mehr zu lesen ist. Der
+  // Name steht in 13px (siehe .karte-name in style.css); 0,6 laesst davon
+  // knapp 8px uebrig, die Grenze des Lesbaren. Eine Beispielanlage einer
+  // einzelnen Karte passt damit ganz ins Bild (gemessen: Zoom 0,72), eine
+  // Vorlage mit 38 Karten nicht (0,37) - und die oeffnet weiter an ihrem
+  // Anfang, wo man zu arbeiten beginnt.
+  EINSTIEG_ZOOM_MIN: 0.6,
+
   /* Berechnet Breite, Hoehe und alle Textzeilen/-y-Positionen einer Karte,
      bevor sie gezeichnet wird - die Kartenhoehe waechst mit der Anzahl
      Namenszeilen, statt Text unter dem Rand abzuschneiden (siehe Task,
@@ -1195,6 +1207,19 @@ const Editor = {
      ohne die Gegenskalierung, die das beheben sollte, wiederum Namen ueber
      die Nachbarkarte hinauslaufen liess (siehe Task "Ueberlappende Karten
      im gezeichneten Bild"). */
+  /* Die Zoomstufe, bei der die ganze Anlage samt Rand in die Leinwand passt.
+     Getrennt von einpassen(), weil startAnsicht() dieselbe Zahl braucht, um
+     zu entscheiden, ob eine Einpassung ueberhaupt sinnvoll ist - nicht um
+     einzupassen. Nicht ueber 1 hinaus vergroessern: bei wenigen Karten soll
+     "Einpassen" sie in Originalgroesse zentrieren, nicht auf Plakatgroesse
+     aufblasen. */
+  einpassZoom(huelle, kasten) {
+    const POLSTER = 70;
+    const inhaltBreite = huelle.maxX - huelle.minX + POLSTER * 2;
+    const inhaltHoehe = huelle.maxY - huelle.minY + POLSTER * 2;
+    return Math.min(kasten.width / inhaltBreite, kasten.height / inhaltHoehe, 1);
+  },
+
   einpassen() {
     const huelle = this.kartenHuelle();
     const leinwand = document.getElementById("leinwand");
@@ -1204,12 +1229,7 @@ const Editor = {
       this.aktualisiereSicht();
       return;
     }
-    const POLSTER = 70;
-    const inhaltBreite = huelle.maxX - huelle.minX + POLSTER * 2;
-    const inhaltHoehe = huelle.maxY - huelle.minY + POLSTER * 2;
-    // Nicht ueber 1 hinaus vergroessern - bei wenigen Karten soll "Einpassen"
-    // sie in Originalgroesse zentrieren, nicht auf Plakatgroesse aufblasen.
-    const zoom = Math.min(kasten.width / inhaltBreite, kasten.height / inhaltHoehe, 1);
+    const zoom = this.einpassZoom(huelle, kasten);
     this.sicht.zoom = zoom;
     const mitteX = (huelle.minX + huelle.maxX) / 2;
     const mitteY = (huelle.minY + huelle.maxY) / 2;
@@ -1218,8 +1238,9 @@ const Editor = {
     this.aktualisiereSicht();
   },
 
-  /* Ansicht, in der der Editor eine Anlage oeffnet (siehe laden() oben):
-     START_ZOOM statt voller Einpassung, verankert an der Karte, an der der
+  /* Ansicht, in der der Editor eine Anlage oeffnet (siehe laden() oben).
+     Eine Regel, zwei Ausgaenge: passt alles in lesbarer Groesse hinein, wird
+     eingepasst; sonst START_ZOOM, verankert an der Karte, an der der
      Luftweg beginnt - dort, wo jemand zu arbeiten anfaengt, nicht an der
      Uebersicht ueber alles (die bleibt ueber "Einpassen" einen Klick
      entfernt, die Minikarte gibt dabei die Orientierung). "Wo der Luftweg
@@ -1236,6 +1257,19 @@ const Editor = {
       this.aktualisiereSicht();
       return;
     }
+    // Passt die ganze Anlage ohne Verkleinern unter die Lesbarkeitsschwelle
+    // hinein, ist die Uebersicht der bessere Einstieg als ein Ausschnitt:
+    // kleine Anlagen - etwa die Beispielanlagen einer einzelnen Karte
+    // (core/lehrinhalte/) mit einer Handvoll Karten - wuerden sonst rechts
+    // abgeschnitten geoeffnet, obwohl alles bequem Platz haette. Erst wenn
+    // die Einpassung unter EINSTIEG_ZOOM_MIN fiele (bei 36 Karten war an ihr
+    // nichts mehr zu lesen), greift die Verankerung darunter.
+    const huelle = this.kartenHuelle();
+    if (huelle && this.einpassZoom(huelle, kasten) >= this.EINSTIEG_ZOOM_MIN) {
+      this.einpassen();
+      return;
+    }
+
     let start = this.anlage.karten[0];
     for (const karte of this.anlage.karten) {
       if (

@@ -128,3 +128,37 @@ def test_luftarten_sind_nicht_nur_an_der_farbe_zu_unterscheiden():
         strich = re.search(r"stroke-dasharray:\s*([^;]+);", regel)
         muster[art] = strich.group(1).strip() if strich else "durchgezogen"
     assert len(set(muster.values())) == 5, muster
+
+
+def test_die_oeffnungsansicht_entscheidet_an_einer_eigenen_schwelle():
+    """Beim Öffnen gilt eine Regel mit zwei Ausgängen (static/js/editor.js,
+    startAnsicht): passt die ganze Anlage in lesbarer Größe hinein, wird
+    eingepasst - sonst öffnet der Editor an der Karte, an der der Luftweg
+    beginnt. Eine kleine Beispielanlage (core/lehrinhalte/) wurde sonst
+    rechts abgeschnitten gezeigt, obwohl alles Platz gehabt hätte.
+
+    Die Schwelle dafür ist bewusst eine eigene und nicht die, ab der eine
+    Karte ihre Zusatzzeilen ausblendet: das sind zwei verschiedene Fragen -
+    „ist der Name noch lesbar" gegen „stören die Detailzeilen". Wer sie
+    wieder zusammenlegt, macht die Einpassung ohne Not strenger; gemessen
+    passt eine Beispielanlage bei Zoom 0,72, die Detailschwelle liegt bei
+    0,85. Dieser Test hält die Trennung fest.
+    """
+    js = (
+        pathlib.Path(__file__).resolve().parent.parent
+        / "static" / "js" / "editor.js"
+    ).read_text(encoding="utf-8")
+
+    einstieg = re.search(r"EINSTIEG_ZOOM_MIN:\s*([\d.]+)", js)
+    detail = re.search(r"DETAIL_ZOOM_SCHWELLE:\s*([\d.]+)", js)
+    assert einstieg and detail
+    assert float(einstieg.group(1)) < float(detail.group(1))
+
+    # startAnsicht() muss gegen die Einstiegsschwelle prüfen, nicht gegen die
+    # Detailschwelle - und einpassZoom() dafür benutzen statt die Rechnung
+    # ein zweites Mal hinzuschreiben.
+    stelle = js.index("  startAnsicht() {")
+    abschnitt = js[stelle:stelle + 1600]
+    assert "EINSTIEG_ZOOM_MIN" in abschnitt
+    assert "einpassZoom(" in abschnitt
+    assert "DETAIL_ZOOM_SCHWELLE" not in abschnitt
