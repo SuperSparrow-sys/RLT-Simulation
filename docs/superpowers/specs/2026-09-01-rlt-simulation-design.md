@@ -291,7 +291,7 @@ mit `get_db`/`close_db` und Wiederholung bei Sperren.
 | `projekt` | `id`, `name`, `beschreibung`, `erstellt_am`, `geaendert_am` |
 | `anlage` | `id`, `projekt_id`, `name`, `notiz`, `erstellt_am`, `geaendert_am` |
 | `karte` | `id`, `anlage_id`, `typ`, `name`, `pos_x`, `pos_y`, `parameter` (JSON) |
-| `port` | `id`, `karte_id`, `schluessel`, `art`, `richtung`, `rolle`, `nummer` |
+| `port` | `id`, `karte_id`, `schluessel`, `basis`, `art`, `richtung`, `rolle`, `nummer` |
 | `pfeil` | `id`, `anlage_id`, `von_karte_id`, `nach_karte_id`, `stuetzpunkte` (JSON) |
 | `verbindung` | `id`, `pfeil_id`, `von_port_id`, `nach_port_id` |
 
@@ -301,8 +301,9 @@ Varianten für den Vergleich.
 `karte.parameter` liegt als JSON vor. Ein neuer Kartentyp erfordert dadurch keine
 Schemaänderung.
 
-`port` wird aus der Typdeklaration erzeugt; `nummer` unterscheidet die Ports
-dynamischer Rollen.
+`port` wird aus der Typdeklaration erzeugt. `basis` hält den deklarierten Namen
+fest, `schluessel` den tatsächlichen; bei dynamischen Ports unterscheidet `nummer`
+die Ausfertigungen (`basis` = `zuluft_ein`, `schluessel` = `zuluft_ein_2`).
 
 `pfeil` ist die Sicht des Nutzers, `verbindung` die des Solvers. Löschen eines Pfeils
 löscht seine Verbindungen mit.

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Anlage nicht gefunden – RLT-Simulation</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <div class="start">
+    <header class="leiste">
+      <span class="titel">RLT-Simulation</span>
+    </header>
+
+    <main class="start-haupt">
+      <div class="start-abschnitt nicht-gefunden">
+        <div class="leerhinweis-gross">
+          <h2>Diese Anlage gibt es nicht</h2>
+          <p>
+            Anlage {{ anlage_id }} wurde nicht gefunden – möglicherweise wurde sie
+            gelöscht, oder der Link war fehlerhaft. Zurück zur Übersicht, um eine
+            vorhandene Anlage zu öffnen oder eine neue anzulegen.
+          </p>
+          <a class="knopf-haupt" href="{{ url_for('pages.index') }}">Zur Übersicht</a>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

@@ -1,0 +1,222 @@
+/* Eingangsseite (/): Gewichtung und Einstieg. Eigenes Stylesheet, weil
+   static/css/style.css waehrend dieser Arbeit von einem anderen Agenten
+   bearbeitet wird (siehe wetter-abruf.css/loeschen.css fuer denselben
+   Grund). Nutzt nur vorhandene CSS-Variablen aus style.css und ergaenzt
+   vorhandene Klassen (.start-abschnitt, .abschnitt-titel, .wetter-weg,
+   .anlage-status, .eintrag-aktionen) um zusaetzliche, additive Regeln -
+   keine davon wird selbst angefasst.
+
+   Reihenfolge auf der Seite (siehe templates/index.html): zuerst der
+   Einstiegskasten (nur im leeren Zustand, siehe #start-einstieg unten),
+   dann Projekte - der Zweck des Programms, deshalb unveraendert in voller
+   Groesse - dann Wetterdaten - eine Voraussetzung, deshalb hier bewusst
+   zurueckhaltender gestaltet (kleinere, stumme Ueberschrift, umschliessender
+   Rahmen) statt gleichrangig neben Projekte zu stehen. */
+
+/* ---------- Einstiegskasten ----------
+   Nur sichtbar, solange es noch kein einziges Projekt gibt (siehe
+   Start.zeichneEinstieg() in start.js) - fuer alle folgenden Besuche schon
+   durch echte Projekte und Anlagen beantwortet, ein dauerhafter Kasten waere
+   dann nur noch Ballast. Drei Schritte in der Reihenfolge, die tatsaechlich
+   zum ersten Ergebnis fuehrt (Wetter vor Anlage vor Rechnen) - unabhaengig
+   von der Reihenfolge der Abschnitte darunter, die stattdessen nach
+   Bedeutung sortiert sind (Projekte vor Wetterdaten, siehe oben). */
+.start-einstieg {
+  max-width: 1400px;
+  margin: 0 auto 32px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  padding: 20px 24px;
+}
+.start-einstieg-titel {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 500;
+}
+.start-einstieg-hinweis {
+  margin: 0 0 16px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  max-width: var(--lesebreite);
+  line-height: 1.5;
+}
+.einstieg-schritte {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.einstieg-schritt {
+  flex: 1 1 220px;
+  min-width: 200px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.einstieg-nummer {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Der Haken ist ein SVG, kein Schriftzeichen (siehe start.js, hakenSymbol()).
+   Er erbt seine Farbe ueber currentColor von der Nummernflaeche und bekommt
+   dieselbe Groesse, die die Ziffer vorher hatte. Strichangaben stehen hier
+   und nicht in der Datei - dieselbe Bauweise wie bei allen uebrigen
+   Bedienzeichen (.knopf-symbol, .aufklapp-zeichen in style.css): die Datei
+   traegt nur die Form, das Aussehen kommt aus dem CSS. */
+.einstieg-haken {
+  width: 15px;
+  height: 15px;
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.einstieg-schritt-erledigt .einstieg-nummer {
+  border-color: var(--energie);
+  color: var(--energie);
+  background: var(--energie-tint);
+}
+.einstieg-text h2 {
+  margin: 0 0 3px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.einstieg-text p {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+.einstieg-schritt-erledigt .einstieg-text h2 { color: var(--text-secondary); }
+.einstieg-schritt:not(.einstieg-schritt-erledigt) .einstieg-nummer {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+/* ---------- Wetterdaten: Voraussetzung statt Zweck ----------
+   Der eigene, umschliessende Rahmen und die kleinere, stumme Ueberschrift
+   (13px statt der 18px von .abschnitt-titel, gleiche Optik wie
+   .wetter-weg-titel) machen sichtbar, dass dieser Abschnitt anders gewichtet
+   ist als "Projekte" - ohne die gemeinsame Klasse .abschnitt-titel selbst
+   umzudefinieren, die auch anderswo unveraendert 18px bleiben soll. */
+.start-abschnitt-wetter {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 20px 24px 24px;
+  background: var(--surface);
+}
+.start-abschnitt-wetter > .abschnitt-titel {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  margin: 0 0 10px;
+}
+.start-abschnitt-wetter > .abschnitt-hinweis { margin-top: 0; }
+
+/* Online abrufen ist der bequemere, empfohlene Weg (Ort waehlen, Jahre
+   ankreuzen, unter einer Sekunde fertig) - deshalb breiter und offen. Die
+   Datei fuer eine eigene TRY-Datei ist der Sonderfall, deshalb als <details>
+   eingeklappt (siehe templates/index.html) und schmaler, wenn sie offen
+   ist. */
+.wetter-weg-hauptweg { flex: 2 1 380px; }
+.wetter-weg-nebenweg { flex: 1 1 280px; }
+/* -3px/-16px oben/seitlich gleicht das zusaetzliche Innenmass gegenueber
+   der Nachbarschrift (.wetter-weg-titel: margin 0 0 10px) wieder aus, damit
+   die Kante des Bereichs optisch gleich bleibt - das Antippziel selbst
+   braucht die 6px oben/unten, um auf die geforderten 24px Hoehe zu kommen
+   (gemessene Hoehe vorher: 18px, siehe Task, Befund 5). */
+.wetter-weg-nebenweg summary {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  margin: -6px -16px 4px;
+  padding: 6px 16px;
+  border-radius: var(--radius-sm);
+}
+.wetter-weg-nebenweg summary::-webkit-details-marker { display: none; }
+/* Aufklapp-Pfeilchen als gezeichnete SVG statt Schriftzeichen (▾/▴) - siehe
+   .aufklapp-zeichen in style.css, dieselbe Datei wie bei der Legende im
+   Editor (templates/bedienzeichen/aufklapp.svg). Hier nur Abstand und Farbe
+   fuer diese Stelle, Form und Drehung kommen von dort. */
+.wetter-weg-nebenweg summary .aufklapp-zeichen {
+  margin-left: 6px;
+  vertical-align: -1px;
+  color: var(--text-tertiary);
+}
+.wetter-weg-nebenweg[open] summary .aufklapp-zeichen { transform: rotate(180deg); }
+.wetter-weg-nebenweg summary:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+.wetter-weg-nebenweg .wetter-weg-hinweis { margin-top: 10px; }
+
+/* ---------- Anlage-Karte: Auskunft statt Leerstelle ----------
+   Zusaetzlich zur bisherigen einzeiligen .anlage-status (Kosten oder
+   Zustand) eine zweite, stumme Zeile mit Datum und Wetterjahr des letzten
+   Laufs - siehe Start._fuelleStatus() in start.js. */
+.anlage-status-neben {
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  margin-top: 1px;
+}
+/* Bericht-Verweis in der Aktionszeile (nur bei einem fertigen Lauf) - sitzt
+   neben Umbenennen/Loeschen (.eintrag-aktionen, siehe loeschen.css) und
+   nutzt .knopf-mini unveraendert; a.knopf-mini selbst (Entfernen der
+   Unterstreichung) steht schon in style.css. */
+
+/* ---------- Beispielanlagen: eigener, eingeklappter Bereich ----------
+   Lehrmaterial, kein Arbeitsergebnis (Task-Rueckmeldung) - deshalb weder
+   zwischen den eigenen Projekten noch dauerhaft ausgeklappt. Gestrichelter
+   statt durchgezogener Rahmen (wie .leerhinweis-gross, style.css) haelt ihn
+   sichtbar zurueckhaltender als die Projektkarten, die er enthaelt (siehe
+   projektKarteElement() in start.js, unveraendert wiederverwendet). */
+.start-lehrmaterial {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+  padding: 4px 20px 4px;
+}
+.start-lehrmaterial[open] { padding-bottom: 20px; }
+.start-lehrmaterial-titel {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  padding: 12px 0;
+}
+.start-lehrmaterial-titel::-webkit-details-marker { display: none; }
+/* Dieselbe gezeichnete SVG wie beim Nebenweg oben, hier vor statt nach dem
+   Wort (siehe templates/index.html). */
+.start-lehrmaterial-titel .aufklapp-zeichen {
+  margin-right: 6px;
+  vertical-align: -1px;
+  color: var(--text-tertiary);
+}
+.start-lehrmaterial[open] .start-lehrmaterial-titel .aufklapp-zeichen { transform: rotate(180deg); }
+.start-lehrmaterial-titel:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+.start-lehrmaterial .abschnitt-hinweis { margin-top: 4px; }
+
+@media (max-width: 700px) {
+  .einstieg-schritte { flex-direction: column; }
+}

@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="de" class="seite-editor">
+<head>
+  <meta charset="utf-8">
+  <!-- maximum-scale/user-scalable: nur eine ZWEITE Sicherung fuer Browser
+       ausserhalb von iOS Safari - Safari selbst ignoriert das seit iOS 10
+       absichtlich (Zoomen bleibt dort als Zugaenglichkeitsfunktion
+       erhalten), verlassen wird sich hier nicht darauf (siehe
+       gesturestart-Sperre in editor.js, der eigentliche Weg). Wirkt nur auf
+       mobile Browser im Viewport-Meta-Modus, an einem Schreibtischbrowser
+       aendert diese Zeile nichts - Strg +/- und Strg+Mausrad bleiben dort
+       unberuehrt. Nur in dieser Vorlage: Startseite/Bausteine sollen sich
+       weiterhin mit zwei Fingern aufziehen lassen. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+  <title>RLT-Simulation</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/loeschen.css') }}">
+</head>
+<body class="seite-editor">
+  <div id="fehlermeldung" class="fehlermeldung" role="alert" aria-live="assertive" hidden></div>
+
+  <!-- Ruhige Schwester der Fehlerleiste: sie meldet, was gerade
+       zurueckgenommen oder wiederholt wurde. role="status"/aria-live="polite"
+       statt "alert"/"assertive" - es ist eine Bestaetigung, keine Stoerung.
+       Auf dem iPad ist sie der einzige Ort, an dem die Beschriftung eines
+       Verlaufsschritts ohne Schweben zu lesen ist (siehe editor.html oben). -->
+  <div id="hinweismeldung" class="hinweismeldung" role="status" aria-live="polite" hidden></div>
+
+  <div class="app">
+    <aside class="palette" id="palette"></aside>
+
+    <main class="buehne">
+      <!-- Kopfleiste: vier Gruppen, durch schmale Striche getrennt, in
+           EINER Formensprache (siehe style.css, "Kopfleiste des Editors").
+           Runde Knöpfe tragen genau ein Zeichen und einen Namen in
+           title/aria-label; Pillen tragen ein Wort; genau eine gefüllte
+           Pille trägt den Zweck der Seite. Die Gruppen von links nach
+           rechts: ORT (zurück, Name, umbenennen), BEARBEITUNG (rückgängig,
+           wiederholen), ANSICHT (einpassen, Verbindungen, auf schmalen
+           Geräten die beiden Seitenbereiche), ERGEBNIS (Bericht,
+           Vergleich, Simulieren). Auf schmalen Geräten verlieren die
+           Knöpfe links ihr Wort und behalten ihr Zeichen - der Platz
+           gehört dann den drei Wegen zum Ergebnis. -->
+      <header class="leiste">
+        <div class="leiste-gruppe">
+          <!-- Derselbe Weg zurueck wie im Erklaerbereich und im Bericht
+               (.zurueck-knopf, style.css) - links neben dem Anlagennamen,
+               damit es sich auf jeder Seite gleich anfuehlt. -->
+          <a class="zurueck-knopf" href="{{ url_for('pages.index') }}"
+             title="Zur Startseite" aria-label="Zur Startseite">{% include "bedienzeichen/pfeil-links.svg" %}<span class="knopf-wort">Start</span></a>
+
+          <span class="titel anlagenname-zeile">
+            <span id="anlagenname">Anlage</span>
+            <button class="leiste-knopf leiste-knopf-rund leiste-knopf-still"
+                    id="btn-anlage-umbenennen" title="Anlage umbenennen"
+                    aria-label="Anlage umbenennen"><svg class="knopf-symbol" viewBox="0 0 16 16" aria-hidden="true"><path d="M11.3 1.9 14.1 4.7 5.6 13.2 2.2 14.1 3.1 10.7z"/><path d="M9.9 3.3 12.7 6.1"/></svg></button>
+          </span>
+        </div>
+
+        <span class="leiste-trenner" aria-hidden="true"></span>
+
+        <!-- Rueckgaengig/Wiederholen (core/verlauf.py, editor.js). Zu Beginn
+             beide gesperrt; editor.js hebt die Sperre auf, sobald der
+             Verlauf etwas hergibt, und traegt in title/aria-label ein, WAS
+             der Knopf zuruecknimmt ("Rückgängig: Karte 'Erhitzer'
+             gelöscht"). Auf dem iPad, wo es kein Schweben gibt, nennt der
+             Hinweisstreifen nach dem Druck dasselbe noch einmal
+             (zeigeHinweis() in editor.js). -->
+        <div class="leiste-gruppe verlauf-knoepfe">
+          <button class="leiste-knopf leiste-knopf-rund" id="btn-zurueck"
+                  title="Rückgängig" aria-label="Rückgängig" disabled>{% include "bedienzeichen/rueckgaengig.svg" %}</button>
+          <button class="leiste-knopf leiste-knopf-rund" id="btn-vor"
+                  title="Wiederholen" aria-label="Wiederholen" disabled>{% include "bedienzeichen/wiederholen.svg" %}</button>
+        </div>
+
+        <span class="leiste-trenner" aria-hidden="true"></span>
+
+        <div class="leiste-gruppe">
+          <button class="leiste-knopf leiste-knopf-rund" id="btn-einpassen"
+                  title="Ganze Anlage einpassen" aria-label="Ganze Anlage einpassen">{% include "bedienzeichen/einpassen.svg" %}</button>
+
+          <details class="legende">
+            <summary title="Verbindungsarten" aria-label="Verbindungsarten">{% include "bedienzeichen/verbindungen.svg" %}<span class="knopf-wort">Verbindungen</span>{% include "bedienzeichen/aufklapp.svg" %}</summary>
+            <div class="legende-inhalt">
+              <p class="legende-titel">Karten verbinden</p>
+              <p class="legende-hinweistext">
+                Karte überfahren oder antippen – am Rand erscheint ein Punkt –
+                und ihn auf die Zielkarte ziehen. Oder mit Umschalt+Ziehen von
+                einer Karte zur anderen. Einen Pfeil antippen wählt ihn aus;
+                dann löscht ihn der Knopf an der Verbindung oder die Entf-Taste.
+              </p>
+
+              <!-- Luftarten: Farbe UND Strichmuster, damit sie auch ohne
+                   Farbunterscheidung und im Schwarzweissdruck tragen
+                   (siehe static/js/pfeile.js, LUFTROLLEN). -->
+              <p class="legende-titel">Luftwege</p>
+              <div class="legende-zeile">
+                <svg class="legende-muster" viewBox="0 0 32 8" aria-hidden="true">
+                  <path class="pfeil pfeil-luft pfeil-luft-aussenluft" d="M1 4 H31"/>
+                </svg>
+                <span>Außenluft</span>
+              </div>
+              <div class="legende-zeile">
+                <svg class="legende-muster" viewBox="0 0 32 8" aria-hidden="true">
+                  <path class="pfeil pfeil-luft pfeil-luft-zuluft" d="M1 4 H31"/>
+                </svg>
+                <span>Zuluft</span>
+              </div>
+              <div class="legende-zeile">
+                <svg class="legende-muster" viewBox="0 0 32 8" aria-hidden="true">
+                  <path class="pfeil pfeil-luft pfeil-luft-abluft" d="M1 4 H31"/>
+                </svg>
+                <span>Abluft</span>
+              </div>
+              <div class="legende-zeile">
+                <svg class="legende-muster" viewBox="0 0 32 8" aria-hidden="true">
+                  <path class="pfeil pfeil-luft pfeil-luft-fortluft" d="M1 4 H31"/>
+                </svg>
+                <span>Fortluft</span>
+              </div>
+              <div class="legende-zeile">
+                <svg class="legende-muster" viewBox="0 0 32 8" aria-hidden="true">
+                  <path class="pfeil pfeil-luft pfeil-luft-umluft" d="M1 4 H31"/>
+                </svg>
+                <span>Umluft</span>
+              </div>
+
+              <p class="legende-titel">Weitere Wege</p>
+              <div class="legende-zeile">
+                <svg class="legende-muster" viewBox="0 0 32 8" aria-hidden="true">
+                  <path class="pfeil pfeil-signal" d="M1 4 H31"/>
+                </svg>
+                <span>Signal (Regelung)</span>
+              </div>
+              <div class="legende-zeile">
+                <svg class="legende-muster" viewBox="0 0 32 8" aria-hidden="true">
+                  <path class="pfeil pfeil-energie" d="M1 4 H31"/>
+                </svg>
+                <span>Energie zur Bilanz</span>
+              </div>
+              <div class="legende-zeile">
+                <svg class="legende-muster" viewBox="0 0 32 8" aria-hidden="true">
+                  <path class="pfeil pfeil-protokoll" d="M1 4 H31"/>
+                </svg>
+                <span>Meldung an den Datenlogger</span>
+              </div>
+              <div class="legende-zeile">
+                <svg class="legende-muster" viewBox="0 0 32 8" aria-hidden="true">
+                  <path class="pfeil pfeil-mehrdeutig" d="M1 4 H31"/>
+                </svg>
+                <span>Mehrdeutig &ndash; bitte prüfen</span>
+              </div>
+
+              <!-- Energie- und Meldewege laufen aus der ganzen Anlage auf
+                   zwei Karten am Rand zu (in AX_SIM 2.1 sind das 17 der 52
+                   Signalwege) und queren dabei alles. Von Haus aus sichtbar,
+                   nur blasser gezeichnet - hier lassen sie sich ganz
+                   ausblenden (editor.js, meldewegeSetzen). -->
+              <label class="legende-schalter">
+                <input type="checkbox" id="schalter-meldewege" checked>
+                <span>Energie- und Meldewege anzeigen</span>
+              </label>
+            </div>
+          </details>
+
+          <!-- Nur auf schmalem Hochformat mit Finger (@media (max-width: 900px)
+               and (pointer: coarse), siehe style.css) sichtbar: dort ist neben
+               der Leinwand kein Platz mehr fuer Palette UND Parameterfenster
+               gleichzeitig - beide werden zu ein-/ausblendbaren
+               Seitenbereichen, diese beiden Knoepfe schalten sie. -->
+          <button class="leiste-knopf knopf-seitenbereich" id="btn-palette-umschalten"
+                  aria-controls="palette" aria-expanded="false">Palette</button>
+          <button class="leiste-knopf knopf-seitenbereich" id="btn-panel-umschalten"
+                  aria-controls="panel" aria-expanded="false">Parameter</button>
+        </div>
+
+        <div class="leiste-gruppe leiste-ergebnis">
+          <!-- Dauerhaft in der Kopfleiste statt nur im Bilanzdialog (siehe
+               static/js/simulation.js, zeigeBilanz()) - sonst war der
+               Bericht nach dem Schliessen des Dialogs gar nicht mehr
+               erreichbar. Zu Beginn immer abgeblendet (kein Lauf bekannt);
+               Editor.berichtLinkAktualisieren() setzt href und hebt die
+               Abblendung auf, sobald ein Lauf mit Ergebnis vorliegt. -->
+          <a class="leiste-knopf" id="link-bericht" aria-disabled="true"
+             title="Bericht des letzten Laufs">Bericht</a>
+
+          <!-- Vorhaben B: dieselbe Anlage ueber mehrere Wetterjahre
+               vergleichen (core/vergleich.py, core/laeufe.py
+               starte_reihe()). -->
+          <button class="leiste-knopf" id="btn-vergleich"
+                  title="Diese Anlage über mehrere Wetterjahre vergleichen">Vergleich</button>
+
+          <button class="leiste-knopf leiste-knopf-haupt" id="btn-simulieren">Simulieren</button>
+        </div>
+      </header>
+      <!-- .leinwand-flaeche traegt die Kanten (top/right/bottom/left,
+           siehe style.css), #leinwand selbst nur noch width/height:100%
+           eines damit bereits fest bemessenen Elternbehaelters - genau
+           das "SVG in einen Behaelter legen und absolut auf dessen
+           Flaeche aufziehen" aus dem Bericht, und derselbe Aufbau wie
+           schon bei #minikarte/.minikarte-huelle weiter unten. NICHT
+           direkt am SVG selbst mit top/right/bottom/left positioniert:
+           erst probiert, dann per Nachbau widerlegt - ein SVG ist ein
+           "replaced element", bei "auto" nutzt CSS fuer dessen Hoehe dann
+           die intrinsische Groesse statt zwischen top und bottom
+           aufzuspannen, und mit einem width/height="100%"-Attribut
+           daran geklebt loest sich die Prozentangabe gegen die volle
+           Hoehe des Elternrahmens auf (ohne den Kopfleisten-Abzug) - in
+           beiden Faellen wurde das SVG dadurch falsch hoch. Ein
+           gewoehnlicher <div> als Behaelter "spannt" zwischen den Kanten
+           dagegen ganz normal auf (kein replaced element), das SVG
+           bekommt darin ein bereits eindeutiges, richtiges Mass. -->
+      <div class="leinwand-flaeche">
+        <svg id="leinwand" width="100%" height="100%">
+          <g id="welt">
+            <g id="pfeile"></g>
+            <g id="karten"></g>
+          </g>
+        </svg>
+      </div>
+      <!-- Werkzeug eines ausgewaehlten Pfeils (editor.js,
+           pfeilAuswahlZeichnen): schwebt an der Mitte der Verbindung, nennt
+           sie ("Erhitzer → Kühler") und traegt den Loeschknopf. Als
+           HTML-Element neben der Leinwand statt als SVG-Gruppe darin: so
+           behaelt es beim Hineinzoomen seine Groesse und seine
+           Beruehrungsflaeche, statt mitzuwachsen oder zu schrumpfen. Der
+           Weg fuer den Finger - auf dem iPad gibt es weder Entf-Taste noch
+           einen zuverlaessig treffbaren Doppeltipp auf einen 1,5 Pixel
+           breiten Signalpfeil. -->
+      <div class="pfeil-werkzeug" id="pfeil-werkzeug" hidden>
+        <span class="pfeil-werkzeug-text" id="pfeil-werkzeug-text"></span>
+        <button class="knopf-mini knopf-mini-gefahr" id="btn-pfeil-loeschen"
+                title="Diese Verbindung löschen">Verbindung löschen</button>
+      </div>
+
+      <div class="leinwand-hinweis" id="leinwand-hinweis" hidden>
+        <div class="leinwand-hinweis-kasten">
+          <p><strong>Diese Anlage ist noch leer.</strong></p>
+          <p>Karten aus der Palette links auf die Leinwand ziehen, oder eine
+          Karte in der Palette antippen und danach die Zielstelle auf der
+          Leinwand antippen.
+          Zwei Karten verbinden: an den Rand einer Karte fahren oder sie
+          antippen – dort erscheint ein Punkt – und ihn auf die Zielkarte
+          ziehen.</p>
+        </div>
+      </div>
+      <div class="minikarte-huelle" id="minikarte-huelle" hidden
+           title="Ausschnitt der ganzen Anlage - anklicken springt dorthin">
+        <!-- Dieselbe Absicherung wie bei #leinwand (siehe dort) - hier
+             steckt zwar bereits ein fest bemessener Elternbehaelter
+             (.minikarte-huelle, siehe style.css) dahinter, width/height
+             passend zum viewBox schaden trotzdem nicht. -->
+        <svg id="minikarte" viewBox="0 0 168 108" width="168" height="108"></svg>
+      </div>
+    </main>
+
+    <aside class="panel" id="panel"></aside>
+  </div>
+
+  <script>window.ANLAGE_ID = {{ anlage_id }};</script>
+  <script src="{{ url_for('static', filename='js/zahlen.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/palette.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/pfeile.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/panel.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/simulation.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/editor.js') }}"></script>
+</body>
+</html>

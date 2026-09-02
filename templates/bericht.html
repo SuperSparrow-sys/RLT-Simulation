@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Bericht – {{ daten.anlage.name }}</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/bericht.css') }}">
+</head>
+<body class="seite-bericht">
+  <header class="bericht-kopfleiste">
+    <a class="zurueck-knopf" href="{{ url_for('pages.editor', anlage_id=daten.anlage.id) }}">{% include "bedienzeichen/pfeil-links.svg" %}<span class="knopf-wort">Zurück zur Anlage</span></a>
+    <!-- Dieselben drei Stufen wie ueberall (style.css, "Kopfleiste des
+         Editors"): eine Pille mit einem Wort fuer den benannten Weg, genau
+         EINE gefuellte Pille fuer den Zweck der Seite. "Drucken" trug
+         vorher gar keine Klasse und sah damit aus, wie der Browser einen
+         Knopf eben zeichnet - graue Flaeche, eckige Ecken. -->
+    <div class="bericht-kopfleiste-knoepfe">
+      <button type="button" class="leiste-knopf" id="btn-drucken">Drucken</button>
+      <a class="leiste-knopf leiste-knopf-haupt" href="{{ pdf_href }}">PDF herunterladen</a>
+    </div>
+  </header>
+
+  <main class="bericht">
+    <h1>Ergebnisbericht – {{ daten.anlage.name }}</h1>
+
+    <dl class="bericht-kopf">
+      <div><dt>Projekt</dt><dd>{{ daten.anlage.projekt_name }}</dd></div>
+      <div><dt>Wetterdatensatz</dt><dd>{{ daten.wetter_kopfzeile }}</dd></div>
+      <div><dt>Lauf gestartet</dt><dd>{{ daten.sim.gestartet_am }}</dd></div>
+      <div><dt>Status</dt><dd>{{ daten.status_text }}</dd></div>
+      <div><dt>Gerechnete Stunden</dt><dd>{{ daten.stunden_gerechnet }} (Stunde {{ daten.sim.von_stunde }}–{{ daten.sim.bis_stunde }})</dd></div>
+      <div><dt>Bericht erzeugt</dt><dd>{{ daten.erzeugt_am.strftime("%d.%m.%Y %H:%M") }}</dd></div>
+    </dl>
+
+    <section class="bericht-abschnitt">
+      <h2>Jahresbilanz</h2>
+      <table class="bilanz bericht-tabelle">
+        <thead>
+          <tr><th>Größe</th><th class="zahl">Menge</th><th>Einheit</th><th class="zahl">Preis</th><th class="zahl">Kosten</th></tr>
+        </thead>
+        <tbody>
+          {% for z in daten.bilanz %}
+          <tr>
+            <td>{{ z.label }}</td>
+            <td class="zahl">{{ format_zahl(z.menge) }}</td>
+            <td>{{ z.einheit }}</td>
+            <td class="zahl">{{ format_zahl(z.preis) }}</td>
+            <td class="zahl">{{ format_zahl(z.kosten) }} EUR</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr><td colspan="4">Summe</td><td class="zahl">{{ format_zahl(daten.bilanz_summe) }} EUR</td></tr>
+        </tfoot>
+      </table>
+    </section>
+
+    {% if daten.vergleich %}
+    <section class="bericht-abschnitt">
+      <h2>Im Vergleich zu den anderen Jahren dieser Reihe</h2>
+      <p class="bericht-vergleich-hinweis">
+        Dieselbe Anlage, {{ daten.vergleich.laeufe | length }} Wetterjahre.
+        Abweichung jeweils gegenüber {{ daten.vergleich.laeufe[0].wetter_name }}.
+      </p>
+      <div class="bericht-vergleich-huelle">
+        <table class="bilanz bericht-vergleich-tabelle">
+          <thead>
+            <tr>
+              <th>Größe</th>
+              {% for lauf in daten.vergleich.laeufe %}
+              <th{% if lauf.simulation_id == daten.vergleich.diesen_lauf_id %} class="bericht-vergleich-aktuell"{% endif %}>
+                {{ lauf.wetter_name }}
+                {% if lauf.simulation_id == daten.vergleich.diesen_lauf_id %}<span class="bericht-vergleich-marke">(dieser Bericht)</span>{% endif %}
+                {% if not lauf.hat_ergebnis %}<span class="vergleich-kein-ergebnis">(kein Ergebnis)</span>{% endif %}
+              </th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for zeile in daten.vergleich.zeilen %}
+            <tr>
+              <td>{{ zeile.label }} [{{ zeile.einheit }}]</td>
+              {% for w in zeile.werte %}
+              <td class="zahl">
+                {% if w.menge is not none %}
+                  {{ format_zahl(w.menge, 3) }}
+                  {% if w.abweichung is not none %}
+                  <span class="vergleich-abweichung">{{ "+" if w.abweichung >= 0 else "" }}{{ "%.1f"|format(w.abweichung * 100) }} %</span>
+                  {% endif %}
+                {% else %}–{% endif %}
+              </td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr class="vergleich-zeile-kosten">
+              <td>Kosten gesamt</td>
+              {% for lauf in daten.vergleich.laeufe %}
+              <td class="zahl">{% if lauf.hat_ergebnis %}{{ format_zahl(lauf.kosten_gesamt) }} EUR{% else %}–{% endif %}</td>
+              {% endfor %}
+            </tr>
+            <tr class="vergleich-zeile-warnungen">
+              <td>Warnungen</td>
+              {% for lauf in daten.vergleich.laeufe %}
+              <td class="zahl">{% if lauf.hat_ergebnis %}{{ lauf.anzahl_warnungen }}{% else %}–{% endif %}</td>
+              {% endfor %}
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      {% if svg.vergleich %}
+      <div class="bericht-diagramm-karte bericht-diagramm-breit">{{ svg.vergleich|safe }}</div>
+      {% endif %}
+    </section>
+    {% endif %}
+
+    {% if svg.monat or svg.dauerlinie %}
+    <section class="bericht-abschnitt">
+      <h2>Diagramme</h2>
+      <div class="bericht-diagramme">
+        {% if svg.monat %}<div class="bericht-diagramm-karte">{{ svg.monat|safe }}</div>{% endif %}
+        {% if svg.dauerlinie %}<div class="bericht-diagramm-karte">{{ svg.dauerlinie|safe }}</div>{% endif %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% if daten.diagramme.stunden_reihen %}
+    <section class="bericht-abschnitt">
+      <h2>Jahresverlauf in Stundenwerten</h2>
+      <form class="bericht-reihen-auswahl" id="form-reihen-auswahl" method="get">
+        <input type="hidden" name="auswahl" value="1">
+        {% set bilanzreihen = daten.diagramme.stunden_reihen | selectattr("gruppe", "equalto", "Bilanz") | list %}
+        {% if bilanzreihen %}
+        <fieldset>
+          <legend>Bilanzgrößen</legend>
+          {% for r in bilanzreihen %}
+          <label class="reihen-kaestchen">
+            <input type="checkbox" name="reihe" value="{{ r.schluessel }}"
+                   {% if r.schluessel in daten.diagramme.stunden_ausgewaehlt %}checked{% endif %}>
+            <span class="reihen-farbe" style="background:{{ r.farbe }}"></span>
+            {{ r.label }}{% if r.einheit %} [{{ r.einheit }}]{% endif %}
+          </label>
+          {% endfor %}
+        </fieldset>
+        {% endif %}
+        {% set loggerreihen = daten.diagramme.stunden_reihen | selectattr("gruppe", "equalto", "Datenlogger") | list %}
+        {% if loggerreihen %}
+        <fieldset>
+          <legend>Datenlogger</legend>
+          {% for r in loggerreihen %}
+          <label class="reihen-kaestchen">
+            <input type="checkbox" name="reihe" value="{{ r.schluessel }}"
+                   {% if r.schluessel in daten.diagramme.stunden_ausgewaehlt %}checked{% endif %}>
+            <span class="reihen-farbe" style="background:{{ r.farbe }}"></span>
+            {{ r.label }}{% if r.einheit %} [{{ r.einheit }}]{% endif %}
+          </label>
+          {% endfor %}
+        </fieldset>
+        {% endif %}
+        <noscript><button type="submit">Auswahl anzeigen</button></noscript>
+      </form>
+
+      {% if svg.jahr_stunden %}
+      <div class="bericht-diagramm-karte bericht-diagramm-breit">{{ svg.jahr_stunden|safe }}</div>
+      {% else %}
+      <p class="leerhinweis">Keine Reihen ausgewählt.</p>
+      {% endif %}
+
+      {% if svg.vier_monats_ausschnitte %}
+      <h3>Ausschnitte zu je vier Monaten</h3>
+      <div class="bericht-diagramme">
+        {% for ausschnitt in svg.vier_monats_ausschnitte %}
+        <div class="bericht-diagramm-karte">{{ ausschnitt|safe }}</div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </section>
+    {% endif %}
+
+    {% if svg.datenlogger %}
+    <section class="bericht-abschnitt">
+      <h2>Datenlogger</h2>
+      <div class="bericht-diagramme">
+        {% for eintrag in svg.datenlogger %}
+        <div class="bericht-diagramm-karte">
+          <p class="bericht-diagramm-titel">{{ eintrag.titel }}</p>
+          {{ eintrag.svg|safe }}
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% else %}
+    <section class="bericht-abschnitt">
+      <h2>Datenlogger</h2>
+      <p class="leerhinweis">Kein Datenlogger mit benannten Anschlüssen in dieser Anlage.</p>
+    </section>
+    {% endif %}
+
+    <section class="bericht-abschnitt">
+      <h2>Warnungen</h2>
+      {% if daten.warnungen.anzahl == 0 %}
+        <p class="warnhinweis warnhinweis-ok">Alle Stunden konvergiert.</p>
+      {% else %}
+        <div class="warnhinweis">
+          <p>{{ daten.warnungen.anzahl }} Stunden ohne Konvergenz, Beispiele:</p>
+          <ul class="warn-beispiele">
+            {% for w in daten.warnungen.beispiele %}
+            <li>Stunde {{ w.stunde }}: {{ w.text }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+      {# Kein Fehler, sondern eine Aussage ueber die Anlage: hier taktet eine
+         Zweipunktregelung schneller, als eine Stundenrechnung sie aufloesen
+         kann (core/solver.py). Deshalb ein eigener, ruhiger Absatz und nicht
+         die Warnfarbe. #}
+      {% if daten.warnungen.takte %}
+        <div class="warnhinweis warnhinweis-ok">
+          <p>In {{ daten.warnungen.takte }} Stunden taktet eine Zweipunktregelung
+             schneller, als eine Stundenrechnung sie auflösen kann. Ausgewiesen
+             ist dort das Mittel beider Schaltzustände - der Regler lief also
+             einen Teil der Stunde. Beispiele:</p>
+          <ul class="warn-beispiele">
+            {% for w in daten.warnungen.takt_beispiele %}
+            <li>Stunde {{ w.stunde }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+      {% if daten.baustein_warnungen %}
+        <div class="warnhinweis">
+          <p>Warnungen aus Bausteinen</p>
+          <ul class="warn-beispiele">
+            {% for w in daten.baustein_warnungen %}
+            <li><strong>{{ w.karte_name }}</strong>: {{ w.text }} — {{ w.anzahl }} Stunde{{ "n" if w.anzahl != 1 else "" }}
+              (z.&nbsp;B. {% for s in w.beispiele %}Stunde {{ s }}{% if not loop.last %}, {% endif %}{% endfor %})</li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% else %}
+        <p class="warnhinweis warnhinweis-ok">Keine Warnungen aus Bausteinen.</p>
+      {% endif %}
+    </section>
+
+    <section class="bericht-abschnitt">
+      <h2>Die Anlage</h2>
+      <ul class="bericht-karten">
+        {% for karte in daten.karten %}
+        <li class="bericht-karte">
+          <div class="bericht-karte-kopf">
+            <span class="bericht-karte-name">{{ karte.name }}</span>
+            <span class="bericht-karte-typ">{{ karte.typ_name }} · {{ karte.gruppe }}</span>
+          </div>
+          {% if karte.kennwerte %}
+          <p class="bericht-karte-kennwerte">
+            {% for k in karte.kennwerte %}{{ k.label }}: {{ k.text }}{% if not loop.last %} · {% endif %}{% endfor %}
+          </p>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+  </main>
+
+  <script>
+    document.getElementById("btn-drucken").onclick = () => window.print();
+
+    // Auswahl der Stundendiagramm-Reihen: jedes Kaestchen schickt das
+    // Formular sofort ab (GET, siehe Formular oben) - die Seite laedt dann
+    // mit der neuen Auswahl in der Adresse neu, wovon auch der
+    // "PDF herunterladen"-Knopf profitiert (routes/bericht.py baut ihn aus
+    // genau dieser Adresse). Kein Bauschritt, kein Framework noetig.
+    const formReihenAuswahl = document.getElementById("form-reihen-auswahl");
+    if (formReihenAuswahl) {
+      formReihenAuswahl.querySelectorAll('input[type="checkbox"]').forEach((kaestchen) => {
+        kaestchen.addEventListener("change", () => formReihenAuswahl.submit());
+      });
+    }
+  </script>
+</body>
+</html>

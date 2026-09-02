@@ -1,0 +1,124 @@
+"""Luftkuehler mit Taupunktentfeuchtung.
+
+Formeln aus Anlage!AC117, AB131 bis AB135 sowie der Warnung in AA136.
+Die Oberflaechentemperatur wird wie in der Excel als Kaltwassertemperatur plus
+15 Prozent der Spreizung zur Eintrittsluft angesetzt.
+"""
+
+from core.bausteine import stoffdaten as st
+from core.bausteine.basis import (
+    AUSGANG, EINGANG, KAELTE, LUFT, MESSWERT, SIGNAL, STELLGROESSE, ZAHL, ZULUFT,
+    Baustein, Luft, Param, Port, druckverlust, registriere,
+)
+
+
+@registriere
+class Kuehler(Baustein):
+    KENNUNG = "kuehler"
+    NAME = "Kühler"
+    GRUPPE = "Luftbehandlung"
+    SYMBOL = "kuehler.svg"
+
+    PARAMETER = [
+        Param("V_nenn", "Nennvolumenstrom (V_nenn)", "m³/h", 8200.0,
+              darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
+        Param("dp_nenn", "Druckverlust bei Nennvolumenstrom (dp_nenn)", "Pa", 240.0,
+              darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
+        Param("QK_nenn", "Nennkälteleistung (QK_nenn)", "kW", 63.0,
+              darstellung=ZAHL, dezimalstellen=1, minimum=0.0,
+              hinweis="Dient nur als Warngrenze: Braucht der Kühler mehr, meldet die "
+                      "Karte „Kühlleistung zu niedrig“. Begrenzt wird die gerechnete "
+                      "Leistung dadurch nicht."),
+        Param("T_KW_mittel", "Mittlere Kaltwassertemperatur (T_KW_mittel)", "°C", 6.0,
+              darstellung=ZAHL, dezimalstellen=1,
+              hinweis="Bestimmt, wie kalt die Luft überhaupt werden kann. Die "
+                      "Oberfläche des Kühlers liegt zwischen dieser Temperatur und "
+                      "der eintretenden Luft (siehe Kontaktfaktor); unter ihrem "
+                      "Taupunkt fällt Wasser aus und die Luft wird entfeuchtet."),
+        # Bisher stand die 0,15 unbenannt in oberflaechentemperatur(). Sie ist
+        # aber keine Naturkonstante, sondern beschreibt, wie gut ein bestimmter
+        # Kuehler seine Luft an das Kaltwasser heranfuehrt - genau die Groesse,
+        # an der man in einer Uebung dreht. Der Vorgabewert ist der der
+        # Excel-Mappe (Anlage!T3), die Rechnung bleibt damit unveraendert.
+        Param("kontaktfaktor", "Kontaktfaktor der Kühlfläche", "Anteil 0–1", 0.15,
+              darstellung=ZAHL, dezimalstellen=2, minimum=0.0, maximum=1.0,
+              hinweis="Wie weit die Oberflächentemperatur vom Kaltwasser zur "
+                      "eintretenden Luft hin abweicht: 0 hieße, die Oberfläche wäre "
+                      "so kalt wie das Wasser, 1 hieße, sie wäre so warm wie die "
+                      "Luft und der Kühler wirkungslos. Kleiner heißt tiefere "
+                      "Lufttemperatur und mehr Entfeuchtung."),
+    ]
+
+    PORTS = [
+        Port("luft_ein", LUFT, EINGANG, ZULUFT),
+        Port("luft_aus", LUFT, AUSGANG, ZULUFT),
+        Port("stellgroesse", SIGNAL, EINGANG, STELLGROESSE),
+        Port("T_aus", SIGNAL, AUSGANG, MESSWERT),
+        Port("QK", SIGNAL, AUSGANG, KAELTE),
+    ]
+
+    AUSGABEN = ["T_aus", "F_aus", "QK", "dp", "warnung"]
+    AUSGABE_LABEL = {
+        "T_aus": "Austrittstemperatur (°C)",
+        "F_aus": "Austrittsfeuchte, absolut (g/kg)",
+        "QK": "Kälteleistung (kW)",
+        "dp": "Druckverlust (Pa)",
+        "warnung": "Warnung",
+    }
+
+    def oberflaechentemperatur(self, T_ein, p):
+        """Anlage!T3 - die Temperatur, an die der Kuehler die Luft heranfuehrt.
+
+        Sie liegt zwischen Kaltwasser und Eintrittsluft; wo genau, sagt der
+        Kontaktfaktor. Ist die Eintrittsluft KAELTER als das Kaltwasser, liegt
+        sie darueber - dann waermt der Kuehler, statt zu kuehlen. berechne()
+        warnt in diesem Fall (siehe dort).
+        """
+        return p["T_KW_mittel"] + p["kontaktfaktor"] * (T_ein - p["T_KW_mittel"])
+
+    def berechne(self, ein, p, zustand):
+        luft = ein.get("luft_ein", Luft())
+        u = float(ein.get("stellgroesse", 0.0))
+
+        T_O = self.oberflaechentemperatur(luft.T, p)
+        x_O = st.x_saett(T_O)
+
+        T_aus = luft.T - u / 100.0 * (luft.T - T_O)
+        x_aus = luft.x
+        if x_O < luft.x:
+            x_aus = luft.x - u / 100.0 * (luft.x - x_O)
+
+        QK = 0.0
+        if luft.V > 0:
+            QK = luft.V / 3600.0 * 1.2 * (
+                st.enthalpie(luft.T, luft.x) - st.enthalpie(T_aus, x_aus)
+            )
+
+        dp = druckverlust(luft.V, p["V_nenn"], p["dp_nenn"])
+
+        warnung = "Kühlleistung zu niedrig" if QK > p["QK_nenn"] else ""
+        # Die Oberflaechentemperatur T_O liegt WAERMER als die Eintrittsluft,
+        # wenn diese schon kaelter ist als das Kaltwasser selbst (T_ein <
+        # T_KW_mittel) - derselbe Grenzfall wie in der Excel (Anlage!T3),
+        # dort ebenfalls ungesichert. Der Kuehler waermt die Luft dann
+        # tatsaechlich, statt sie zu kuehlen, sobald er trotzdem angesteuert
+        # wird (u > 0): QK wird negativ. Das ist keine neue Bedingung, nur
+        # eine zweite Meldung fuer denselben Zustand, den die Formel oben
+        # unveraendert durchrechnet - eine Anlage sollte den Kuehler in
+        # diesem Betriebszustand gar nicht erst ansteuern.
+        if u > 0.0 and luft.T < p["T_KW_mittel"]:
+            zusatz = (
+                "Kühler außerhalb seines Einsatzbereichs angesteuert: "
+                "Eintrittsluft ist kälter als das Kaltwasser – er wärmt "
+                "statt zu kühlen"
+            )
+            warnung = f"{warnung}; {zusatz}" if warnung else zusatz
+
+        aus = Luft(V=luft.V, T=T_aus, x=x_aus, dp=dp)
+        return (
+            {
+                "luft_aus": aus, "QK": QK, "warnung": warnung,
+                "T_aus": T_aus, "F_aus": x_aus, "dp": dp,
+            },
+            zustand,
+        )

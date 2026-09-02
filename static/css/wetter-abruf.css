@@ -1,0 +1,129 @@
+/* Wetterabruf ueber Open-Meteo: eigenes Stylesheet, weil static/css/style.css
+   waehrend dieser Arbeit von einem anderen Agenten bearbeitet wird. Nutzt nur
+   vorhandene CSS-Variablen aus style.css (--border, --text-secondary, ...)
+   und vorhandene Klassen (.panel-zeile, .panel-label, .knopf-haupt) fuer ein
+   einheitliches Bild, ohne die Datei selbst anzufassen. */
+
+.wetter-wege {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 18px;
+}
+
+.wetter-weg {
+  flex: 1 1 320px;
+  min-width: 280px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  background: var(--surface-alt);
+}
+
+.wetter-weg-titel {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  margin: 0 0 10px;
+}
+
+.wetter-weg-hinweis {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  margin: 0 0 12px;
+}
+
+.wetter-weg .wetter-formular {
+  margin-bottom: 0;
+}
+
+/* Eigener Dateiknopf statt des englischen Browser-Standards ("Choose File" /
+   "No file chosen"). Das echte <input type="file"> bleibt im Dokumentfluss
+   und per Tastatur erreichbar - nur "visuell versteckt" (die uebliche
+   sr-only-Technik: kein display:none/visibility:hidden, die das Element aus
+   der Tab-Reihenfolge naehmen), damit sein :focus-visible weiterhin greift.
+   Die Regel darunter zeigt diesen Fokus dann sichtbar auf dem gestylten
+   Label an, das an seiner Stelle steht - ein Klick oder Enter/Space auf dem
+   Label oeffnet ueber "for" denselben nativen Dateidialog. */
+.datei-eingabe {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.datei-eingabe-eingabe {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.datei-eingabe-knopf {
+  display: inline-block;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 7px 14px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.datei-eingabe-knopf:hover { background: var(--surface-alt); border-color: var(--border-strong); }
+.datei-eingabe-eingabe:focus-visible + .datei-eingabe-knopf {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.datei-eingabe-name {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.wetter-abruf-formular {
+  display: flex;
+  flex-direction: column;
+}
+
+.wetter-abruf-formular .panel-zeile {
+  margin-bottom: 10px;
+}
+
+.wetter-abruf-koordinaten {
+  align-items: flex-start;
+}
+
+.wetter-abruf-formular select[multiple] {
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.wetter-abruf-formular button[type="submit"] {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+/* Quelle in der Datensatzliste - kurzes, farbneutrales Etikett statt des
+   rohen Speicherwerts ("upload" / "open-meteo"). */
+.wetter-quelle-etikett {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  background: var(--surface);
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .wetter-wege {
+    flex-direction: column;
+  }
+}

@@ -1,0 +1,1737 @@
+/* RLT-Simulation - Oberflaeche eines Fachwerkzeugs, kein Verbraucherprodukt.
+   Ruhig, dicht, klare Hierarchie. Alle Farben stehen hier als Variablen -
+   keine Regel darunter schreibt eine Farbe fest. Stilfamilie an
+   ~/projekte/kapa-planung angelehnt, aber zurueckhaltender: keine Pillenknoepfe,
+   keine Farbverlaeufe, keine Animation ohne Zweck. */
+
+:root {
+  --bg: #f8f9fa;
+  --surface: #ffffff;
+  --surface-alt: #f1f3f4;
+  --border: #dadce0;
+  --border-light: #e8eaed;
+  --border-strong: #b0b6bd;
+
+  --text: #3c4043;
+  --text-secondary: #5f6368;
+  --text-tertiary: #80868b;
+
+  --blue: #1a73e8;
+  --blue-hover: #1765cc;
+  --blue-tint: #e8f0fe;
+
+  --danger: #d93025;
+  --danger-tint: #fce8e6;
+
+  --warning: #b06000;
+  --warning-tint: #fef7e0;
+
+  --auf-farbe: #ffffff;
+  --schleier: rgba(32, 33, 36, .5);
+  --schleier-hell: rgba(255, 255, 255, .3);
+
+  /* Verbindungsarten auf der Leinwand: Luft, Signal und Energie sind drei
+     verschiedene Bedeutungen und muessen sich auch ohne Farbsinn allein an
+     Strichstaerke und Strichmuster unterscheiden lassen (siehe .pfeil-*
+     weiter unten) - die Farbe hier ist Verstaerkung, nicht der einzige
+     Traeger. */
+  --luft: #1a73e8;
+  /* Die fuenf Luftarten (core/bausteine/basis.py: AUSSENLUFT, ZULUFT,
+     ABLUFT, FORTLUFT, UMLUFT). Farbe UND Strichmuster unterscheiden sie
+     (siehe .pfeil-luft-* weiter unten) - im Schwarzweissdruck und ohne
+     Farbsinn traegt das Muster allein. Die Toene folgen der ueblichen
+     Lesart im Lueftungsbau: Aussenluft kuehl/gruenblau, Zuluft blau,
+     Abluft warm/orange, Fortluft braun (verbraucht), Umluft violett
+     (kreist im Haus). */
+  --luft-aussen: #00838f;
+  --luft-zu: #1a73e8;
+  --luft-ab: #e37400;
+  --luft-fort: #8d5a1b;
+  --luft-um: #8430ce;
+  --signal: #5f6368;
+  --energie: #146c2e;
+  --energie-tint: #e6f4ea;
+
+  /* Eine Farbe je Palettengruppe (siehe palette.js "reihenfolge" und
+     editor.js GRUPPEN_KLASSE) - immer zusammen mit dem Gruppennamen als
+     Text verwendet, nie als einzige Auskunft (siehe .karte-gruppenstreifen
+     weiter unten). */
+  --gruppe-luftbehandlung: #1a73e8;
+  --gruppe-verteilung: #8430ce;
+  --gruppe-raeume: #e37400;
+  --gruppe-regelung: #146c2e;
+  --gruppe-zeit: #5f6368;
+  --gruppe-quellen: #00838f;
+  --gruppe-verbraucher: #b06000;
+  --gruppe-sonstige: #9aa0a6;
+
+  --radius-sm: 5px;
+  --radius: 8px;
+  --radius-lg: 10px;
+
+  --schatten-1: 0 1px 2px rgba(60, 64, 67, .18), 0 1px 3px 1px rgba(60, 64, 67, .10);
+  --schatten-2: 0 4px 16px rgba(60, 64, 67, .22), 0 1px 3px rgba(60, 64, 67, .15);
+
+  --font-body: Roboto, Arial, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace;
+
+  /* Lesebreite fuer Fliesstext-Einleitungen (Startseite, /bausteine) - ein
+     einziger Wert statt je Seite ihr eigenes ch-Mass, damit beide gleich
+     breit umbrechen. 80ch ist die uebliche obere Grenze fuer eine gut lesbare
+     Zeile; die engeren Werte davor (62ch/68ch) wirkten neben den deutlich
+     breiteren Kaesten darunter zufaellig schmal. */
+  --lesebreite: 80ch;
+}
+
+* { box-sizing: border-box; }
+
+/* Das hidden-Attribut muss immer gewinnen, egal welche Klasse hinterher
+   noch ein display setzt (z.B. .fehlermeldung/.panel-zeile mit display:flex)
+   - sonst bleibt ein per hidden ausgeblendetes Element trotzdem sichtbar,
+   weil eine gleich spezifische Klassenregel spaeter im Stylesheet steht und
+   das UA-Standardverhalten [hidden]{display:none} verdraengt. Diese Regel
+   gilt bewusst fuer die ganze Seite, nicht nur an einer Fundstelle. */
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.4;
+  /* Verhindert das Gummiband-Ueberschwingen am Rand eines Bereichs, der
+     tatsaechlich scrollt (Startseite, /bausteine, Palette, Parameterfenster)
+     - schaltet aber NICHT das Scrollen selbst ab (dafuer siehe
+     .seite-editor weiter unten). overscroll-behavior regelt nur, ob ein
+     ausgeschoepfter innerer Scrollbereich seinen Überschuss an den
+     naechsten Vorfahren weiterreicht, nicht, ob html/body selbst ein
+     natives Wischziel sind - genau das war der eigentliche Fehler auf der
+     Editorseite: html/body blieben ohne eigenes overflow ganz normal
+     scrollbar, jeder Wisch, der nirgendwo lokal "verbraucht" wurde (leere
+     Kopfleiste, ein Parameterfenster ohne eigenen Ueberlauf, ...) bewegte
+     also die Seite selbst - unabhaengig von overscroll-behavior. */
+  overscroll-behavior: none;
+}
+
+/* ---------- Editorseite: keine Seite zum Scrollen ----------
+   Siehe Task ("Es scrollt weiterhin, nach rechts und nach unten") und
+   Kommentar oben: overscroll-behavior allein schaltet nur das
+   Ueberschwingen ab, nicht die Scrollbarkeit von html/body selbst. Der
+   direkte, von der Fenstergroesse/Zoomstufe/Werkzeugleiste unabhaengige Weg
+   ist, html/body auf der Editorseite gar keine Scrollflaeche mehr sein zu
+   lassen: position:fixed + inset 0 + overflow:hidden. position:fixed statt
+   nur overflow:hidden, weil overflow:hidden allein auf iOS Safari bekannt
+   unzuverlaessig ist, sobald die Seite mit zwei Fingern aufgezogen wurde
+   (die Seite bleibt dann trotzdem wischbar) - die Kombination aus beidem
+   ist der in der Praxis verlaessliche Weg ("iOS body scroll lock").
+   .seite-editor steht auf <html> UND <body> (siehe templates/editor.html) -
+   beide muessen feststehen, sonst bleibt der jeweils andere die
+   Scroll-Wurzel. NUR die Editorseite traegt diese Klasse: Startseite,
+   /bausteine und die Fehlerseite sollen weiterhin ganz normal scrollen
+   (siehe .start/.lehre - unveraendert scrollbar). */
+html.seite-editor,
+body.seite-editor {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+/* Ueberlagerungen, die auf allen vier Seiten vorkommen (Dialoge,
+   Fehlerleiste), aber nur hier - auf der festgesetzten Editorseite -
+   keine eigene Kneifgeste anbieten sollen (siehe Task, "der zweite Weg"
+   und Kommentar bei .fehlermeldung). Auf Startseite/Bausteine bleibt die
+   Voreinstellung "auto" bestehen - dort ist Aufziehen ausdruecklich
+   erlaubt. */
+body.seite-editor .dialog-huelle,
+body.seite-editor .fehlermeldung,
+body.seite-editor .hinweismeldung {
+  touch-action: none;
+}
+/* Auf der Editorseite unterhalb der Kopfleiste (52 Punkte hoch, siehe
+   .leiste) statt darueber: sonst verdeckt eine Meldung den Anlagennamen
+   und die Knoepfe, ueber die sie gerade spricht. */
+body.seite-editor .fehlermeldung,
+body.seite-editor .hinweismeldung { top: 64px; }
+
+h1, h2, h3, p { margin: 0; }
+
+/* ---------- Tastaturfokus ----------
+   Sichtbar bei Tastaturbedienung, nicht bei einem Mausklick - so bleibt die
+   Oberflaeche ruhig, ohne den Fokus zu verstecken. Ein einziges, kraeftiges
+   Muster fuer alle interaktiven Elemente statt verstreuter Einzelregeln. */
+a, button, input, select, textarea, summary, [tabindex] {
+  outline: none;
+}
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible,
+.palette-eintrag:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline-offset: -1px;
+  border-color: var(--blue);
+}
+
+/* 100dvh statt 100vh: auf iOS zaehlt 100vh die Hoehe MIT eingefahrener
+   Werkzeugleiste, also mehr, als gerade wirklich zu sehen ist - der
+   Editor ragte dadurch immer ein Stueck unter den Bildschirmrand, und genau
+   dieses ueberschiessende Stueck liess sich als Seite "gummibandartig"
+   herunterziehen (siehe Task, Befund 3 und "100vh ist auf iOS ... falsch").
+   100vh bleibt als erste, redundante Deklaration stehen - ein Rueckfallwert
+   fuer Browser, die dvh nicht kennen; sie ueberspringen die zweite Zeile
+   einfach. env(safe-area-inset-*) braucht viewport-fit=cover in der
+   Viewport-Angabe (siehe templates/editor.html) und ist ohne echtes Geraet
+   mit Rundung/Notch als 0 zu lesen - schadet auf einem Bildschirm ohne
+   solche Bereiche nicht (dann alles 0), traegt sie aber nach, sobald es
+   welche gibt. */
+.app {
+  display: flex;
+  height: 100vh;
+  height: 100dvh;
+  /* --app-hoehe: von static/js/editor.js ueber die VisualViewport-API
+     nachgetragen (siehe dort) - deckt einen Fall ab, den dvh allein nicht
+     zuverlaessig abdeckt: die von der Bildschirmtastatur verkleinerte
+     sichtbare Flaeche. Ohne das koennte .panel (ein Kind von .app, siehe
+     unten) unten laenger sein als tatsaechlich sichtbar, und ein
+     "scrollIntoView" beim Fokussieren eines Feldes braechte es dann nicht
+     zuverlaessig ueber die Tastatur hinaus. Faellt auf 100dvh zurueck,
+     solange JS die Eigenschaft noch nicht gesetzt hat oder VisualViewport
+     fehlt. */
+  height: var(--app-hoehe, 100dvh);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+           env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* ---------- Palette ---------- */
+.palette {
+  width: 228px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border-light);
+  overflow-y: auto;
+  padding: 10px 10px 20px;
+  /* "contain" statt "none": die Palette darf innerhalb ihrer selbst ganz
+     gewoehnlich zu Ende scrollen (kein hartes Abschneiden der Animation),
+     nur soll ein Ueberscrollen an ihrem eigenen Rand nicht an die Seite
+     weitergereicht werden. Auf der Editorseite gibt es dank .seite-editor
+     (siehe oben) ohnehin nichts mehr, an das weiterzureichen waere -
+     contain bleibt trotzdem stehen (schadet nicht, und die Palette taucht
+     unveraendert auch ausserhalb des Editors auf, falls sie das je tut). */
+  overscroll-behavior: contain;
+  /* pan-y statt des ererbten "auto": die Liste soll sich weiter mit einem
+     Finger senkrecht schieben lassen (das ist ihr eigentlicher Zweck),
+     aber NICHT als Ansatzpunkt fuer die native Kneifgeste des Browsers
+     (Seiten-Zoom) dienen - genau das waere ein zweiter Weg, die Seite in
+     einen verschobenen/vergroesserten Zustand zu bringen, den
+     .seite-editor allein nicht abfaengt (siehe Task, "Aufziehen mit zwei
+     Fingern ist der zweite Weg"). #leinwand loest das bereits mit
+     touch-action:none; hier muss das einfingrige Scrollen erhalten
+     bleiben, deshalb pan-y statt none. */
+  touch-action: pan-y;
+}
+.gruppe {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-secondary);
+  margin: 18px 6px 6px;
+}
+.gruppe:first-child { margin-top: 8px; }
+.gruppe-liste { display: flex; flex-direction: column; gap: 1px; }
+.palette-eintrag {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  cursor: grab;
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.25;
+}
+.palette-eintrag:hover { background: var(--surface-alt); }
+.palette-eintrag:active { cursor: grabbing; }
+/* "Bewaffnet" fuer den naechsten Tipp auf die Leinwand (siehe palette.js,
+   Palette.armieren()) - dieselbe Blaufaerbung wie eine ausgewaehlte Karte
+   (.karte.gewaehlt), damit sofort erkennbar ist: diese Auswahl wartet noch
+   auf einen Tipp, sie ist nicht schon erledigt. */
+.palette-eintrag-bereit,
+.palette-eintrag-bereit:hover {
+  background: var(--blue-tint);
+  color: var(--blue);
+}
+.palette-eintrag img {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+.palette-eintrag span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Buehne / Kopfleiste ---------- */
+.buehne { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
+.leiste {
+  height: 52px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-light);
+}
+/* Nur die Kopfleiste DES EDITORS (.app .leiste, nicht das gleichnamige
+   .leiste auf Startseite/Bausteine/Fehlerseite - dort bleibt die native
+   Kneifgeste des Browsers erlaubt, diese Seiten sind nicht festgesetzt):
+   keine native Kneifgeste (Seiten-Zoom) - siehe Kommentar bei .palette
+   weiter oben, derselbe zweite Weg, hier ohne eigenen Scrollinhalt, deshalb
+   "none" statt "pan-y". */
+.app .leiste { touch-action: none; }
+.titel {
+  font-size: 15px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Kopfleiste des Editors: eine Formensprache ----------
+   Die Leiste war ueber viele Schritte gewachsen - ein Textlink, drei
+   Knopfarten, ein <details>, ein gefuellter Hauptknopf, zuletzt zwei runde
+   Zeichenknoepfe: verschiedene Formen, verschiedene Gewichte, keine
+   erkennbare Ordnung. Sie folgt jetzt drei Regeln:
+
+   1. ALLE Bedienelemente der Leiste haben DIESELBE Grundform: gleiche
+      Hoehe, gleicher Radius, gleicher Rahmen, gleiche Schrift
+      (.leiste-knopf - dazu .zurueck-knopf und die Zusammenfassung der
+      Legende, die aus aelteren Gruenden keine eigene Klasse tragen).
+      .zurueck-knopf gilt auf ALLEN Seiten, die einen Weg zurueck haben
+      (Editor, Bausteine, Bericht): der Rueckweg sah frueher auf jeder der
+      drei anders aus - Pille, flacher Textlink, flacher Textlink -, obwohl
+      er ueberall dasselbe tut.
+   2. Sie unterscheiden sich in DREI Stufen: rund mit genau einem Zeichen
+      (ein Handgriff - zurueck, umbenennen, rueckgaengig, wiederholen,
+      einpassen), Pille mit einem Wort (ein benannter Weg - Verbindungen,
+      Palette, Parameter, Bericht, Vergleich), und genau EINE gefuellte
+      Pille fuer den Zweck der Seite (Simulieren).
+   3. Sie stehen in Gruppen, durch einen schmalen Strich getrennt: ORT,
+      BEARBEITUNG, ANSICHT - und ganz rechts das ERGEBNIS.
+
+   Alles ist mindestens 36 Punkte hoch, mit Finger 44 (siehe @media
+   (pointer: coarse) weiter unten) - Apples Richtwert, denselben, den die
+   uebrigen Knoepfe des Programms schon einhalten. */
+.leiste-knopf,
+.zurueck-knopf,
+.legende summary {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  user-select: none;
+}
+.leiste-knopf:hover,
+.zurueck-knopf:hover,
+.legende summary:hover {
+  background: var(--surface-alt);
+  border-color: var(--border-strong);
+}
+.leiste-knopf:disabled,
+.leiste-knopf[aria-disabled="true"] {
+  opacity: .45;
+  cursor: default;
+  pointer-events: none;
+}
+/* Schiebt alles Folgende ans rechte Ende der Leiste (Startseite: Titel links,
+   Wege hinaus rechts - wie im Editor der Ort links und das Ergebnis rechts). */
+.leiste-fueller { flex: 1; }
+/* Rund: Breite = Hoehe, genau ein Zeichen. */
+.leiste-knopf-rund { width: 36px; padding: 0; }
+/* Jedes Zeichen der Leiste ist eine gezeichnete SVG, kein Schriftzeichen -
+   Stift, Pfeile & Co. sehen dadurch auf jedem Geraet gleich aus, statt von
+   der Emoji-Schrift des Browsers abzuhaengen (der Stift als U+270E etwa
+   gewinnt in den meisten Browsern bunt aus der Emoji-Schrift, auch mit
+   angehaengtem Textwaehler U+FE0E - nachgestellt und nachgesehen).
+   currentColor macht jede SVG in Farbe und Abblendung vom eigenen Knopf
+   abhaengig, dieselbe Strichstaerke fuer alle. */
+.knopf-symbol {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+/* Ohne eigenen Rahmen - fuer den Stift neben dem Anlagennamen, der zum
+   Namen gehoert und nicht als eigener Knopf daneben stehen soll. */
+.leiste-knopf-still { border-color: transparent; background: none; }
+.leiste-knopf-still:hover { border-color: var(--border); }
+/* Die eine gefuellte Pille: der Zweck der Seite. */
+.leiste-knopf-haupt {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: var(--auf-farbe);
+  font-weight: 500;
+  padding: 0 18px;
+}
+.leiste-knopf-haupt:hover { background: var(--blue-hover); border-color: var(--blue-hover); }
+.leiste-knopf-haupt:disabled {
+  background: var(--border);
+  border-color: var(--border);
+  color: var(--text-tertiary);
+  opacity: 1;
+}
+
+.leiste-gruppe {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+/* Zwischen den Gruppen mehr Luft als innerhalb (6px), aber weniger als die
+   16px, die die Leiste sonst zwischen allem setzt - die Gruppierung soll
+   man sehen, ohne dass die Leiste auseinanderfaellt. Nur die Leiste des
+   Editors; auf Startseite/Bausteine bleibt der Abstand wie er war. */
+.app .leiste { gap: 10px; }
+/* Das Ergebnis steht rechts - der Rest waechst von links. */
+.leiste-ergebnis { margin-left: auto; }
+.leiste-trenner {
+  width: 1px;
+  height: 20px;
+  background: var(--border-light);
+  flex-shrink: 0;
+}
+
+/* Rueckgaengig/Wiederholen bilden ein Paar und stehen deshalb enger
+   beieinander als die uebrigen Glieder einer Gruppe. Ihre Form kommt aus
+   .leiste-knopf-rund - sie waren der Ausgangspunkt der Formensprache oben
+   und sind keine eigene Variante mehr. */
+.verlauf-knoepfe { gap: 4px; }
+
+/* Wo der Platz knapp wird, legen die Knoepfe links ihr Wort ab und
+   behalten ihr Zeichen; die drei Wege zum Ergebnis behalten ihres, denn
+   "Bericht", "Vergleich" und "Simulieren" waeren als Zeichen nicht zu
+   erraten. title und aria-label nennen die Handlung weiterhin
+   vollstaendig, und nach einem Druck sagt der Hinweisstreifen, was
+   geschehen ist (editor.js, zeigeHinweis).
+
+   Die Schwellen sind gemessen, nicht geraten: Palette und
+   Parameterfenster nehmen zusammen 548 Punkte, sodass einem
+   1280-Punkte-Laptop nur 732 fuer die Leiste bleiben - mit beiden
+   Woertern braeuchte sie 747. Unter 1100 (iPad quer, 1080) entfallen
+   zusaetzlich die Trennstriche und die Leiste rueckt enger; unter 900
+   kommen die beiden Seitenbereich-Umschalter dazu, die den Platz dann
+   selbst brauchen. */
+/* Nur im Editor (.app): dort ist der Platz knapp, weil Palette und
+   Parameterfenster ihn wegnehmen. Bericht und Erklaerbereich tragen
+   dieselbe .zurueck-knopf, haben aber die ganze Breite - dort waere ein auf
+   36 Punkte geschrumpfter Knopf ohne Not raetselhaft (und sein Wort liefe
+   aus dem Knopf heraus). */
+@media (max-width: 1400px) {
+  .app .knopf-wort { display: none; }
+  .app .zurueck-knopf,
+  .legende summary { width: 36px; padding: 0; }
+}
+@media (max-width: 1100px) {
+  .app .leiste { gap: 8px; padding: 0 8px; }
+  .leiste-gruppe { gap: 5px; }
+  .anlagenname-zeile { gap: 4px; }
+  /* Die Gruppen stehen dann eng genug beieinander, dass die Striche mehr
+     Platz kosten als sie ordnen. */
+  .leiste-trenner { display: none; }
+}
+/* Dieselben runden Knoepfe mit dem Finger: 44 statt 36 Punkte. Muss NACH
+   der Regel oben stehen (gleiche Spezifitaet, spaeter gewinnt) und
+   getrennt von ihr bleiben - an einem breiten Beruehrungsbildschirm tragen
+   sie ihr Wort und duerfen keine feste Breite bekommen. */
+@media (max-width: 1100px) and (pointer: coarse) {
+  .app .zurueck-knopf,
+  .legende summary { width: 44px; }
+}
+
+/* Der Bericht-Weg in der Kopfleiste (templates/editor.html, #link-bericht):
+   ein <a>, kein <button> - kennt darum kein :disabled. Solange noch kein
+   Lauf mit Ergebnis vorliegt, setzt editor.js aria-disabled="true" statt
+   eines href (siehe dort); dieselbe Abblendung wie .knopf-mini:disabled
+   (loeschen.css), zusaetzlich pointer-events:none, weil ein <a> ohne href
+   sonst zwar keine Fahrt antritt, mit der Maus aber trotzdem als klickbar
+   wirkt (Cursor, Fokus). */
+.knopf-mini[aria-disabled="true"] { opacity: .5; cursor: default; pointer-events: none; }
+
+.knopf-haupt {
+  border: 1px solid var(--blue);
+  background: var(--blue);
+  color: var(--auf-farbe);
+  border-radius: var(--radius-sm);
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+}
+.knopf-haupt:hover { background: var(--blue-hover); border-color: var(--blue-hover); }
+.knopf-haupt:disabled { background: var(--border); border-color: var(--border); color: var(--text-tertiary); cursor: default; }
+/* .knopf-haupt sitzt sonst immer auf einem <button> - auf einem <a> (z.B.
+   templates/anlage_nicht_gefunden.html) braucht es zusaetzlich inline-block
+   und die Unterstreichung muss weg, sonst wirkt es nicht wie ein Knopf. */
+a.knopf-haupt { display: inline-block; text-decoration: none; }
+
+/* Dasselbe fuer .knopf-mini auf einem <a> - der "Bericht ansehen"-Verweis im
+   Bilanzdialog (static/js/simulation.js, zeigeBilanz()) sitzt neben echten
+   <button>-Knoepfen und soll genauso aussehen, nicht wie ein blauer,
+   unterstrichener Link. */
+a.knopf-mini { display: inline-block; text-decoration: none; }
+
+/* Zurueckhaltender als .knopf-haupt - fuer "Einpassen" neben dem Hauptknopf
+   der Kopfleiste, nicht fuer die eine zentrale Handlung der Seite. */
+.knopf-sekundaer {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 7px 14px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.knopf-sekundaer:hover { background: var(--surface-alt); border-color: var(--border-strong); }
+
+/* (Der frueher hier stehende "margin-left: auto" auf .knopf-sekundaer ist
+   entfallen: die Kopfleiste schiebt jetzt die ganze Ergebnisgruppe nach
+   rechts - siehe .leiste-ergebnis weiter oben. Ausserhalb der Kopfleiste
+   hatte die Regel ohnehin nie etwas zu suchen, genau das war ihr
+   urspruenglicher Anlass.) */
+
+/* Seitenbereich-Umschalter (Palette/Parameter): nur im schmalen
+   Hochformat mit Finger sichtbar (siehe @media (max-width: 900px) and
+   (pointer: coarse) weiter unten) - am Schreibtisch unnoetig, weil dort
+   ohnehin immer beide Seitenbereiche zu sehen sind. */
+.knopf-seitenbereich { display: none; }
+
+/* Legende der Pfeilarten: eine natives <details> - klickbar und per Tastatur
+   bedienbar (Enter/Leertaste) ganz ohne Skript. */
+.legende { position: relative; font-size: 12.5px; }
+/* Form und Masse kommen aus der gemeinsamen Regel ganz oben
+   (.leiste-knopf, .zurueck-knopf, .legende summary) - hier bleibt nur,
+   was ein <summary> zusaetzlich braucht. */
+.legende summary { list-style: none; position: relative; }
+/* Solange Melde- und Energiewege ausgeblendet sind, traegt die Legende
+   einen kleinen Punkt - die Anzeige zeigt dann nicht alles, und das soll
+   man sehen, ohne die Legende erst zu oeffnen. */
+.legende-gefiltert summary::before {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warning);
+}
+.legende summary::-webkit-details-marker { display: none; }
+/* Aufklapp-Pfeilchen: eine gezeichnete SVG (templates/bedienzeichen/aufklapp.svg),
+   keine aus Rahmenlinien gedrehte Ecke mehr - siehe Task "alles soll durch
+   SVGs geloest sein". currentColor macht die Drehung unabhaengig von Farbe
+   und Zustand des Knopfes (abgeblendet, Tastaturfokus). */
+.aufklapp-zeichen {
+  width: 9px;
+  height: 9px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform .15s ease;
+}
+.legende[open] .aufklapp-zeichen { transform: rotate(180deg); }
+.legende[open] summary { border-color: var(--border-strong); }
+.legende-inhalt {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 15;
+  min-width: 258px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--schatten-2);
+  padding: 10px 14px 12px;
+  /* Luecke schliessen (siehe Task, "Kneifgeste ueber der Kopfleiste"): ohne
+     eigenes touch-action bliebe hier die Voreinstellung "auto" stehen, ueber
+     der sich die Seite mit zwei Fingern haette aufziehen lassen. Nur in
+     templates/editor.html vorhanden, keine Abgrenzung zu anderen Seiten
+     noetig. */
+  touch-action: none;
+}
+.legende-titel {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+.legende-titel:not(:first-child) { margin-top: 16px; }
+.legende-hinweistext {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text);
+  margin: 0 0 4px;
+}
+/* Der Schalter unter der Legende: er gehoert zu den Wegen, die darueber
+   erklaert sind, steht aber fuer eine Handlung - deshalb durch eine feine
+   Linie abgesetzt. */
+.legende-schalter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-light);
+  font-size: 12.5px;
+  color: var(--text);
+  cursor: pointer;
+  line-height: 1.35;
+}
+.legende-schalter input { flex-shrink: 0; margin: 0; }
+
+.legende-zeile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  color: var(--text);
+}
+.legende-muster { width: 32px; height: 8px; flex-shrink: 0; overflow: visible; }
+
+/* ---------- Leinwand ---------- */
+/* Kein flex:1 mehr auf dem SVG selbst - siehe Bericht: Safari berechnet
+   die tatsaechlich bemalte Flaeche eines SVG, dessen Groesse allein aus
+   einem Flex-Layout kommt, bekanntermassen abweichend von seinem
+   CSS-Kasten, alles darueber hinaus wird beschnitten (die senkrechte
+   Kante quer durch die Leinwand, vom Benutzer markiert).
+   .leinwand-flaeche traegt jetzt die festen Kanten (top: 52px = Hoehe von
+   .leiste, dieselbe Grundlage wie .leinwand-hinweis weiter unten) - ein
+   GEWOEHNLICHER <div>, kein "replaced element" wie ein SVG, spannt sich
+   damit korrekt zwischen den Kanten auf (siehe CSS 2.1, absolut
+   positionierte NICHT-ersetzte Elemente). #leinwand selbst braucht dann
+   nur noch width/height:100% eines damit bereits eindeutig bemessenen
+   Elternbehaelters - derselbe, bereits bewaehrte Aufbau wie
+   #minikarte/.minikarte-huelle weiter unten. Direkt am SVG selbst
+   positioniert (mit ODER ohne width/height="100%"-Attribut) wurde es in
+   beiden Faellen falsch hoch - ein SVG OHNE eigene Groesse ist ein
+   "replaced element": bei "auto" nutzt CSS dafuer die intrinsische
+   Groesse statt zwischen top und bottom aufzuspannen, und ein
+   width/height="100%"-Attribut daran loest sich gegen die volle Hoehe
+   des Elternrahmens auf, nicht gegen die um die Kopfleiste verkleinerte
+   Flaeche. */
+.leinwand-flaeche {
+  position: absolute;
+  top: 52px;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+#leinwand {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: var(--bg);
+  touch-action: none;
+  cursor: grab;
+}
+#leinwand.verbinde-aktiv { cursor: crosshair; }
+.karte-rahmen { fill: var(--surface); stroke: var(--border); stroke-width: 1; }
+.karte.gewaehlt .karte-rahmen { stroke: var(--blue); stroke-width: 2; }
+.karte { color: var(--text-secondary); cursor: move; }
+
+/* Farbstreifen am linken Rand: erkennbar, zu welcher Palettengruppe eine
+   Karte gehoert (siehe Task, "Erkennbar, zu welcher Gruppe eine Karte
+   gehoert") - Farbe UND der Gruppenname als Text (.karte-gruppe unten),
+   damit Farbe allein nie die einzige Auskunft ist. Dieselben sieben Gruppen
+   wie palette.js' "reihenfolge", auf CSS-Klassen abgebildet in
+   GRUPPEN_KLASSE (editor.js). */
+.karte-gruppenstreifen { fill: var(--gruppe-sonstige); }
+.karte[data-gruppe="luftbehandlung"] .karte-gruppenstreifen { fill: var(--gruppe-luftbehandlung); }
+.karte[data-gruppe="verteilung"] .karte-gruppenstreifen { fill: var(--gruppe-verteilung); }
+.karte[data-gruppe="raeume"] .karte-gruppenstreifen { fill: var(--gruppe-raeume); }
+.karte[data-gruppe="regelung"] .karte-gruppenstreifen { fill: var(--gruppe-regelung); }
+.karte[data-gruppe="zeit"] .karte-gruppenstreifen { fill: var(--gruppe-zeit); }
+.karte[data-gruppe="quellen"] .karte-gruppenstreifen { fill: var(--gruppe-quellen); }
+.karte[data-gruppe="verbraucher"] .karte-gruppenstreifen { fill: var(--gruppe-verbraucher); }
+
+/* 14px hier MUSS zu Editor.KARTE_NAME_PX in editor.js passen - die Zahl
+   steht an zwei Stellen, weil karteMasseBerechnen() den Zeilenumbruch per
+   Canvas-Textmessung mit genau dieser Schriftgroesse berechnet, bevor die
+   Karte ueberhaupt im DOM haengt (siehe dortiger Kommentar). Der Name
+   skaliert wie der Rest der Karte normal mit dem Zoom mit - eine fruehere
+   Gegenskalierung gegen kleine Zoomstufen ist entfallen, weil sie den Namen
+   bei vielen Karten ueber die Nachbarkarte hinauslaufen liess (siehe
+   Editor.aktualisiereBeschriftungen() in editor.js). */
+.karte-name tspan {
+  font-size: 14px;
+  font-weight: 500;
+  fill: var(--text);
+  font-family: var(--font-body);
+}
+/* Tragen unterhalb einer Zoomstufe nichts mehr bei und verschwinden dann
+   ganz statt zu unlesbarem Grau zu verblassen (Editor.
+   aktualisiereBeschriftungen() setzt [hidden]) - die Gruppe steht bei
+   kleinem Zoom ohnehin schon als Farbkante da (.karte-gruppenstreifen). */
+.karte-gruppe {
+  font-size: 9px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  fill: var(--text-tertiary);
+  font-family: var(--font-body);
+}
+.karte-werte {
+  font-size: 10.5px;
+  fill: var(--text-secondary);
+  font-family: var(--font-body);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Anschluesse ----------
+   Ein Detail, das nur in bestimmten Momenten zaehlt (siehe Task): in der
+   Grundansicht unsichtbar, sichtbar bei ausgewaehlter Karte, waehrend eine
+   Verbindung von dieser Karte aus gezogen wird, und - gezielt fuer genau die
+   zwei beteiligten Anschluesse - beim Ueberfahren eines bestehenden Pfeils
+   (siehe pfeile.js, port-in-pruefung). Luft/Signal/Energie unterscheiden
+   sich zusaetzlich zur Farbe an der Form (Kreis/Quadrat/Dreieck, siehe
+   Editor.zeichnePort()) - fuer Anwenderinnen ohne Farbsinn. */
+.port {
+  fill: var(--surface);
+  stroke-width: 2;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .12s ease;
+}
+.karte.gewaehlt .port,
+.karte.verbindet-von .port,
+.port.port-in-pruefung {
+  opacity: 1;
+  pointer-events: auto;
+}
+.port-luft { stroke: var(--luft); }
+.port-signal { stroke: var(--signal); }
+.port-energie { stroke: var(--energie); }
+.port.port-in-pruefung { fill: currentColor; stroke-width: 2.5; }
+.port-in-pruefung.port-luft { fill: var(--luft); }
+.port-in-pruefung.port-signal { fill: var(--signal); }
+.port-in-pruefung.port-energie { fill: var(--energie); }
+.karte.ziel .karte-rahmen { stroke: var(--blue); stroke-width: 2; fill: var(--blue-tint); }
+
+/* ---------- Anknuepfpunkt zum Verbinden ----------
+   Der einzige, deutliche Griff am Kartenrand (siehe Task und Kommentar bei
+   Editor.zeichneVerbindungsgriff() in editor.js). Standardmaessig
+   unsichtbar, erscheint bei :hover/:focus-visible der Karte, waehrend des
+   Ziehens - UND sobald die Karte ausgewaehlt ist (.gewaehlt, von
+   Editor.karteAuswaehlen() gesetzt). Der Finger kennt kein :hover (siehe
+   Task, Befund 2: der Griff blieb auf einem Touchscreen deshalb fuer immer
+   unsichtbar) - Antippen waehlt die Karte aus wie ueberall sonst auf der
+   Leinwand, und genau dieser bereits vorhandene Zustand blendet den Griff
+   jetzt zusaetzlich ein. Fuer die Maus aendert sich nichts: :hover bleibt
+   der schnellere Weg, ohne die Karte erst anzuklicken. */
+.verbindungs-griff {
+  opacity: 0;
+  pointer-events: none;
+  cursor: crosshair;
+  transition: opacity .12s ease;
+}
+.karte:hover .verbindungs-griff,
+.karte:focus-visible .verbindungs-griff,
+.karte.gewaehlt .verbindungs-griff,
+.karte.verbindet-von .verbindungs-griff {
+  opacity: 1;
+  pointer-events: auto;
+}
+.verbindungs-griff-kreis { fill: var(--surface); stroke: var(--blue); stroke-width: 2; r: 9px; }
+.verbindungs-griff-kreuz { stroke: var(--blue); stroke-width: 1.6; }
+.verbindungs-griff:hover .verbindungs-griff-kreis,
+.karte.verbindet-von .verbindungs-griff-kreis { fill: var(--blue); }
+.verbindungs-griff:hover .verbindungs-griff-kreuz,
+.karte.verbindet-von .verbindungs-griff-kreuz { stroke: var(--auf-farbe); }
+
+/* ---------- Hinweis auf der leeren Leinwand ----------
+   Siehe Task, Befund 6: eine frisch angelegte Anlage darf nicht wie eine
+   leere Flaeche ohne jeden Hinweis aussehen. Getoggelt ueber [hidden] in
+   Editor.zeichne(); pointer-events:none, damit er Drag&Drop aus der Palette
+   nicht blockiert. */
+.leinwand-hinweis {
+  position: absolute;
+  top: 52px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.leinwand-hinweis-kasten {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 380px;
+  padding: 20px 24px;
+  background: var(--surface);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: center;
+  box-shadow: var(--schatten-1);
+}
+.leinwand-hinweis-kasten strong { color: var(--text); font-size: 14px; }
+
+/* ---------- Minikarte (Positionsanzeiger) ----------
+   Zurueckhaltend: nur sichtbar, wenn tatsaechlich etwas ausserhalb des
+   Bildausschnitts liegt (Editor.aktualisiereMinikarte() togglet [hidden]) -
+   direkt nach "Einpassen" ist sie also weg. Unten rechts, klein, dezenter
+   Rahmen statt Schatten/Farbe - ein Hilfsmittel, kein Blickfang. */
+.minikarte-huelle {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: 168px;
+  height: 108px;
+  background: rgba(255, 255, 255, .88);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--schatten-1);
+  cursor: pointer;
+  overflow: hidden;
+  /* Luecke schliessen (siehe .legende-inhalt weiter oben, dieselbe
+     Begruendung) - nur in templates/editor.html vorhanden. */
+  touch-action: none;
+}
+#minikarte { width: 100%; height: 100%; display: block; }
+.minikarte-karte { fill: var(--border-strong); }
+.minikarte-sichtfenster {
+  fill: var(--blue-tint);
+  fill-opacity: .5;
+  stroke: var(--blue);
+  stroke-width: 1.5;
+}
+
+/* ---------- Parameterfenster ---------- */
+.panel {
+  width: 320px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-left: 1px solid var(--border-light);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* pan-y: dieselbe Begruendung wie bei .palette (siehe dort) - senkrechtes
+     Scrollen mit einem Finger bleibt, die native Kneifgeste (Seiten-Zoom)
+     des Browsers greift hier nicht mehr an. */
+  touch-action: pan-y;
+  padding: 16px;
+}
+.panel-kopf {
+  font-size: 15px;
+  font-weight: 500;
+  margin: 0 0 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-light);
+}
+.panel-zeile { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.panel-label { font-size: 11px; color: var(--text-secondary); }
+.panel-zeile input,
+.panel-zeile select,
+.panel-zeile textarea {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface);
+  width: 100%;
+}
+.panel-zeile input[type="number"] { font-variant-numeric: tabular-nums; }
+
+/* Ein vom Server abgelehnter Wert (siehe static/js/panel.js,
+   markiereFeldFehler) - die Meldung selbst steht in der Fehlerleiste, hier
+   geht es nur darum, dass sich das betroffene Feld erkennen laesst. */
+.panel-feld-fehler,
+.panel-feld-fehler:focus-visible {
+  border-color: var(--danger);
+  outline: 2px solid var(--danger);
+  outline-offset: -1px;
+}
+
+/* ---------- Zusammengesetzte Parameter (Zeitreihe, Monatswerte, Zeitraeume,
+   Anteile, Textlisten) - je Darstellungsart genau ein Baustein, siehe
+   static/js/panel.js. Ein rohes JSON-Feld ist keine Bedienung. ---------- */
+.panel-block { margin-bottom: 18px; }
+.panel-block > .panel-label { display: block; margin-bottom: 6px; }
+.panel-hinweis { font-size: 11.5px; color: var(--text-tertiary); margin: 2px 0 6px; }
+
+.panel-knopf-klein {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  padding: 4px 9px;
+  font-size: 11.5px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.panel-knopf-klein:hover { background: var(--surface-alt); border-color: var(--border-strong); color: var(--text); }
+
+/* Prozentfelder: "%" als sichtbares Anhaengsel statt eckiger Einheit -
+   direkt am Feld, nicht nur in der Beschriftung darueber. */
+.panel-prozent-huelle { display: flex; align-items: center; gap: 6px; }
+.panel-prozent-huelle input { flex: 1; min-width: 0; }
+.panel-prozent-huelle span { font-size: 12px; color: var(--text-secondary); }
+
+/* Zeitreihe (24 Stunden): eine kleine Balkenreihe fuer den Verlauf auf einen
+   Blick, darunter jede Stunde als eigenes, beschriftetes Zahlenfeld. */
+.panel-zeitreihe-balken { display: flex; align-items: flex-end; gap: 2px; height: 32px; margin: 2px 0 8px; }
+.panel-balken-saeule { flex: 1; min-height: 2px; background: var(--blue-tint); border-top: 2px solid var(--blue); border-radius: 1px 1px 0 0; }
+.panel-zeitreihe-gitter { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
+.panel-zeitreihe-zelle { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 9.5px; color: var(--text-tertiary); }
+.panel-zeitreihe-zelle input { width: 100%; padding: 3px 2px; text-align: center; font-size: 11px; }
+
+/* Monatswerte: Umschaltknoepfe statt Checkbox-Liste. */
+.panel-monat-gitter { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.panel-monat-knopf {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  padding: 6px 0;
+  font-size: 11.5px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.panel-monat-knopf:hover { border-color: var(--border-strong); }
+.panel-monat-knopf.aktiv { background: var(--blue); border-color: var(--blue); color: var(--auf-farbe); }
+
+/* Zeitraeume mit Datum (Ferien): eine Karte je Zeitraum, Tag/Monat einzeln -
+   genau das Format, das core/bausteine/ferien.py liest (kein Jahr). */
+.panel-zeitraeume { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
+.panel-zeitraum-zeile {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.panel-zeitraum-zeile input[type="text"] {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 7px;
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface);
+  width: 100%;
+}
+.panel-zeitraum-daten { display: flex; gap: 16px; }
+.panel-zeitraum-datum { display: flex; align-items: center; gap: 3px; font-size: 11px; color: var(--text-secondary); }
+.panel-zeitraum-datum input {
+  width: 32px;
+  padding: 4px 2px;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface);
+}
+.panel-entfernen { align-self: flex-end; }
+
+/* Anteile einer Aufteilung (Verteiler). */
+.panel-anteil-zeile { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.panel-anteil-zeile .panel-prozent-huelle { width: 84px; flex-shrink: 0; }
+.panel-anteil-ziel { font-size: 12px; color: var(--text); overflow-wrap: anywhere; }
+
+/* Gepaarte Textlisten (Datenlogger: Spaltennamen + Einheiten) als eine
+   Tabelle - Zeile i der einen gehoert zu Zeile i der anderen. */
+.panel-textlisten-tabelle { display: flex; flex-direction: column; gap: 4px; margin-bottom: 4px; }
+.panel-textlisten-zeile { display: grid; gap: 5px; align-items: center; }
+.panel-textlisten-zeile input {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 6px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface);
+  width: 100%;
+  min-width: 0;
+}
+.panel-textlisten-kopf span { font-size: 9.5px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: .03em; }
+.panel-textlisten-nummer { font-size: 11px; color: var(--text-tertiary); text-align: right; }
+.panel-textliste-zeile { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.panel-textliste-zeile > span { width: 16px; font-size: 11px; color: var(--text-tertiary); text-align: right; flex-shrink: 0; }
+.panel-textliste-zeile input {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 7px;
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface);
+  width: 100%;
+}
+
+/* Fest oder Verbindung: eine Zahl neben einem gerade belegten Anschluss ist
+   wirkungslos - dieses Feld darf deshalb nicht wie ein normales Eingabefeld
+   aussehen (gestrichelter Rahmen statt Eingaberahmen, keine Eingabe). */
+/* Ein Wert, der nur dokumentiert und nicht gerechnet wird (Param.ohne_wirkung):
+   dieselbe gestrichelte Umrandung wie ein ueberschriebener Parameter - beide
+   sagen "dieser Wert wirkt gerade nicht" -, aber in der ruhigeren Schriftfarbe,
+   weil hier nichts zu loesen ist. */
+.panel-ohne-wirkung {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  background: var(--surface-alt);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+}
+
+.panel-ueberschrieben {
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface-alt);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- "Regelt auf": Sollwert/Istwert eines Reglers ----------
+   Eigener Abschnitt statt der rohen Anschlussliste (siehe .panel-ports) -
+   zeigt in Klartext, woher der Wert kommt, und laesst es aendern. */
+.panel-regelung { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--border-light); }
+.panel-regelung h3 {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--text-secondary);
+  margin: 0 0 10px;
+}
+.panel-regelkreis {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  margin-bottom: 10px;
+}
+.panel-regelkreis:last-child { margin-bottom: 0; }
+.panel-regelkreis-titel { font-size: 12px; font-weight: 500; color: var(--text); margin-bottom: 8px; }
+.panel-regeleingang { margin-bottom: 10px; }
+.panel-regeleingang:last-child { margin-bottom: 0; }
+.panel-regeleingang-label { display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; }
+.panel-regeleingang select {
+  margin-top: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface);
+  width: 100%;
+}
+
+.panel-ports { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--border-light); }
+.panel-ports h3 {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--text-secondary);
+  margin: 0 0 8px;
+}
+.port-zeile { font-size: 11.5px; color: var(--text-secondary); padding: 3px 0; }
+.port-zeile-luft { color: var(--text); font-weight: 500; }
+/* Richtungspfeil vor der Beschriftung (panel.js, portPfeilSvg) - eine Form,
+   fuer "aus" gespiegelt statt eines zweiten Pfads. currentColor macht ihn von
+   derselben Farbe wie die Zeile abhaengig (gedimmt bei .port-zeile,
+   kraeftiger bei .port-zeile-luft). */
+.port-pfeil {
+  width: 7px;
+  height: 7px;
+  vertical-align: middle;
+  margin-top: -1px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.port-pfeil-aus { transform: scaleX(-1); }
+.leerhinweis { font-size: 13px; color: var(--text-secondary); }
+
+/* ---------- Fehlerleiste ----------
+   Faellt auf, ohne die Arbeit zu blockieren: schwebt oben, nimmt keinen
+   Platz vom Editor, verschwindet von selbst (siehe zeigeFehler() in
+   editor.js/start.js). z-index ueber Dialogen, sonst waere sie hinter einem
+   offenen Dialog unsichtbar, obwohl genau dann oft ein Fehler entsteht. */
+.fehlermeldung {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(80vw, 560px);
+  background: var(--danger);
+  color: var(--auf-farbe);
+  padding: 9px 16px 9px 14px;
+  border-radius: var(--radius-sm);
+  /* touch-action erst unten, mit body.seite-editor abgegrenzt - dieses
+     Element existiert auf ALLEN vier Seiten (siehe jedes templates/*.html),
+     hier direkt "none" zu setzen wuerde auch der Startseite/Bausteinen die
+     Kneifgeste ueber der Fehlerleiste wegnehmen, wo sie erlaubt bleiben
+     soll (siehe Task, "nur auf der Editorseite"). */
+  font-size: 13px;
+  line-height: 1.35;
+  z-index: 40;
+  box-shadow: var(--schatten-2);
+  /* Nichts an diesen beiden Leisten ist zum Anklicken da - und sie
+     schweben ueber der Kopfleiste. Ohne pointer-events:none verschluckt
+     die Hinweisleiste genau den Knopf, den sie nennt: "Verbindung
+     gelöscht - „Rückgängig" holt sie zurück" legte sich auf dem iPad
+     ueber ↶, und der Fingertipp dort kam nicht an (nachgestellt und
+     gemessen: der Pfeil kam nicht wieder). */
+  pointer-events: none;
+}
+/* Das Ausrufezeichen im Kreis war ein Schriftzeichen (content:"!") - jetzt
+   eine gezeichnete SVG, als Hintergrundbild statt Text. Kein <svg> in der
+   HTML: zeigeFehler()/zeigeHinweis() setzen textContent auf #fehlermeldung
+   (editor.js, bausteine.js UND das nicht zu dieser Aufgabe gehoerende
+   start.js) und wuerden ein Kind-Element dabei jedesmal mitloeschen - ein
+   Hintergrundbild auf ::before uebersteht das. Kreis (halbdurchsichtiges
+   Weiss, wie vorher --schleier-hell) und Strich fest als Weiss in der SVG
+   verdrahtet statt currentColor: die Leiste hat nur diese eine Erscheinung
+   (roter Grund, weisse Schrift, siehe .fehlermeldung), kein abgeblendeter
+   oder fokussierter Zustand wie bei einem Knopf. */
+.fehlermeldung::before {
+  content: "";
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='8' fill='%23fff' fill-opacity='.3'/%3E%3Cline x1='8' y1='4.2' x2='8' y2='9' stroke='%23fff' stroke-width='1.6' stroke-linecap='round'/%3E%3Ccircle cx='8' cy='11.6' r='.9' fill='%23fff'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-size: 16px 16px;
+}
+
+/* ---------- Hinweisleiste ----------
+   Dieselbe Stelle und dieselbe Form wie die Fehlerleiste darueber, nur
+   ruhig statt alarmierend: sie bestaetigt, was gerade zurueckgenommen oder
+   wiederholt wurde (zeigeHinweis() in editor.js). Bewusst dieselben Masse
+   wie .fehlermeldung, damit beide nicht wie zwei verschiedene Systeme
+   wirken - und ohne das "!"-Zeichen, das dort die Warnung traegt. Beide
+   koennen nie gleichzeitig sichtbar sein: zeigeHinweis() und zeigeFehler()
+   blenden jeweils die andere aus. */
+.hinweismeldung {
+  position: fixed;
+  top: 14px;
+  pointer-events: none;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(80vw, 560px);
+  background: var(--text);
+  color: var(--auf-farbe);
+  padding: 9px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.35;
+  z-index: 40;
+  box-shadow: var(--schatten-2);
+}
+
+/* ---------- Pfeile ----------
+   Drei Verbindungsarten, jede mit eigener Kombination aus Strichstaerke UND
+   -muster - nicht nur Farbe, damit die Unterscheidung auch ohne Farbsinn
+   traegt. "Mehrdeutig" ueberlagert jede der drei mit einem eigenen, feinen
+   Punktmuster in Warnfarbe. */
+.pfeil { fill: none; pointer-events: stroke; }
+/* Luft ist immer dick - daran erkennt man den Luftweg schon von weitem,
+   unabhaengig von der Art. Die Art selbst steht im Muster (und, als
+   Verstaerkung, in der Farbe): durchgezogen fuer die Zuluft als den
+   Hauptweg, lange Striche fuer die Abluft, Punkte fuer die Aussenluft,
+   Strich-Punkt fuer die Fortluft, Strich-Punkt-Punkt fuer die Umluft.
+   Fuenf Muster, die sich auch in einer Schwarzweisskopie unterscheiden -
+   genau die Regel, die auch fuer Luft/Signal/Energie schon galt. */
+.pfeil-luft { stroke: var(--luft); stroke-width: 3; }
+.pfeil-luft-zuluft    { stroke: var(--luft-zu);     stroke-width: 3.5; }
+.pfeil-luft-abluft    { stroke: var(--luft-ab);     stroke-width: 3.5; stroke-dasharray: 12 5; }
+.pfeil-luft-aussenluft{ stroke: var(--luft-aussen); stroke-width: 3.5; stroke-dasharray: 3 4; stroke-linecap: round; }
+.pfeil-luft-fortluft  { stroke: var(--luft-fort);   stroke-width: 3.5; stroke-dasharray: 12 4 3 4; }
+.pfeil-luft-umluft    { stroke: var(--luft-um);     stroke-width: 3.5; stroke-dasharray: 10 4 3 4 3 4; }
+.pfeil-signal { stroke: var(--signal); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.pfeil-energie { stroke: var(--energie); stroke-width: 2; stroke-dasharray: 9 3 1.5 3; }
+/* Meldeweg zu einem Datenlogger: dieselbe Strichart wie ein Signal, nur
+   noch feiner - er meldet einen Wert zum Mitschreiben, er regelt nichts. */
+.pfeil-protokoll { stroke: var(--signal); stroke-width: 1.2; stroke-dasharray: 2 4; }
+
+/* Melde- und Energiewege sind Buchhaltung: sie fuehren aus der ganzen
+   Anlage auf zwei Karten am Rand zu (in AX_SIM 2.1 sind das 17 der 52
+   Signalwege) und queren dabei alles. Fuer die Rechnung sind sie noetig,
+   beim Betrachten des Luftwegs stoeren sie. Deshalb zweierlei: sie sind
+   von Haus aus blasser als ein Regelweg - und ganz abschalten laesst sich
+   die Gruppe ueber die Legende (editor.js, meldewegeZeigen). Ausgeblendet
+   wird die ganze Bahn samt ihrer Trefferbahn, sie faengt dann auch keine
+   Klicks mehr ab. */
+.pfeil-meldeweg { opacity: .45; }
+.leinwand-ohne-meldewege .pfeil-meldeweg { display: none; }
+.pfeil-mehrdeutig { stroke: var(--warning); stroke-dasharray: 1.5 3.5; stroke-width: 2.5; }
+.pfeil-vorschau { stroke: var(--blue); stroke-width: 2; stroke-dasharray: 4 4; }
+.pfeil:hover { stroke: var(--blue); }
+
+/* Trefferbahn: eine zweite, durchsichtige Bahn hinter jedem Pfeil, damit
+   ein Finger ihn ueberhaupt treffen kann (ein Signalpfeil ist 1,5 Pixel
+   breit, eine Fingerkuppe rund 9 Millimeter). editor.js traegt sie nach
+   jedem Neuzeichnen nach (pfeilTrefferbahnenNachtragen) und gibt ihr
+   dieselbe data-id, damit Auswahl UND der Doppelklick in pfeile.js sie wie
+   den Pfeil selbst behandeln. Zwei Klassen tief, damit sie die Farbe und
+   das Muster der Pfeilart (.pfeil-luft & Co., je eine Klasse) sicher
+   uebersteuert. */
+.pfeil.pfeil-treffer {
+  stroke: transparent;
+  stroke-width: 22;
+  stroke-dasharray: none;
+}
+/* Ausgewaehlter Pfeil: kraeftige durchgezogene Linie UND ein breiter,
+   heller Saum ueber die Trefferbahn - nicht Farbe allein, sondern auch
+   Breite und Muster, wie bei den Pfeilarten selbst (siehe Kommentar bei
+   --luft). Der Saum ist das, was auf einem iPad-Bildschirm aus einem Meter
+   Entfernung ueberhaupt auffaellt. */
+.pfeil.gewaehlt {
+  stroke: var(--blue);
+  stroke-width: 5;
+  stroke-dasharray: none;
+}
+/* Drei Klassen tief, damit BEIDE Eigenschaften der Trefferbahn gewinnen:
+   .pfeil.gewaehlt (zwei Klassen, weiter oben) setzt stroke-width 5 und
+   traefe sonst auch den Saum - der waere dann genauso schmal wie die Linie
+   selbst und faellt hinter ihr gar nicht auf (nachgemessen: 5px statt 22px,
+   unsichtbar). */
+.pfeil.pfeil-treffer.gewaehlt {
+  stroke: var(--blue-tint);
+  stroke-width: 22;
+}
+
+/* Das Werkzeug an der Mitte des ausgewaehlten Pfeils (templates/editor.html,
+   #pfeil-werkzeug). pointer-events nur auf den Kindern: der durchsichtige
+   Rand des Behaelters soll die Leinwand darunter nicht abfangen. */
+.pfeil-werkzeug {
+  position: absolute;
+  /* Ueber dem Pfeil, mit Abstand - nicht auf ihm: die Blase darf weder den
+     Pfeil verdecken, den sie beschreibt, noch mit ihrem Loeschknopf genau
+     dort liegen, wo gerade geklickt oder getippt wurde (siehe
+     pfeilWerkzeugPositionieren in editor.js). Am oberen Rand der Leinwand
+     klappt sie nach unten. */
+  transform: translate(-50%, calc(-100% - 14px));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--schatten-2);
+  white-space: nowrap;
+  z-index: 6;
+  pointer-events: none;
+}
+.pfeil-werkzeug-unten { transform: translate(-50%, 14px); }
+.pfeil-werkzeug > * { pointer-events: auto; }
+.pfeil-werkzeug-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  max-width: 40vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- Dialoge (Simulation, Projekt/Anlage anlegen) ---------- */
+.dialog-huelle {
+  position: fixed;
+  inset: 0;
+  background: var(--schleier);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  padding: 24px;
+}
+/* Befunde der Anlagenpruefung im Simulationsdialog (core/pruefung.py).
+   Bewusst in der Hinweisfarbe und nicht in der Warnfarbe: es sind Hinweise
+   auf etwas, das man vielleicht vergessen hat, kein Fehler und kein Riegel -
+   der Lauf laesst sich damit ganz normal starten. */
+.pruefung-hinweis {
+  margin: 4px 0 12px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--warning);
+  background: var(--warning-tint);
+  border-radius: var(--radius-sm);
+}
+.pruefung-titel {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--warning);
+}
+.pruefung-liste {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.pruefung-liste li { margin-bottom: 3px; }
+
+.dialog {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 22px 24px 24px;
+  min-width: 340px;
+  max-width: 90vw;
+  max-height: 85vh;
+  overflow-y: auto;
+  /* Fehlte hier (siehe Kommentar bei .palette weiter oben, dieselbe
+     Begruendung): ein bis zum Ende gescrollter Dialog (z.B. ein langer
+     Loeschtext) reichte einen weiteren Wisch sonst an den naechsten
+     Vorfahren weiter. */
+  overscroll-behavior: contain;
+  box-shadow: var(--schatten-2);
+}
+.dialog-breit { min-width: 560px; }
+.dialog h2 {
+  font-size: 16px;
+  font-weight: 500;
+  margin: 0 0 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-light);
+}
+.dialog-knoepfe { display: flex; gap: 8px; justify-content: flex-end; margin-top: 22px; }
+/* Die NEBENknoepfe einer Knopfreihe. Das :not() ist der Kern der Regel: ohne
+   es traf sie auch .knopf-haupt und gewann gegen dessen Regel weiter oben
+   (0,1,1 gegen 0,1,0) - in jedem Dialog sah der Hauptknopf danach aus wie
+   "Abbrechen" daneben, und die Reihe hatte keinen erkennbaren Schwerpunkt
+   mehr. Dasselbe gilt fuer den roten Loeschknopf. */
+.dialog-knoepfe button:not(.knopf-haupt):not(.knopf-haupt-gefahr),
+.fortschritt button:not(.knopf-haupt):not(.knopf-haupt-gefahr),
+.projekt-aktionen button:not(.knopf-haupt):not(.knopf-haupt-gefahr) {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 7px 16px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+}
+.dialog-knoepfe button:not(.knopf-haupt):not(.knopf-haupt-gefahr):hover,
+.fortschritt button:not(.knopf-haupt):not(.knopf-haupt-gefahr):hover,
+.projekt-aktionen button:not(.knopf-haupt):not(.knopf-haupt-gefahr):hover {
+  background: var(--surface-alt);
+  border-color: var(--border-strong);
+}
+.dialog-knoepfe button:disabled,
+.fortschritt button:disabled { opacity: .6; cursor: default; }
+.panel-zeile-nebeneinander { flex-direction: row; gap: 12px; }
+.panel-zeile-nebeneinander .panel-zeile { flex: 1; }
+
+.fruehere-laeufe {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  max-height: 150px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+}
+.frueherer-lauf {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-light);
+}
+.frueherer-lauf:last-child { border-bottom: none; }
+.frueherer-lauf:hover, .frueherer-lauf:focus-visible { background: var(--surface-alt); }
+.frueherer-lauf-laeuft { color: var(--blue); font-style: italic; }
+
+/* ---------- Fortschritt (Simulation laeuft bis zu acht Minuten) ---------- */
+.fortschritt-huelle {
+  position: fixed;
+  inset: 0;
+  background: var(--schleier);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+}
+.fortschritt {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 26px 28px;
+  min-width: 380px;
+  text-align: center;
+  box-shadow: var(--schatten-2);
+}
+.fortschritt-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.fortschritt-schiene {
+  height: 6px;
+  background: var(--border-light);
+  border-radius: 3px;
+  margin: 16px 0;
+  overflow: hidden;
+}
+.fortschritt-schiene div {
+  height: 100%;
+  width: 0;
+  background: var(--blue);
+  transition: width .3s ease;
+}
+
+/* ---------- Jahresbilanz: rechtsbuendige Tabelle, einheitliche
+   Nachkommastellen (per .toFixed() in simulation.js/start.js gesetzt) ---------- */
+.bilanz { width: 100%; border-collapse: collapse; font-size: 13px; }
+.bilanz th, .bilanz td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-light);
+  text-align: left;
+}
+.bilanz th {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+}
+.bilanz .zahl { text-align: right; font-variant-numeric: tabular-nums; }
+.bilanz tbody tr:nth-child(even) { background: var(--surface-alt); }
+.bilanz tfoot td { font-weight: 500; border-top: 2px solid var(--border); border-bottom: none; }
+
+.abbruchhinweis { color: var(--warning); font-size: 12px; margin: -8px 0 16px; }
+
+/* ---------- Stundenprotokoll (Datenlogger-Spalten, bis zu 8760 Zeilen) ---------- */
+.protokoll-huelle { max-height: 60vh; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--border-light); border-radius: var(--radius-sm); }
+.protokoll { width: 100%; border-collapse: collapse; font-size: 12px; }
+.protokoll th, .protokoll td {
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border-light);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.protokoll th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+}
+.protokoll tbody tr:nth-child(even) { background: var(--surface-alt); }
+.protokoll-hinweis { font-size: 12px; color: var(--text-secondary); margin: 0 0 12px; }
+
+.warnhinweis { margin-top: 16px; font-size: 12px; color: var(--warning); }
+.warnhinweis p { margin: 0; }
+.warnhinweis-ok { color: var(--text-secondary); }
+.warn-mehr {
+  border: none;
+  background: none;
+  color: var(--blue);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  padding: 0;
+  margin-left: 6px;
+  text-decoration: underline;
+}
+.warn-beispiele {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--text-secondary);
+  max-height: 120px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.warn-beispiele li { margin-bottom: 3px; }
+
+/* ---------- Vergleich mehrerer Wetterjahre (Vorhaben B) ----------
+   .vergleich-tabelle erweitert die vorhandene .bilanz-Tabelle nur um eine
+   waagerechte Schiene (mehrere Jahresspalten sind auf einem Tablet breiter
+   als der Dialog) statt eigene Zell-/Kopfregeln nachzubauen. */
+.vergleich-hinweis { font-size: 12.5px; color: var(--text-secondary); margin: -4px 0 14px; }
+.vergleich-tabelle-huelle { overflow-x: auto; overscroll-behavior: contain; margin-top: 4px; }
+.vergleich-tabelle { min-width: 100%; }
+.vergleich-tabelle th:first-child,
+.vergleich-tabelle td:first-child { white-space: nowrap; }
+.vergleich-kein-ergebnis { font-weight: 400; color: var(--text-tertiary); text-transform: none; }
+.vergleich-abweichung { font-size: 11px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.vergleich-zeile-kosten td,
+.vergleich-zeile-warnungen td { border-top: 2px solid var(--border); font-weight: 500; }
+.vergleich-diagramm { width: 100%; height: auto; margin-top: 18px; }
+
+/* ---------- Startseite ---------- */
+/* dvh/safe-area: dieselbe Begruendung wie bei .app weiter oben. */
+.start {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+           env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+.start .leiste { flex-shrink: 0; }
+.start-haupt { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 28px 32px 48px; }
+/* Begrenzte Lesebreite gilt fuer Fliesstext (siehe .abschnitt-hinweis,
+   .leerhinweis-gross p - beide mit eigenem ch-Mass), nicht fuer den
+   Abschnitt selbst: Listen, Karten und Tabellen duerfen die verfuegbare
+   Breite nutzen, sonst klebt bei breiten Fenstern alles gestaucht am
+   linken Rand. 1400px ist eine weiche Obergrenze gegen ausufernde
+   Kartenreihen auf sehr breiten Bildschirmen, keine enge Spalte. */
+.start-abschnitt { max-width: 1400px; margin: 0 auto 44px; }
+.abschnitt-titel { font-size: 18px; font-weight: 500; margin: 0 0 14px; }
+.abschnitt-hinweis { font-size: 13px; color: var(--text-secondary); margin: -6px 0 16px; max-width: var(--lesebreite); line-height: 1.5; }
+
+.leerhinweis-gross {
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+  padding: 34px;
+  text-align: center;
+}
+.leerhinweis-gross h2 { margin: 0 0 8px; font-size: 16px; font-weight: 500; }
+/* Eigenstaendige Seite (templates/anlage_nicht_gefunden.html), nicht
+   Teil der Startseiten-Liste - schmaler und mit etwas Abstand nach oben,
+   statt ueber die volle .start-abschnitt-Breite (1400px) zu laufen. */
+.nicht-gefunden { max-width: 480px; margin-top: 72px; }
+.leerhinweis-gross p {
+  margin: 0 0 18px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+  max-width: 52ch;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.projekt-karte {
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  margin-bottom: 16px;
+}
+.projekt-kopf h2 { margin: 0; font-size: 15px; font-weight: 500; }
+.projekt-beschreibung { margin: 4px 0 0; font-size: 12px; color: var(--text-secondary); }
+
+.anlagen-liste { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0 14px; }
+.anlage-karte {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 184px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  padding: 11px 13px;
+  text-decoration: none;
+  color: var(--text);
+  background: var(--bg);
+}
+.anlage-karte:hover { border-color: var(--blue); background: var(--blue-tint); }
+.anlage-name { font-size: 13px; font-weight: 500; }
+.anlage-info { font-size: 11px; color: var(--text-secondary); }
+.anlage-status { font-size: 11px; font-variant-numeric: tabular-nums; }
+.anlage-status-laeuft { color: var(--blue); font-style: italic; }
+.anlage-status-fertig { color: var(--text-secondary); }
+.anlage-status-offen { color: var(--text-secondary); font-style: italic; }
+.anlage-status-warnung { color: var(--warning); }
+.anlage-status-unbekannt { color: var(--text-secondary); font-style: italic; }
+
+.projekt-aktionen { display: flex; gap: 8px; }
+
+.vorlage-wahl {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  margin: 7px 0;
+  cursor: pointer;
+}
+.vorlage-wahl input { margin-top: 3px; }
+
+.wetter-formular { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 18px; }
+.wetter-formular input[type="text"] {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface);
+}
+.wetter-tabelle { max-width: 640px; }
+
+/* Bis 1100px (das iPad im Querformat ist 1080 Punkte breit) schmalere
+   Seitenbereiche: dort gehen sonst 548 der 1080 Punkte an Palette und
+   Parameterfenster, und fuer die Kopfleiste bleibt weniger uebrig, als
+   ihre Knoepfe brauchen (gemessen: 532 verfuegbar, 589 noetig). Frueher
+   galt diese Regel erst ab 900px - dazwischen standen beide auf ihrer
+   vollen Schreibtischbreite. */
+@media (max-width: 1100px) {
+  .palette { width: 190px; }
+  .panel { width: 270px; }
+}
+
+/* ---------- Beruehrungsziele (Finger statt Maus) ----------
+   Apples Richtwert ist 44 Punkte Kantenlaenge (siehe Task, Befund 5). Am
+   Schreibtisch bleiben die Knoepfe kompakt - "pointer: coarse" trifft nur
+   Geraete ohne praezisen Zeiger (Finger), nicht ein schmales Mausfenster.
+   Nur das Innenmass (padding) waechst, nicht Schrift oder Rahmenfarbe -
+   dieselbe Optik, nur eine groessere Trefferflaeche. */
+@media (pointer: coarse) {
+  .knopf-haupt,
+  .knopf-sekundaer,
+  .dialog-knoepfe button,
+  .fortschritt button,
+  .projekt-aktionen button {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+  /* .knopf-mini/.knopf-haupt-gefahr: siehe loeschen.css, nicht hier - das
+     dortige @media (pointer: coarse) muss NACH der eigenen, unconditional
+     .knopf-mini-Regel derselben Datei stehen, sonst gewinnt bei gleicher
+     Spezifitaet die spaetere, unconditional Regel und die Vergroesserung
+     hier bliebe wirkungslos. */
+  .palette-eintrag {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+  .panel-knopf-klein {
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+  .panel-monat-knopf {
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+  /* Die ganze Kopfleiste des Editors auf Apples 44 Punkte - eine Regel
+     fuer alle ihre Formen, statt je Knopfart eine eigene. */
+  .leiste-knopf,
+  .zurueck-knopf,
+  .legende summary { height: 44px; }
+  .leiste-knopf-rund { width: 44px; }
+  /* Generische Parameterfelder - NICHT die eng gepackten Gitter (Zeitreihe
+     Stundenwerte, Zeitraeume, Textlisten): deren eigene, spezifischere
+     Regeln (z.B. .panel-zeitreihe-zelle input) bleiben unangetastet, weil
+     eine hoehere Selektor-Spezifitaet sie unabhaengig von der Reihenfolge
+     gewinnen laesst - dort wuerde ein aufgeblasenes Feld das enge Gitter
+     sprengen. */
+  .panel-zeile input,
+  .panel-zeile select,
+  .panel-zeile textarea {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+  /* Der Anknuepfpunkt zum Verbinden (siehe .verbindungs-griff weiter oben):
+     r=9px trifft an einem Kartenrand kaum ein Fingerspitzenzentrum - 16px
+     Radius ergibt eine 32px-Flaeche, dazu zaehlt bei einer Beruehrung
+     ueblicherweise noch ein paar Pixel Toleranz der Plattform selbst. */
+  .verbindungs-griff-kreis { r: 16px; }
+}
+
+/* ---------- Editor im Hochformat ----------
+   Drei Spalten (Palette 190/228px + Leinwand + Parameterfenster 270/320px)
+   passen auf einem Hochformat-iPad (834 Punkte, siehe Task) nicht mehr
+   nebeneinander, ohne der Leinwand fast allen Platz zu nehmen. Nur bei
+   SCHMAL UND FINGERBEDIENUNG (nicht bei einem schmalen Mausfenster am
+   Schreibtisch - siehe Kommentar oben bei "pointer: coarse") werden Palette
+   und Parameterfenster zu ein-/ausblendbaren Seitenbereichen: standardmaessig
+   beide zu, die Leinwand bekommt die volle Breite (siehe Task: "Die
+   Leinwand ist das Wichtigste"). static/js/editor.js schaltet sie ueber
+   #btn-palette-umschalten/#btn-panel-umschalten sowie automatisch beim
+   Auswaehlen/Abwaehlen einer Karte (Parameterfenster) bzw. beim Antippen
+   eines Paletteneintrags (Palette, siehe dort Palette.armieren()). */
+@media (max-width: 900px) and (pointer: coarse) {
+  /* inline-flex, nicht inline-block: sonst faellt genau dieser Knopf aus
+     der Formensprache der Kopfleiste (die zentriert ihre Beschriftung
+     ueber align-items/justify-content, siehe .leiste-knopf). */
+  .knopf-seitenbereich { display: inline-flex; }
+
+  .app { position: relative; }
+  .palette,
+  .panel {
+    position: absolute;
+    top: 52px; /* Hoehe von .leiste, siehe auch .leinwand-hinweis */
+    bottom: 0;
+    z-index: 12;
+    box-shadow: var(--schatten-2);
+    transition: transform .18s ease;
+  }
+  .palette { left: 0; transform: translateX(-100%); }
+  .panel { right: 0; transform: translateX(100%); }
+  .palette.seitenbereich-offen,
+  .panel.seitenbereich-offen {
+    transform: translateX(0);
+  }
+}
