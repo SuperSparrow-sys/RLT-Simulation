@@ -1,6 +1,6 @@
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, Response, current_app, jsonify, request
 
-from core import anlagen, ergebnisse, laeufe
+from core import anlagen, ausgabe, ergebnisse, laeufe
 
 bp = Blueprint("simulation", __name__, url_prefix="/api/simulation")
 
@@ -97,3 +97,51 @@ def protokoll(simulation_id):
         return jsonify({"fehler": str(fehler)}), 404
     graph = anlagen.lade_graph(anlage_id)
     return jsonify({"spalten": ergebnisse.lade_protokoll(simulation_id, graph)})
+
+
+def _ausgabedaten_oder_fehler(simulation_id):
+    """Gemeinsamer Rahmen fuer die beiden Ausgabe-Routen: unbekannte
+    simulation_id wird 404, ein Lauf ohne gespeichertes Ergebnis 409 (der
+    Lauf existiert, ist aber noch nicht so weit) - dieselbe Unterscheidung wie
+    routes/bericht.py._daten_oder_404(), nur mit jsonify() statt abort(),
+    weil diese Routen (anders als die HTML-Berichtsseite) von fetch()/einem
+    Download-Link aus aufgerufen werden."""
+    try:
+        return ausgabe.daten_fuer(simulation_id), None
+    except KeyError as fehler:
+        return None, (jsonify({"fehler": str(fehler)}), 404)
+    except ausgabe.AusgabeNichtVerfuegbar as fehler:
+        return None, (jsonify({"fehler": str(fehler)}), 409)
+
+
+@bp.get("/<int:simulation_id>/stundenwerte.csv")
+def stundenwerte_csv(simulation_id):
+    """Die Stundenwerte des Laufs als CSV - siehe core.ausgabe.csv_bytes()
+    fuer Trennzeichen, Dezimalzeichen und Kodierung."""
+    daten, fehler = _ausgabedaten_oder_fehler(simulation_id)
+    if fehler:
+        return fehler
+    rohdaten = ausgabe.csv_bytes(daten)
+    name = ausgabe.dateiname(daten, "csv")
+    # Nur 'text/csv', kein eigener charset-Zusatz: Flask haengt ihn fuer
+    # 'text/*' selbst an (siehe Response.mimetype) - mit einem eigenen waere
+    # der Header doppelt ('charset=utf-8; charset=utf-8').
+    return Response(
+        rohdaten, mimetype="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )
+
+
+@bp.get("/<int:simulation_id>/stundenwerte.xlsx")
+def stundenwerte_xlsx(simulation_id):
+    """Die Stundenwerte des Laufs als Excel-Mappe - siehe core.ausgabe.xlsx_bytes()."""
+    daten, fehler = _ausgabedaten_oder_fehler(simulation_id)
+    if fehler:
+        return fehler
+    rohdaten = ausgabe.xlsx_bytes(daten)
+    name = ausgabe.dateiname(daten, "xlsx")
+    return Response(
+        rohdaten,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )

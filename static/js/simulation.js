@@ -152,6 +152,13 @@ const Simulation = {
       });
     });
 
+    // Ein Klick auf CSV/Excel soll nur herunterladen, nicht zugleich (wie ein
+    // Klick auf die Zeile selbst) den Dialog schliessen und die Bilanz
+    // oeffnen - derselbe stopPropagation()-Kniff wie beim Loeschen-Knopf.
+    dialog.querySelectorAll(".frueherer-lauf-download").forEach((link) => {
+      link.addEventListener("click", (e) => e.stopPropagation());
+    });
+
     dialog.querySelectorAll(".frueherer-lauf-loeschen").forEach((knopf) => {
       // Eigener Klick-Handler, nicht die Zeile selbst - sonst wuerde ein
       // Klick auf "Löschen" zugleich die Zeile "oeffnen" (siehe oben).
@@ -250,6 +257,18 @@ const Simulation = {
         const rechts = laeuftNoch
           ? `<span class="zahl frueherer-lauf-laeuft">läuft …</span>`
           : `<span class="zahl">${l.kosten_gesamt.toFixed(2)} EUR</span>`;
+        // Stundenwerte gibt es nur fuer einen Lauf mit gespeicherter
+        // Zeitreihe (core.ausgabe.STATUS_MIT_ERGEBNIS) - 'laeuft' und
+        // 'fehler' haben keine.
+        const downloadLinks =
+          l.status === "fertig" || l.status === "abgebrochen"
+            ? `<a class="knopf-mini frueherer-lauf-download"
+                  href="/api/simulation/${l.id}/stundenwerte.csv"
+                  title="Stundenwerte als CSV herunterladen">CSV</a>
+               <a class="knopf-mini frueherer-lauf-download"
+                  href="/api/simulation/${l.id}/stundenwerte.xlsx"
+                  title="Stundenwerte als Excel-Mappe herunterladen">Excel</a>`
+            : "";
         // Ein laufender Lauf laesst sich hier nicht loeschen (siehe
         // core.ergebnisse.simulation_loeschen) - erst abbrechen, dann
         // loeschen, oder gleich die ganze Anlage loeschen.
@@ -260,7 +279,7 @@ const Simulation = {
         return `<li class="frueherer-lauf" data-simulation-id="${l.id}"
               data-status="${htmlSicher(l.status)}" data-kennung="${htmlSicher(l.kennung || "")}">
           <span>${htmlSicher(l.wetter_name)} · Stunde ${l.von_stunde}–${l.bis_stunde}</span>
-          <span class="frueherer-lauf-rechts">${rechts}${loeschKnopf}</span>
+          <span class="frueherer-lauf-rechts">${rechts}${downloadLinks}${loeschKnopf}</span>
         </li>`;
       })
       .join("");
@@ -510,6 +529,8 @@ const Simulation = {
           <a class="knopf-mini" href="/anlage/${Editor.anlage.id}/lauf/${simulationId}/bericht">Bericht ansehen</a>
           <a class="knopf-mini" href="/anlage/${Editor.anlage.id}/lauf/${simulationId}/bericht.pdf">PDF herunterladen</a>
           <button id="btn-protokoll">Stundenprotokoll</button>
+          <a class="knopf-mini" href="/api/simulation/${simulationId}/stundenwerte.csv">Stundenwerte CSV</a>
+          <a class="knopf-mini" href="/api/simulation/${simulationId}/stundenwerte.xlsx">Stundenwerte Excel</a>
           <button class="knopf-haupt" id="btn-schliessen">Schließen</button>
         </div>
       </div>`;
