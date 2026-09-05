@@ -17,6 +17,12 @@ class RaumZuluftKaskade(Baustein):
     # die Iterationen des Vorwaertslaufs auf, genau wie in der Excel.
     ZUSTAND_UEBER_ITERATION = True
 
+    #: Breite des Bandes vor T_ZU_min/T_ZU_max, ueber das der Raumregelschritt
+    #: ausgeblendet wird (siehe _raumanteil). 1 K ist schmal genug, um die
+    #: Regelung im normalen Band unveraendert zu lassen, und breit genug, dass
+    #: die Rechnung an der Grenze nicht mehr zwischen beiden Gesetzen springt.
+    GRENZBAND = 1.0
+
     KENNUNG = "kaskade"
     NAME = "Raum-/Zuluft-Kaskade"
     GRUPPE = "Regelung"
@@ -94,6 +100,46 @@ class RaumZuluftKaskade(Baustein):
         ) / spanne
         return min(gleitend, p["T_Raum_max"])
 
+    def _raumanteil(self, T_Raum, soll, T_ZU, p):
+        """Der Raumregelschritt, ausgeblendet in der Naehe der Zuluftgrenzen.
+
+        Die Excel schaltet an den Grenzen hart um (Anlage!Q140, Vorrang der
+        Zuluftbegrenzung): innerhalb des Bandes regelt der Raum, ausserhalb
+        zwingt die Grenze die Zuluft zurueck. An der Grenze selbst treffen sich
+        beide Gesetze aber nicht - die Grenze liefert dort den Schritt null,
+        der Raum seinen vollen. Steht eine Anlage laengere Zeit genau an ihrer
+        Zuluftbegrenzung - der Normalfall, wenn der Raum kaelter ist, als die
+        begrenzte Zuluft ihn bekommen kann - genuegt ein Rundungsmass Drift,
+        um zwischen beiden Gesetzen hin und her zu springen. Gemessen an der
+        Testanlage: die Rechnung stand acht Durchgaenge stabil auf T_ZU =
+        26,000, dann unterschritt sie die Grenze um 1e-7, der Raumschritt von
+        -1,01 schlug durch, und die Zuluft sprang auf 28,7 Grad. Von da an
+        pendelte es, ohne je einzuschwingen.
+
+        Deshalb wird der Raumschritt ueber ein schmales Band vor der Grenze
+        linear auf null heruntergefahren, statt an ihr abzureissen. Damit
+        gehen beide Gesetze stetig ineinander ueber: an der Grenze liefern
+        beide null. Ausserhalb des Bandes bleibt alles wie in der Excel.
+
+        Das ist kein Kunstgriff der Numerik, sondern das, was ein Regler an
+        einer Begrenzung tun soll: Er faehrt seine Forderung zurueck, wenn die
+        Begrenzung sie ohnehin nicht durchlaesst, statt bis zuletzt dagegen zu
+        druecken.
+        """
+        delta = (T_Raum - soll) / 3.0
+        if delta < 0.0:
+            # Der Raum fordert Waerme; das treibt die Zuluft nach oben, also
+            # gegen T_ZU_max.
+            abstand = p["T_ZU_max"] - T_ZU
+        elif delta > 0.0:
+            # Der Raum fordert Kuehlung, das treibt die Zuluft gegen T_ZU_min.
+            abstand = T_ZU - p["T_ZU_min"]
+        else:
+            return 0.0
+        if abstand >= self.GRENZBAND:
+            return delta
+        return delta * max(0.0, abstand) / self.GRENZBAND
+
     def berechne(self, ein, p, zustand):
         T_AU = float(ein.get("T_AU", 0.0))
         T_Raum = float(ein.get("T_Raum", 0.0))
@@ -107,7 +153,7 @@ class RaumZuluftKaskade(Baustein):
         elif T_ZU < p["T_ZU_min"]:
             delta = (T_ZU - p["T_ZU_min"]) / 3.0
         else:
-            delta = (T_Raum - soll) / 3.0
+            delta = self._raumanteil(T_Raum, soll, T_ZU, p)
 
         e = max(-300.0, min(200.0, e_alt + delta))
 

@@ -265,9 +265,8 @@ def _baue_roh(projekt_id, name=NAME):
     # Nachtluftabsenkung statt Abschalten (siehe Docstring, "Zur Konvergenz",
     # Fund 2): tageslastprofil.lastgang_1 (0,2 nachts / 1,0 tags / 0,3 abends)
     # ist von Wochenzeitplan/Ferien/Monatsprofil UNABHAENGIG und daher nie
-    # null - skaliert auf 5-25 % ergibt eine Luftmenge, die auch ausserhalb
-    # der Betriebszeit nie auf null faellt. Der Anlagenbetrieb (bis 100 %)
-    # gewinnt ueber das Maximalglied, sobald er hoeher liegt.
+    # null. Der Anlagenbetrieb (bis 100 %) gewinnt ueber das Maximalglied,
+    # sobald er hoeher liegt.
     #
     # Der Grund, warum die Luftmenge NIE null werden darf, steht in raum.py
     # und stammt so aus der Excel: raum.berechne() koppelt die Raumfeuchte nur
@@ -275,13 +274,36 @@ def _baue_roh(projekt_id, name=NAME):
     # springt sie auf die Aussenfeuchte (Anlage!AH49 = IF(AH32>0; AH32; 0,001) -
     # die Mappe setzt dort selbst einen Ersatzwert ein, kein Nachbaufehler).
     #
-    # 25 (-> 5-25 % Luftmenge) ist dabei eine bewusst gewaehlte, plausible
-    # GROESSENORDNUNG fuer eine reduzierte Nachtlueftung - kein Wert aus einer
-    # Norm (z. B. DIN EN 16798-1) und nicht gegen einen Mindestwert geprueft.
-    # Fuer die Kopplung selbst waere jeder Wert > 0 gleich gut geeignet:
-    # raum.berechne() prueft nur "Volumenstrom > 0", nicht seine Hoehe.
+    # Der Faktor 100 macht das Lastprofil unmittelbar zum Luftmengenanteil:
+    # 20 % nachts, 30 % abends, 100 % tagsueber (die Karte begrenzt ohnehin auf
+    # 100 %). Er ist NICHT frei waehlbar, auch wenn fuer die Feuchtekopplung
+    # oben jeder Wert groesser null genuegte - die Luftmenge bestimmt, wie
+    # kraeftig das Heizregister auf die Temperatur wirkt:
+    #
+    #     Autoritaet = 3600 * QH_max / (rho * cp * V)
+    #
+    # Bei Nennmenge (5000 m3/h) schafft das 90-kW-Register 0,54 K je Prozent
+    # Ventilstellung; die Kaskade mit ihrem Proportionalbereich von 5 K regelt
+    # das mit einer Kreisverstaerkung von 0,11 muehelos aus. Bei einem
+    # frueheren Faktor von 25 fiel die Nachtluft auf 5 % (250 m3/h), und
+    # dieselbe Karte schaffte 10,7 K je Prozent - Kreisverstaerkung 2,1. Ein
+    # Regelkreis, dessen Stellglied die geregelte Groesse je Schritt um mehr
+    # veraendert als sein Proportionalbereich breit ist, ueberschiesst bei
+    # jedem Durchgang und kippt zwischen seinen Anschlaegen, statt sich
+    # einzupendeln: Der Vorwaertslauf fand in vier von 72 Stunden ueberhaupt
+    # keinen Wert mehr (Restabweichung bis 103), und 5,85 kW erzeugten 72 Grad
+    # Zuluft. Es ist derselbe Fehler wie bei einem Zweipunktregler, dessen
+    # Schaltdifferenz schmaler ist als der Sprung seines Stellglieds.
+    #
+    # Mit 20 % Nachtluft sinkt die Autoritaet auf 2,7 K je Prozent
+    # (Kreisverstaerkung 0,54) und jede Stunde schwingt ein. 20 % von 5000 m3/h
+    # sind 1000 m3/h auf 500 m2 Halle, also 2 m3/(h*m2) - eine uebliche
+    # Groessenordnung fuer reduzierte Lueftung, weiterhin kein aus einer Norm
+    # (z. B. DIN EN 16798-1) entnommener Wert, aber jetzt einer mit einer
+    # nachpruefbaren unteren Schranke. tests/test_testanlage_regelkreise.py
+    # haelt genau diese Schranke fest.
     nachtluft = karte(
-        "faktor", 1360, 320, "Nachtluft-Grundlast", faktor=25.0,
+        "faktor", 1360, 320, "Nachtluft-Grundlast", faktor=100.0,
     )
     ventilatorstellung = karte(
         "maximalwert", 1360, 470, "Ventilatorstellung",

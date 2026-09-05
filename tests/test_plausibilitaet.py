@@ -41,10 +41,35 @@ def test_jede_pruefung_besteht(ergebnis):
     assert not gescheitert, "\n" + plausibilitaet.als_text(ergebnisse)
 
 
+# Was die Plausibilitaetspruefung abdeckt - namentlich statt als blosse Zahl.
+# Frueher stand hier "== 12", weil die Aufgabenbeschreibung zwoelf Pruefungen
+# als Massstab nannte. Als spaeter zwei dazukamen, schlug der Test fehl, ohne
+# zu sagen, WELCHE - eine Zahl allein traegt diese Auskunft nicht. Die Liste
+# sagt es und ist zugleich das Verzeichnis dessen, was geprueft wird.
+ERWARTETE_PRUEFUNGEN = [
+    "Alle 8760 Stunden gerechnet",
+    "Kein Zweipunktregler taktet",
+    "Ab der zweiten Stunde bleibt die Restabweichung klein",
+    "Raumtemperatur zwischen 5 und 40 °C",
+    "Raumfeuchte nie negativ und nie ueber der Saettigung",
+    "Heizwaerme im Winter groesser als im Sommer",
+    "Kaelte im Sommer groesser als im Winter",
+    "Heizleistung wird nie negativ",
+    "Der Kuehler waermt hoechstens in Ausnahmestunden und kaum",
+    "Mischlufttemperatur liegt zwischen Aussen- und Ablufttemperatur",
+    "Zulufttemperatur zwischen -15 und 45 °C",
+    "Summe der Stundenwerte gleich der Jahresbilanz",
+    "Im Betrieb wird mehr Strom gezogen als ausserhalb",
+    "Spezifischer Heizwaermebedarf zwischen 10 und 400 kWh/(m² a)",
+]
+
+
 @pytest.mark.slow
-def test_es_sind_zwoelf_pruefungen(ergebnis):
-    """Die Aufgabenbeschreibung nennt zwoelf Pruefungen als Massstab."""
-    assert len(plausibilitaet.pruefungen(ergebnis)) == 12
+def test_die_pruefungen_sind_vollstaendig(ergebnis):
+    """Keine Pruefung darf still verschwinden - und eine neue soll hier
+    eingetragen werden, damit diese Liste das Verzeichnis bleibt."""
+    namen = [p["name"] for p in plausibilitaet.pruefungen(ergebnis)]
+    assert namen == ERWARTETE_PRUEFUNGEN
 
 
 @pytest.mark.slow
