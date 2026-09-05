@@ -5,7 +5,7 @@ import pytest
 
 from app import create_app
 from core import anlagen, database, ergebnisse, solver
-from core.wetter import speicher, try_import
+from core.wetter import einlesen, speicher, tabelle
 
 REFERENZ = Path(__file__).parent.parent / "referenz" / "RLTSimulation_Vorlage_AX_SIM_2.1.xls"
 
@@ -21,16 +21,16 @@ def app(tmp_path, monkeypatch):
 
 def test_excel_datum_wird_umgerechnet():
     # 36526 ist der 1. Januar 2000 in der Excel-Zaehlung
-    assert try_import.excel_datum(36526.0).date() == datetime(2000, 1, 1).date()
+    assert tabelle.excel_datum(36526.0).date() == datetime(2000, 1, 1).date()
 
 
 def test_excel_datum_mit_uhrzeit():
-    zeitpunkt = try_import.excel_datum(36526.041666666664)
+    zeitpunkt = tabelle.excel_datum(36526.041666666664)
     assert zeitpunkt.hour == 1
 
 
 def test_try_datei_wird_vollstaendig_gelesen():
-    stunden = try_import.lese_datei(REFERENZ)
+    stunden = einlesen.lese_datei(REFERENZ)
     assert len(stunden) == 8760
     assert stunden[0]["t_au"] == pytest.approx(2.5)
     assert stunden[0]["x_au"] == pytest.approx(4.4)
@@ -38,7 +38,7 @@ def test_try_datei_wird_vollstaendig_gelesen():
 
 
 def test_mittags_im_sommer_scheint_die_sonne():
-    stunden = try_import.lese_datei(REFERENZ)
+    stunden = einlesen.lese_datei(REFERENZ)
     sommer = [
         s for s in stunden
         if s["zeitpunkt"].month == 7 and s["zeitpunkt"].hour == 12
@@ -102,7 +102,7 @@ def test_xlsx_mit_datumsformatierten_zellen(tmp_path):
     """Sonst liest das Programm aus einer gespeicherten Mappe null Stunden."""
     pfad = tmp_path / "probe.xlsx"
     _schreibe_probe_xlsx(pfad)
-    stunden = try_import.lese_datei(pfad)
+    stunden = einlesen.lese_datei(pfad)
 
     assert len(stunden) == 3
     assert stunden[0]["zeitpunkt"] == datetime(2000, 1, 1, 1)
@@ -118,7 +118,7 @@ def test_csv_mit_beiden_trennzeichen(tmp_path):
             trenner.join(["36526.083333333336", "3.1", "4.6", "0", "0", "0", "0", "0"]),
         ]
         pfad.write_text("\n".join(zeilen), encoding="utf-8")
-        stunden = try_import.lese_datei(pfad)
+        stunden = einlesen.lese_datei(pfad)
         assert len(stunden) == 2, trenner
         assert stunden[0]["t_au"] == pytest.approx(2.5), trenner
         assert stunden[1]["zeitpunkt"].hour == 2, trenner

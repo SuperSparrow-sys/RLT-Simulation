@@ -1,6 +1,6 @@
 """Wetterdaten ueber die Open-Meteo Archive-API (ERA5-Reanalyse) abrufen.
 
-Bildet die Antwort auf dieselbe kanonische Form ab wie core.wetter.try_import.lese_datei:
+Bildet die Antwort auf dieselbe kanonische Form ab wie core.wetter.einlesen.lese_datei:
 eine Liste von Stunden-Dictionaries mit den Schluesseln 'zeitpunkt', 't_au', 'x_au',
 'str_s', 'str_o', 'str_w', 'str_n', 'str_h'.
 
@@ -163,7 +163,7 @@ def _absolute_feuchte(temperatur, rel_feuchte_prozent):
 
 def abrufen(breite, laenge, jahr, ort=""):
     """Ruft ein volles Kalenderjahr Wetterdaten fuer (breite, laenge) ab und gibt
-    sie in der kanonischen Form zurueck, die auch try_import.lese_datei liefert.
+    sie in der kanonischen Form zurueck, die auch einlesen.lese_datei liefert.
     """
     jahr = _jahr_pruefen(jahr)
     breite, laenge = _ort_pruefen(breite, laenge)

@@ -115,12 +115,12 @@ const Simulation = {
       <div class="dialog">
         <h2>Simulation starten</h2>
         <label class="panel-zeile">
+          <span class="panel-label">Standort</span>
+          <select id="wahl-wetter-ort"></select>
+        </label>
+        <label class="panel-zeile">
           <span class="panel-label">Wetterdatensatz</span>
-          <select id="wahl-wetter">
-            ${wetter
-              .map((w) => `<option value="${w.id}">${htmlSicher(w.name)} (${w.stunden} h)</option>`)
-              .join("")}
-          </select>
+          <select id="wahl-wetter"></select>
         </label>
         <label class="panel-zeile">
           <span class="panel-label">Zeitraum</span>
@@ -149,6 +149,13 @@ const Simulation = {
         </div>
       </div>`;
     document.body.appendChild(dialog);
+
+    // Erst Standort, dann Datensatz - ein TRY-Ordner bringt sechs Jahre mit,
+    // die als flache Liste nicht mehr zu ueberblicken waeren
+    // (static/js/wetterauswahl.js).
+    const gewaehlteWetter = wetterAuswahlFelder(
+      dialog, "wahl-wetter-ort", "wahl-wetter", wetter, { mitAlleStandorte: true }
+    );
 
     const eigenBereich = dialog.querySelector("#wahl-eigen");
     dialog.querySelector("#wahl-bereich").addEventListener("change", (e) => {
@@ -234,7 +241,11 @@ const Simulation = {
 
     dialog.querySelector("#btn-abbrechen").onclick = () => dialog.remove();
     dialog.querySelector("#btn-los").onclick = () => {
-      const wetterId = Number(dialog.querySelector("#wahl-wetter").value);
+      const wetterId = gewaehlteWetter()[0];
+      if (!wetterId) {
+        zeigeFehler("Für diesen Standort gibt es keinen Wetterdatensatz.");
+        return;
+      }
       const bereichName = dialog.querySelector("#wahl-bereich").value;
       let von;
       let bis;
@@ -745,12 +756,12 @@ const Vergleich = {
           ausgewählten Wetterdatensatz gerechnet – ein Jahreslauf dauert rund
           acht Minuten je Datensatz.</p>
         <label class="panel-zeile">
+          <span class="panel-label">Standort</span>
+          <select id="wahl-wetter-ort-reihe"></select>
+        </label>
+        <label class="panel-zeile">
           <span class="panel-label">Wetterdatensätze – Strg/Cmd-Klick für mehrere</span>
-          <select id="wahl-wetter-reihe" multiple size="6">
-            ${wetter
-              .map((w) => `<option value="${w.id}">${htmlSicher(w.name)} (${w.stunden} h)</option>`)
-              .join("")}
-          </select>
+          <select id="wahl-wetter-reihe" multiple size="6"></select>
         </label>
         <label class="panel-zeile">
           <span class="panel-label">Zeitraum (für jedes Jahr gleich)</span>
@@ -778,6 +789,11 @@ const Vergleich = {
       </div>`;
     document.body.appendChild(dialog);
 
+    const gewaehlteWetterReihe = wetterAuswahlFelder(
+      dialog, "wahl-wetter-ort-reihe", "wahl-wetter-reihe", wetter,
+      { mehrfach: true, mitAlleStandorte: true }
+    );
+
     const eigenBereich = dialog.querySelector("#wahl-eigen-reihe");
     dialog.querySelector("#wahl-bereich-reihe").addEventListener("change", (e) => {
       eigenBereich.hidden = e.target.value !== "eigen";
@@ -785,9 +801,7 @@ const Vergleich = {
 
     dialog.querySelector("#btn-vergleich-abbrechen").onclick = () => dialog.remove();
     dialog.querySelector("#btn-vergleich-los").onclick = () => {
-      const auswahl = Array.from(
-        dialog.querySelector("#wahl-wetter-reihe").selectedOptions
-      ).map((o) => Number(o.value));
+      const auswahl = gewaehlteWetterReihe();
       if (auswahl.length < 1) {
         zeigeFehler("Bitte mindestens einen Wetterdatensatz auswählen.");
         return;

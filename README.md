@@ -76,7 +76,10 @@ Für den vollständigen Lauf inklusive dieser Tests:
 - `core/anlagen.py` - Projekte, Anlagen, Karten, Pfeile: lesen, schreiben, prüfen.
 - `core/solver.py` - rechnet eine Anlage stundenweise über ein Wetterjahr.
 - `core/vorlagen/` - fertige Beispielanlagen (u.a. der Nachbau der Excel-Mappe).
-- `core/wetter/` - Wetterdatensätze: Speicherung, Upload-Import, Open-Meteo-Abruf.
+- `core/wetter/` - Wetterdatensätze: Speicherung (`speicher.py`), Einlesen
+  hochgeladener Dateien (`einlesen.py` verteilt auf `try_dat.py` für DWD-
+  Testreferenzjahre und `tabelle.py` für Excel/CSV), Fassadenstrahlung aus dem
+  Sonnenstand (`sonnenstand.py`) und der Open-Meteo-Abruf (`openmeteo.py`).
 - `routes/` - die HTTP-Schnittstelle (Flask-Blueprints) über `core/`.
 - `static/`, `templates/` - die Oberfläche: reines JavaScript/CSS, kein Rahmenwerk.
 - `werkzeuge/` - Abgleich- und Prüfskripte gegen die Excel-Referenz, kein Teil der
@@ -95,13 +98,48 @@ der ohne Vorkenntnisse eine Anlage zusammenstellen will.
 Ein Simulationslauf braucht immer einen Wetterdatensatz, wählbar beim Start eines
 Laufs. Auf der Startseite gibt es zwei Wege, einen zu bekommen:
 
-- **Datei hochladen** - eine TRY-Datei (Testreferenzjahr) als `.xls`, `.xlsx` oder
-  `.csv`, z.B. vom DWD oder einem anderen Anbieter besorgt.
+- **Dateien hochladen** - am einfachsten der ganze Ordner, wie ihn der DWD
+  ausliefert. Der Browser sucht darin - auch in Unterordnern - die
+  Testreferenzjahre (`.dat`) und zeigt sie als Ankreuzliste; ein beigelegtes
+  Handbuch oder sonstiges Beiwerk bleibt liegen und wird gar nicht erst
+  übertragen. Ebenso gelesen werden `.xls`, `.xlsx` und `.csv` im Format des
+  Blattes „Wetterdaten". Jede angekreuzte Datei wird ein eigener Datensatz, alle
+  mit demselben Standort.
 - **Online abrufen** - ein volles Kalenderjahr für einen Ort (Auswahl oder eigene
   Koordinaten) direkt über die Open-Meteo-Archive-API, kostenlos und ohne
   Anmeldung.
 
-Beide Wege landen in derselben Liste auf der Startseite.
+Beide Wege landen in derselben Liste auf der Startseite. Weil ein einziger
+TRY-Ordner sechs Datensätze mitbringt - zwei Schlüsseljahre (2015 und 2045) mal
+mittleres Jahr, extremer Sommer und extremer Winter -, sind sie überall nach
+Standort gebündelt: in der Liste als Zwischenzeilen, im Simulationsdialog als
+zwei Auswahlfelder (erst Standort, dann Datensatz).
+
+### Was beim TRY-Import gerechnet wird
+
+Ein DWD-Testreferenzjahr enthält Temperatur und Wasserdampfgehalt in genau den
+Einheiten, die der Rechenkern führt - die werden unverändert übernommen. Die
+Sonnenstrahlung liefert es aber nur bezogen auf die **Waagerechte**, als
+direkten Anteil `B` und diffusen Anteil `D`. Der Baustein Wetterkarte gibt
+dagegen die Strahlung auf senkrechte Flächen aus (`QH_S`, `QH_O`, `QH_W`,
+`QH_N`), also auf Fassaden. Diese vier Werte rechnet `core/wetter/sonnenstand.py`
+dazu:
+
+1. Der TRY-Kopf nennt den Ort in Lambert konform konisch (EPSG:3034); die
+   Umkehrprojektion liefert Breite und Länge.
+2. Daraus je Stunde Sonnenhöhe und -azimut, gerechnet auf die Stundenmitte, in
+   MEZ ohne Sommerzeit - so gibt das TRY seine Zeiten an.
+3. Jede Fassade bekommt drei Beiträge: den direkten Anteil, sofern die Sonne
+   davor steht, den diffusen vom halben sichtbaren Himmel, und den vom Boden
+   davor zurückgeworfenen (Albedo 0,2 für mitteleuropäisches Umland).
+
+Der Bodenanteil ist bewusst dabei: Open-Meteo liefert ihn in seinen
+Fassadenwerten mit. Ohne ihn wären hochgeladene Datensätze systematisch dunkler
+als abgerufene, und ein Vergleich zweier Wetterjahre zeigte den Unterschied des
+Imports statt den des Wetters.
+
+Nicht übernommen werden Wind, Luftdruck, Bedeckungsgrad und die langwelligen
+Strahlungsgrößen `A` und `E` - der Rechenkern kennt sie nicht.
 
 ## Ergebnisse eines Laufs
 

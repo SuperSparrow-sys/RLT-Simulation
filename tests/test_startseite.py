@@ -57,7 +57,10 @@ def test_startseite_stellt_online_abrufen_vor_die_datei_hochladen(app):
     Reihenfolge vor."""
     klient = app.test_client()
     html = klient.get("/").get_data(as_text=True)
-    assert html.index("Online abrufen") < html.index("Eigene Datei hochladen")
+    # Auf die id statt auf die Beschriftung: der Wortlaut hat sich mit dem
+    # Ordner-Upload schon einmal geaendert ("Datei" -> "Dateien"), die
+    # Reihenfolge der beiden Wege ist aber genau das, was hier zaehlt.
+    assert html.index("Online abrufen") < html.index('id="wetter-upload-details"')
 
 
 def test_startseite_datei_hochladen_ist_eingeklappt(app):

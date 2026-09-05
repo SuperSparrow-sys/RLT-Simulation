@@ -3,6 +3,11 @@
 Aufbau dort: Zeile 1 bis 4 Kopf, ab Zeile 5 je Stunde
 Datum als Excel-Zahl, Temperatur in °C, absolute Feuchte in g/kg und
 die Strahlung auf Sued, Ost, West, Nord und die Horizontale in W/m².
+
+Zustaendig fuer .xls, .xlsx und .csv. Ein DWD-Testreferenzjahr im .dat-Format
+liest dieses Modul nicht - das tut core/wetter/try_dat.py. Bis diese Trennung
+entstand, hiess die Datei hier "try_import.py" und las trotzdem nur Excel; der
+Name legte eine Faehigkeit nahe, die das Programm gar nicht hatte.
 """
 
 import csv

@@ -122,8 +122,83 @@
   white-space: nowrap;
 }
 
+/* Ankreuzliste der im Ordner gefundenen Wetterdateien. Sie kann sechs und
+   mehr Zeilen lang werden (ein TRY-Ordner enthaelt zwei Schluesseljahre mal
+   drei Arten), darum eine eigene Hoehenbegrenzung mit Rollbalken - sonst
+   schoebe sie den Hochladen-Knopf aus dem Sichtfeld. */
+.wetter-auswahl {
+  flex-basis: 100%;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.wetter-auswahl-liste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wetter-auswahl-liste label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.wetter-auswahl-titel { font-weight: 500; }
+
+/* Der Pfad steht daneben, nicht statt des Namens: sechs Testreferenzjahre
+   heissen "2015 - mittleres Jahr" und aehnlich, erst der Pfad sagt, aus
+   welcher Datei das kommt. Er darf dabei nie die Zeile sprengen. */
+.wetter-auswahl-pfad {
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* Der Archivhinweis ist kein Beiwerk, sondern der Grund, warum die Liste leer
+   bleibt - er muss sich von der blossen Zaehlung uebersprungener Dateien
+   abheben. */
+.wetter-auswahl-warnung {
+  margin: 0 0 8px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.wetter-auswahl-hinweis {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+/* Zwischenzeile je Standort in der Wetterliste der Startseite. */
+.wetter-standort-zeile th {
+  text-align: left;
+  padding-top: 12px;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+.wetter-tabelle tbody tr:first-child.wetter-standort-zeile th { padding-top: 0; }
+
 @media (max-width: 700px) {
   .wetter-wege {
     flex-direction: column;
   }
+
+  /* Auf schmalen Geräten frisst der Pfad die ganze Zeile - dort nur der Name. */
+  .wetter-auswahl-pfad { display: none; }
 }

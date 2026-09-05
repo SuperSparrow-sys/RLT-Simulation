@@ -98,18 +98,36 @@
           </div>
 
           <details class="wetter-weg wetter-weg-nebenweg" id="wetter-upload-details">
-            <summary class="wetter-weg-titel">Eigene Datei hochladen (TRY) …{% include "bedienzeichen/aufklapp.svg" %}</summary>
+            <summary class="wetter-weg-titel">Eigene Dateien hochladen (TRY) …{% include "bedienzeichen/aufklapp.svg" %}</summary>
             <p class="wetter-weg-hinweis">
-              Für eine TRY-Wetterdatei, die schon vorliegt – etwa vom DWD oder
-              einem anderen Anbieter besorgt. Gelesen werden .xls, .xlsx oder .csv.
+              Für Wetterdaten, die schon vorliegen – etwa ein Testreferenzjahr
+              vom DWD. Wähle den Ordner so aus, wie du ihn bekommen hast: gesucht
+              werden die .dat-Dateien darin, auch in Unterordnern. Ein beigelegtes
+              Handbuch und alles andere bleibt liegen und wird nicht hochgeladen.
+              Genauso gelesen werden .xls, .xlsx und .csv im Format des Blattes
+              „Wetterdaten“.
             </p>
             <form id="form-wetter-upload" class="wetter-formular">
               <span class="datei-eingabe">
-                <input type="file" id="feld-wetter-datei" class="datei-eingabe-eingabe" accept=".xls,.xlsx,.csv">
-                <label for="feld-wetter-datei" class="datei-eingabe-knopf">Datei auswählen</label>
+                <input type="file" id="feld-wetter-ordner" class="datei-eingabe-eingabe"
+                       webkitdirectory directory multiple>
+                <label for="feld-wetter-ordner" class="datei-eingabe-knopf">Ordner auswählen</label>
+                <span class="datei-eingabe-name" id="feld-wetter-ordnername">Kein Ordner ausgewählt</span>
+              </span>
+              <span class="datei-eingabe">
+                <input type="file" id="feld-wetter-datei" class="datei-eingabe-eingabe"
+                       accept=".dat,.xls,.xlsx,.xlsm,.csv" multiple>
+                <label for="feld-wetter-datei" class="datei-eingabe-knopf">Einzelne Dateien …</label>
                 <span class="datei-eingabe-name" id="feld-wetter-dateiname">Keine Datei ausgewählt</span>
               </span>
-              <input type="text" id="feld-wetter-name" placeholder="Bezeichnung (optional)">
+              <label class="panel-zeile">
+                <span class="panel-label">Standort</span>
+                <input type="text" id="feld-wetter-ort"
+                       placeholder="z. B. Dresden_Industriegelände">
+              </label>
+              <div id="wetter-auswahl-liste" class="wetter-auswahl" hidden></div>
+              <input type="text" id="feld-wetter-name"
+                     placeholder="Bezeichnung (nur bei einer einzelnen Datei)">
               <button type="submit" class="knopf-haupt" id="btn-wetter-hochladen">Hochladen</button>
             </form>
           </details>
@@ -132,6 +150,7 @@
   </div>
 
   <script src="{{ url_for('static', filename='js/zahlen.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/wetterauswahl.js') }}"></script>
   <script src="{{ url_for('static', filename='js/start.js') }}"></script>
 </body>
 </html>

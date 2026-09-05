@@ -145,11 +145,97 @@ function hakenSymbol() {
   return svg;
 }
 
+// Endungen, die der Server lesen kann (core/wetter/einlesen.py: ENDUNGEN).
+// Wonach hier nicht gefiltert wird, geht auch nicht ueber die Leitung - der
+// Ordner eines Testreferenzjahrs enthaelt neben den Daten ein Handbuch von
+// rund zwei Megabyte, das auf dem Rechner des Nutzers bleiben soll.
+const WETTER_ENDUNGEN = [".dat", ".xls", ".xlsx", ".xlsm", ".csv"];
+
+// Art des TRY aus dem Kuerzel im Dateinamen (Handbuch Kap. 2, AAAA) - dieselbe
+// Zuordnung wie in core/wetter/try_dat.py: ARTEN. Hier nur fuer die
+// Beschriftung der Ankreuzliste; verbindlich benannt wird auf dem Server.
+const TRY_ARTEN = {
+  jahr: "mittleres Jahr",
+  somm: "extremer Sommer",
+  wint: "extremer Winter",
+};
+const TRY_NAMENSMUSTER = /^TR[YJ](\d{4})_[^_]*_(Jahr|Somm|Wint)/i;
+
+
+// Archive werden bewusst nicht ausgepackt (core/wetter/einlesen.py:
+// ARCHIVENDUNGEN). Sie werden hier trotzdem erkannt, damit ein Nutzer, der ein
+// heruntergeladenes Zip waehlt, erfaehrt, was er tun soll - statt vor einer
+// leeren Liste zu stehen.
+const WETTER_ARCHIVENDUNGEN = [".zip", ".7z", ".rar", ".tar", ".gz", ".tgz", ".bz2"];
+
+const ARCHIV_HINWEIS =
+  "Archive werden nicht ausgepackt. Bitte das Archiv entpacken und den " +
+  "entpackten Ordner auswählen – die Dateien darin werden dann gefunden, " +
+  "auch in Unterordnern.";
+
+function wetterIstArchiv(dateiname) {
+  const klein = dateiname.toLowerCase();
+  return WETTER_ARCHIVENDUNGEN.some((endung) => klein.endsWith(endung));
+}
+
+function wetterEndungErlaubt(dateiname) {
+  const klein = dateiname.toLowerCase();
+  return WETTER_ENDUNGEN.some((endung) => klein.endsWith(endung));
+}
+
+// "TRY2015_510881137633_Somm.dat" -> "2015 - extremer Sommer". Alles, was nicht
+// auf die Konvention passt, behaelt seinen Dateinamen: raten waere schlechter
+// als zeigen, was dasteht.
+function wetterBeschriftung(dateiname) {
+  const treffer = TRY_NAMENSMUSTER.exec(dateiname);
+  if (!treffer) return dateiname;
+  const art = TRY_ARTEN[treffer[2].toLowerCase()];
+  return art ? `${treffer[1]} – ${art}` : dateiname;
+}
+
+// Schluesseljahr aus dem Dateinamen, oder null.
+function wetterSchluesseljahr(dateiname) {
+  const treffer = TRY_NAMENSMUSTER.exec(dateiname);
+  return treffer ? Number(treffer[1]) : null;
+}
+
+// Ein Zukunfts-TRJ beruht auf Klimamodellen fuer einen Zeitraum, der noch
+// bevorsteht (derzeit 2031-2060, Schluesseljahr 2045). Es wird seltener
+// gebraucht als das Gegenwarts-TRJ und darum nicht vorgehakt - man soll es
+// bewusst dazunehmen.
+//
+// Verglichen wird mit dem laufenden Jahr statt mit der festen Zahl 2045:
+// liefert der DWD spaeter einen weiteren Zukunftsdatensatz unter einem anderen
+// Schluesseljahr, greift die Regel weiterhin.
+function wetterIstZukunftsjahr(dateiname) {
+  const jahr = wetterSchluesseljahr(dateiname);
+  return jahr !== null && jahr > new Date().getFullYear();
+}
+
+// Der oberste Ordnername der Auswahl - beim Ordner-Upload der Standort.
+// webkitRelativePath sieht bei einer Ordnerwahl so aus:
+// "Dresden_Industriegelaende/TRY_510881137633/TRY2015_..._Jahr.dat".
+function wetterStandortRaten(dateien) {
+  for (const datei of dateien) {
+    const pfad = datei.webkitRelativePath || "";
+    const teile = pfad.split("/").filter(Boolean);
+    if (teile.length > 1) return teile[0];
+  }
+  return "";
+}
+
+// wetterNachStandort() und OHNE_STANDORT stehen in static/js/wetterauswahl.js -
+// die Editorseite braucht dieselbe Buendelung fuer ihre Simulationsdialoge.
+
 const Start = {
   projekte: [],
   anlagen: [],
   wetter: [],
   vorlagen: {},
+  // Die im Ordner gefundenen und im Formular angekreuzten Dateien.
+  wetterAuswahl: [],
+  // Mitgewaehlte Archive - nur, um sie erklaeren zu koennen.
+  wetterArchive: [],
 
   async laden() {
     let antworten;
@@ -809,15 +895,23 @@ const Start = {
       return;
     }
 
-    const zeilen = this.wetter
+    // Nach Standort gebuendelt statt als flache Liste: ein einziger
+    // TRY-Ordner bringt sechs Jahre mit, die sonst als sechs zusammenhanglose
+    // Zeilen dastuenden.
+    const gruppen = wetterNachStandort(this.wetter);
+    const zeilen = Array.from(gruppen.entries())
       .map(
+        ([ort, eintraege]) => `
+        <tr class="wetter-standort-zeile">
+          <th colspan="5" scope="rowgroup">${htmlSicher(ort)}</th>
+        </tr>` + eintraege
+        .map(
         (w) => `
         <tr data-id="${w.id}">
           <td>${htmlSicher(w.name)}</td>
           <td><span class="wetter-quelle-etikett">${htmlSicher(
             WETTER_QUELLE_TEXT[w.quelle] || w.quelle
           )}</span></td>
-          <td>${htmlSicher(w.ort)}</td>
           <td>${w.jahr ?? ""}</td>
           <td class="zahl">${w.stunden}</td>
           <td class="wetter-tabelle-aktionen">
@@ -833,6 +927,8 @@ const Start = {
                     }">Löschen</button>
           </td>
         </tr>`
+        )
+        .join("")
       )
       .join("");
 
@@ -840,13 +936,13 @@ const Start = {
     tabelle.className = "bilanz wetter-tabelle";
     tabelle.innerHTML = `
       <thead>
-        <tr><th>Name</th><th>Quelle</th><th>Ort</th><th>Jahr</th>
+        <tr><th>Name</th><th>Quelle</th><th>Jahr</th>
             <th class="zahl">Stunden</th><th></th></tr>
       </thead>
       <tbody>${zeilen}</tbody>`;
     bereich.appendChild(tabelle);
 
-    tabelle.querySelectorAll("tbody tr").forEach((zeile) => {
+    tabelle.querySelectorAll("tbody tr[data-id]").forEach((zeile) => {
       const datensatz = this.wetter.find((w) => w.id === Number(zeile.dataset.id));
       zeile.querySelector(".wetter-umbenennen").addEventListener("click", () =>
         this.wetterUmbenennenDialog(datensatz)
@@ -914,48 +1010,158 @@ const Start = {
     );
   },
 
-  // Zeigt den gewaehlten Dateinamen neben dem eigenen Dateiknopf an (siehe
-  // templates/index.html, .datei-eingabe) - der native Dateiname landet per
-  // textContent auf der Seite, kein innerHTML noetig.
+  // Sammelt die Auswahl aus beiden Dateifeldern (Ordner und Einzeldateien),
+  // wirft alles Unlesbare weg und baut daraus die Ankreuzliste.
+  //
+  // Gefiltert wird hier und nicht erst auf dem Server, damit das Handbuch-PDF
+  // aus einem TRY-Ordner den Rechner gar nicht erst verlaesst.
   wetterDateiAktualisieren() {
+    const ordnerFeld = document.getElementById("feld-wetter-ordner");
     const dateiFeld = document.getElementById("feld-wetter-datei");
-    const anzeige = document.getElementById("feld-wetter-dateiname");
-    if (!dateiFeld || !anzeige) return;
-    const datei = dateiFeld.files[0];
-    anzeige.textContent = datei ? datei.name : "Keine Datei ausgewählt";
+    const ortFeld = document.getElementById("feld-wetter-ort");
+
+    const ordnerDateien = Array.from(ordnerFeld?.files || []);
+    const einzelDateien = Array.from(dateiFeld?.files || []);
+    const alle = [...ordnerDateien, ...einzelDateien];
+    const lesbare = alle.filter((d) => wetterEndungErlaubt(d.name));
+    this.wetterArchive = alle.filter((d) => wetterIstArchiv(d.name));
+
+    this.wetterAuswahl = lesbare.map((datei) => ({
+      datei,
+      pfad: datei.webkitRelativePath || datei.name,
+      beschriftung: wetterBeschriftung(datei.name),
+      angehakt: !wetterIstZukunftsjahr(datei.name),
+    }));
+
+    const ordnerName = wetterStandortRaten(ordnerDateien);
+    if (ordnerName && ortFeld && !ortFeld.value.trim()) ortFeld.value = ordnerName;
+
+    const ordnerAnzeige = document.getElementById("feld-wetter-ordnername");
+    if (ordnerAnzeige) {
+      ordnerAnzeige.textContent = ordnerName
+        ? `${ordnerName} (${ordnerDateien.length} Dateien)`
+        : "Kein Ordner ausgewählt";
+    }
+    const dateiAnzeige = document.getElementById("feld-wetter-dateiname");
+    if (dateiAnzeige) {
+      dateiAnzeige.textContent =
+        einzelDateien.length === 0
+          ? "Keine Datei ausgewählt"
+          : einzelDateien.map((d) => d.name).join(", ");
+    }
+
+    this.zeichneWetterAuswahl(alle.length - lesbare.length);
+  },
+
+  // Die Ankreuzliste unter den Dateifeldern. Sie zeigt auch, wie viele Dateien
+  // aussortiert wurden - sonst wirkt ein Ordner mit Handbuch, als haette das
+  // Programm etwas verschluckt.
+  zeichneWetterAuswahl(uebersprungen) {
+    const bereich = document.getElementById("wetter-auswahl-liste");
+    if (!bereich) return;
+    bereich.textContent = "";
+
+    // Ein Archiv erklaeren wir auch dann, wenn sonst nichts gefunden wurde -
+    // sonst bliebe der Kasten leer und der Nutzer ratlos.
+    if (!this.wetterAuswahl.length && !this.wetterArchive.length) {
+      bereich.hidden = true;
+      return;
+    }
+    bereich.hidden = false;
+
+    if (this.wetterArchive.length) {
+      const archivHinweis = document.createElement("p");
+      archivHinweis.className = "wetter-auswahl-hinweis wetter-auswahl-warnung";
+      archivHinweis.textContent = ARCHIV_HINWEIS;
+      bereich.appendChild(archivHinweis);
+    }
+
+    const liste = document.createElement("ul");
+    liste.className = "wetter-auswahl-liste";
+    this.wetterAuswahl.forEach((eintrag, nummer) => {
+      const zeile = document.createElement("li");
+      const marke = document.createElement("label");
+
+      const haken = document.createElement("input");
+      haken.type = "checkbox";
+      haken.checked = eintrag.angehakt;
+      haken.addEventListener("change", () => {
+        this.wetterAuswahl[nummer].angehakt = haken.checked;
+      });
+
+      const titel = document.createElement("span");
+      titel.className = "wetter-auswahl-titel";
+      titel.textContent = eintrag.beschriftung;
+
+      const pfad = document.createElement("span");
+      pfad.className = "wetter-auswahl-pfad";
+      pfad.textContent = eintrag.pfad;
+
+      marke.append(haken, titel, pfad);
+      zeile.appendChild(marke);
+      liste.appendChild(zeile);
+    });
+    bereich.appendChild(liste);
+
+    if (uebersprungen > 0) {
+      const hinweis = document.createElement("p");
+      hinweis.className = "wetter-auswahl-hinweis";
+      hinweis.textContent =
+        uebersprungen === 1
+          ? "Eine weitere Datei im Ordner ist keine Wetterdatei und bleibt liegen."
+          : `${uebersprungen} weitere Dateien im Ordner sind keine Wetterdaten und bleiben liegen.`;
+      bereich.appendChild(hinweis);
+    }
   },
 
   async wetterHochladen(ereignis) {
     ereignis.preventDefault();
+    const ordnerFeld = document.getElementById("feld-wetter-ordner");
     const dateiFeld = document.getElementById("feld-wetter-datei");
+    const ortFeld = document.getElementById("feld-wetter-ort");
     const nameFeld = document.getElementById("feld-wetter-name");
     const knopf = document.getElementById("btn-wetter-hochladen");
 
-    const datei = dateiFeld.files[0];
-    if (!datei) {
-      zeigeFehler("Bitte eine Datei auswählen.");
+    const gewaehlt = this.wetterAuswahl.filter((e) => e.angehakt);
+    if (!gewaehlt.length) {
+      let meldung = "Bitte einen Ordner oder eine Datei auswählen.";
+      if (this.wetterAuswahl.length) meldung = "Bitte mindestens eine Datei ankreuzen.";
+      else if (this.wetterArchive.length) meldung = ARCHIV_HINWEIS;
+      zeigeFehler(meldung);
       return;
     }
 
     const formular = new FormData();
-    formular.append("datei", datei);
-    if (nameFeld.value.trim()) formular.append("name", nameFeld.value.trim());
+    gewaehlt.forEach((eintrag) => formular.append("datei", eintrag.datei));
+    if (ortFeld?.value.trim()) formular.append("ort", ortFeld.value.trim());
+    // Eine eigene Bezeichnung kann nur fuer eine einzelne Datei gelten - bei
+    // mehreren hiessen sonst alle Datensaetze gleich (routes/wetter.py).
+    if (gewaehlt.length === 1 && nameFeld.value.trim()) {
+      formular.append("name", nameFeld.value.trim());
+    }
 
     const urspruenglicherText = knopf.textContent;
     knopf.disabled = true;
-    knopf.textContent = "Wird hochgeladen …";
+    knopf.textContent =
+      gewaehlt.length === 1
+        ? "Wird hochgeladen …"
+        : `Wird hochgeladen (${gewaehlt.length}) …`;
+
+    const zuruecksetzen = () => {
+      knopf.disabled = false;
+      knopf.textContent = urspruenglicherText;
+    };
 
     let antwort;
     try {
       antwort = await fetch("/api/wetter/upload", { method: "POST", body: formular });
     } catch {
-      zeigeFehler("Wetterdatei konnte nicht hochgeladen werden.");
-      knopf.disabled = false;
-      knopf.textContent = urspruenglicherText;
+      zeigeFehler("Die Wetterdaten konnten nicht hochgeladen werden.");
+      zuruecksetzen();
       return;
     }
     if (!antwort.ok) {
-      let text = "Wetterdatei konnte nicht hochgeladen werden.";
+      let text = "Die Wetterdaten konnten nicht hochgeladen werden.";
       try {
         const daten = await antwort.json();
         if (daten.fehler) text = daten.fehler;
@@ -963,19 +1169,37 @@ const Start = {
         /* Antwort war kein JSON - bei der Vorgabemeldung bleiben. */
       }
       zeigeFehler(text);
-      knopf.disabled = false;
-      knopf.textContent = urspruenglicherText;
+      zuruecksetzen();
       return;
     }
 
-    dateiFeld.value = "";
+    // Ein Teilerfolg ist der Regelfall wert, gemeldet zu werden: wer sechs
+    // Jahre hochlaedt und fuenf bekommt, soll nicht raten muessen, welches
+    // fehlt.
+    try {
+      const daten = await antwort.json();
+      if (daten.dateifehler?.length) {
+        zeigeFehler(
+          `Nicht gelesen: ${daten.dateifehler
+            .map((f) => `${f.datei} (${f.fehler})`)
+            .join("; ")}`
+        );
+      }
+    } catch {
+      /* Antwort war kein JSON - der Upload hat trotzdem geklappt. */
+    }
+
+    this.wetterArchive = [];
+    if (ordnerFeld) ordnerFeld.value = "";
+    if (dateiFeld) dateiFeld.value = "";
+    if (ortFeld) ortFeld.value = "";
     nameFeld.value = "";
+    this.wetterAuswahl = [];
     this.wetterDateiAktualisieren();
-    knopf.disabled = false;
-    knopf.textContent = urspruenglicherText;
+    zuruecksetzen();
 
     await this._wetterListeAktualisieren(
-      "Die Datei wurde hochgeladen, die Liste konnte aber nicht aktualisiert werden."
+      "Die Daten wurden hochgeladen, die Liste konnte aber nicht aktualisiert werden."
     );
   },
 
@@ -1125,9 +1349,11 @@ window.addEventListener("DOMContentLoaded", () => {
   document
     .getElementById("form-wetter-upload")
     .addEventListener("submit", (e) => Start.wetterHochladen(e));
-  document
-    .getElementById("feld-wetter-datei")
-    .addEventListener("change", () => Start.wetterDateiAktualisieren());
+  ["feld-wetter-ordner", "feld-wetter-datei"].forEach((kennung) => {
+    document
+      .getElementById(kennung)
+      .addEventListener("change", () => Start.wetterDateiAktualisieren());
+  });
 
   Start.wetterAbrufJahreFuellen();
   document
