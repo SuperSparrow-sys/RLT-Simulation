@@ -48,14 +48,17 @@ AUSLEGUNG
                    Jahresarbeit ab: 1101 statt 2190 kWh/(m2 a) (nachgemessen).
                    Eine Stunde des Jahres schwingt dabei nicht ein - der
                    10. Juni um 17 Uhr, mit 18,1 GradC Aussenluft genau auf dem
-                   Sollwert der Klappe. Klappe und Kuehler wechseln sich dort
-                   ab, und die Rechnung bleibt mit 26 kW Restabweichung an
-                   ihrer Iterationsgrenze stehen. Ausgewiesen ist das Mittel
-                   der beiden letzten Durchgaenge; auf die Jahresarbeit von
-                   440 MWh wirkt das mit 26 kWh, also sechs Hunderttausendstel.
-                   Ein ruhigerer Klappenregler (xp von 4 auf 8 und 12) aendert
-                   daran nichts - es ist der Uebergang selbst, nicht seine
-                   Geschwindigkeit.
+                   Sollwert der Klappe. Die Klappe steht dort an ihrem
+                   Anschlag: Sie faehrt auf null Umluft, und weil die
+                   Aussenluft ein Zehntelgrad zu warm ist, fordert der Regler
+                   weiter nach unten. Der Umluftbedarf im Rueckwaertslauf
+                   springt dadurch zwischen 0 und rund 26 000 m3/h hin und her
+                   (nachgemessen: die groesste Restabweichung sitzt in
+                   V_umluft_ein, nicht in einer Leistung). Ausgewiesen ist das
+                   Mittel der beiden letzten Durchgaenge. Ein ruhigerer
+                   Klappenregler (xp von 4 auf 8 und 12) aendert daran nichts -
+                   es ist der Anschlag selbst, nicht die Geschwindigkeit, mit
+                   der er angefahren wird.
     Kuehllast      100 kW innere Last + Transmission im Sommer
                    -> Kuehler 120 kW
                    Gegenprobe an der Jahresarbeit: Alles, was die Server an
@@ -67,7 +70,10 @@ AUSLEGUNG
                    -> SFP 0,64 W/(m3/h) fuer beide zusammen
 """
 
-from core.vorlagen.bauhilfe import Bauplatz
+from core.vorlagen.bauhilfe import (
+    Bauplatz, auswertung_verdrahten, betrieb_verdrahten,
+    lasten_verdrahten,
+)
 from core.vorlagen.anlagen._geraet import WOCHENTAGE, betriebszeiten
 
 NAME = "Rechenzentrum"
@@ -198,35 +204,20 @@ def baue(projekt_id, name=NAME):
         b.verbinde(mischkammer, "T_MI", freikuehlung, "istwert_2")
         b.verbinde(freikuehlung, "ausgang_2", mischkammer, "umluftanteil")
 
-        b.pfeil(zeitplan, betrieb)
-        b.pfeil(tagesprofil, betrieb)
-        b.verbinde(tagesprofil, "lastgang_1", grundlast, "ein")
-        b.verbinde(betrieb, "stellgrad", ventilatorstellung, "ein_1")
-        b.verbinde(grundlast, "ausgang", ventilatorstellung, "ein_2")
-        b.verbinde(ventilatorstellung, "ausgang", zuluft, "stellgroesse")
-        b.verbinde(ventilatorstellung, "ausgang", abluft, "stellgroesse")
+        betrieb_verdrahten(b, (zeitplan, tagesprofil), betrieb, tagesprofil,
+                           grundlast, ventilatorstellung, (zuluft, abluft))
         b.pfeil(betrieb, server)
         lasten = b.karte("innere_lasten", 1360, 380, "Innere Lasten",
                          personen=0.0, grundflaeche=FLAECHE_M2)
-        # Der Raum hat je EINEN Eingang fuer Waerme- und Feuchtelast; die
-        # Lastenkarte zaehlt zusammen, was hineingeht. Bisher lief nur die
-        # Waerme dorthin, und die Feuchteabgabe der Menschen fehlte ganz.
-        b.verbinde(tagesprofil, "lastgang_1", lasten, "belegung")
-        b.verbinde(server, "Q_Bel", lasten, "weitere_waerme")
-        b.verbinde(lasten, "waermelast", raum, "waermelast")
-        b.verbinde(lasten, "feuchtelast", raum, "feuchtelast")
-
-        b.verbinde(raum, "QH_stat", gebaeudeheizung, "QH_stat")
-        for karte in (zuluft, abluft, kuehler, server, gebaeudeheizung):
-            b.pfeil(karte, bilanz)
-        # Erst die benannten Groessen auf ihre Steckplaetze, dann den Pfeil: Ein
-        # Pfeil auf den Datenlogger belegt die freien Plaetze der Reihe nach, und
-        # zwar so viele, wie die Gegenkarte Messwerte anbietet. Stand er zuerst,
-        # verschob ein neuer Ausgang an einer Karte alle folgenden Nummern - das
-        # Anlegen der Kuehlflaeche liess so jede Vorlage mit "Der Anschluss
-        # 'wert_5' ist schon belegt" scheitern.
-        b.verbinde(mischkammer, "umluftanteil_ist", logger, "wert_5")
-        b.pfeil(raum, logger)
-        b.pfeil(kaskade, logger)
+        # Die Serverabwaerme kommt ueber 'weitere_waerme' herein; Personen gibt
+        # es hier keine - ein Rechenzentrum versorgt keine.
+        lasten_verdrahten(b, tagesprofil, server, lasten, raum,
+                          gebaeudeheizung=gebaeudeheizung)
+        auswertung_verdrahten(
+            b, (zuluft, abluft, kuehler, server, gebaeudeheizung),
+            bilanz, logger,
+            protokoll=((mischkammer, "umluftanteil_ist", "wert_5"),),
+            pfeile=(raum, kaskade),
+        )
 
     return b.anlage

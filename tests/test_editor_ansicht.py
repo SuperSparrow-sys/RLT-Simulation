@@ -35,6 +35,19 @@ def seite(app):
     return app.test_client().get(f"/anlage/{anlage}").get_data(as_text=True)
 
 
+def editor_quelltext():
+    """Der ganze Editor als ein Text.
+
+    Er steht in mehreren Dateien - editor.js legt die Sammlung an, die
+    editor-*.js tragen zusammenhaengende Gruppen von Methoden nach. Was diese
+    Tests pruefen, ist der Editor, nicht eine einzelne Datei; sie lesen ihn
+    deshalb als Ganzes.
+    """
+    js = pathlib.Path(__file__).resolve().parent.parent / "static" / "js"
+    teile = [js / "editor.js"] + sorted(js.glob("editor-*.js"))
+    return "\n".join(p.read_text(encoding="utf-8") for p in teile)
+
+
 def test_die_kopfleiste_steht_in_gruppen(seite):
     """Ort, Bearbeitung, Ansicht, Ergebnis - vier Gruppen statt einer Reihe
     aus allem, was ueber die Zeit dazukam."""
@@ -144,10 +157,7 @@ def test_die_oeffnungsansicht_entscheidet_an_einer_eigenen_schwelle():
     passt eine Beispielanlage bei Zoom 0,72, die Detailschwelle liegt bei
     0,85. Dieser Test hält die Trennung fest.
     """
-    js = (
-        pathlib.Path(__file__).resolve().parent.parent
-        / "static" / "js" / "editor.js"
-    ).read_text(encoding="utf-8")
+    js = editor_quelltext()
 
     einstieg = re.search(r"EINSTIEG_ZOOM_MIN:\s*([\d.]+)", js)
     detail = re.search(r"DETAIL_ZOOM_SCHWELLE:\s*([\d.]+)", js)
@@ -171,9 +181,7 @@ def test_der_anlagenname_steht_auch_dort_wo_er_ganz_zu_lesen_ist():
     66 Punkte). Das ist eine bewusste Abwägung - aber „in welcher Anlage bin
     ich" muss beantwortbar bleiben. Deshalb setzt der Editor den ganzen Namen
     zusätzlich in den title des Elements und in den Titel der Seite."""
-    js = (
-        pathlib.Path(__file__).resolve().parent.parent / "static" / "js" / "editor.js"
-    ).read_text(encoding="utf-8")
+    js = editor_quelltext()
     stelle = js.index("anlagennamenZeigen(name) {")
     abschnitt = js[stelle:stelle + 400]
     assert "feld.title = name" in abschnitt
@@ -198,3 +206,33 @@ def test_der_hauptknopf_bleibt_auch_in_einer_knopfreihe_hervorgehoben():
     abschnitt = css[stelle:stelle + 400]
     assert ":not(.knopf-haupt)" in abschnitt
     assert ":not(.knopf-haupt-gefahr)" in abschnitt
+
+
+def test_jede_editor_datei_wird_geladen_und_zwar_nach_editor_js():
+    """Der Editor besteht aus mehreren Dateien; keine darf fehlen.
+
+    static/js/editor.js war mit 2017 Zeilen zu groß geworden, um es beim Lesen
+    im Kopf zu behalten. Sechs zusammenhängende Gruppen stehen deshalb in
+    eigenen Dateien, die ihre Methoden derselben Editor-Sammlung nachtragen.
+    Das setzt zweierlei voraus: Jede Datei muss im Template stehen, und sie
+    muss NACH editor.js stehen - dort wird die Sammlung angelegt.
+
+    Fehlte eine, verschwände ein Teil der Bedienung wortlos: Der Editor lüde,
+    zeichnete, und beim ersten Klick auf eine Karte stünde eine
+    TypeError-Meldung in der Konsole, die niemand sieht.
+    """
+    wurzel = pathlib.Path(__file__).resolve().parent.parent
+    vorlage = (wurzel / "templates" / "editor.html").read_text(encoding="utf-8")
+    dateien = sorted(p.name for p in (wurzel / "static" / "js").glob("editor-*.js"))
+    assert dateien, "keine Editor-Teildateien gefunden - Muster geändert?"
+
+    stelle_editor = vorlage.find("js/editor.js")
+    assert stelle_editor >= 0, "editor.js wird gar nicht geladen"
+
+    for name in dateien:
+        stelle = vorlage.find(f"js/{name}")
+        assert stelle >= 0, f"{name} wird im Editor-Template nicht geladen"
+        assert stelle > stelle_editor, (
+            f"{name} steht vor editor.js - dort wird die Editor-Sammlung erst "
+            "angelegt, ein Object.assign davor liefe ins Leere."
+        )

@@ -51,7 +51,10 @@ AUSLEGUNG
                       kostet mehr Druck als ein Bueroteil.
 """
 
-from core.vorlagen.bauhilfe import Bauplatz
+from core.vorlagen.bauhilfe import (
+    Bauplatz, auswertung_verdrahten, betrieb_verdrahten,
+    lasten_verdrahten,
+)
 from core.vorlagen.anlagen._geraet import WERKTAGE, betriebszeiten, tagesgang
 
 NAME = "Produktionshalle"
@@ -186,13 +189,8 @@ def baue(projekt_id, name=NAME):
         b.verbinde(kaskade, "kaelter_1", waescher, "stellgroesse")
         b.verbinde(kaskade, "kaelter_2", kuehler, "stellgroesse")
 
-        b.pfeil(zeitplan, betrieb)
-        b.pfeil(tagesprofil, betrieb)
-        b.verbinde(tagesprofil, "lastgang_1", grundlast, "ein")
-        b.verbinde(betrieb, "stellgrad", ventilatorstellung, "ein_1")
-        b.verbinde(grundlast, "ausgang", ventilatorstellung, "ein_2")
-        b.verbinde(ventilatorstellung, "ausgang", zuluft, "stellgroesse")
-        b.verbinde(ventilatorstellung, "ausgang", abluft, "stellgroesse")
+        betrieb_verdrahten(b, (zeitplan, tagesprofil), betrieb, tagesprofil,
+                           grundlast, ventilatorstellung, (zuluft, abluft))
         b.verbinde(ventilatorstellung, "ausgang", wrg_stellung, "ein")
         b.verbinde(wrg_stellung, "ausgang", wrg, "stellgroesse")
         b.pfeil(betrieb, maschinen)
@@ -203,30 +201,23 @@ def baue(projekt_id, name=NAME):
         # gerechnet, obwohl eine Montagehalle im Winter davon beschlaegt.
         halbe_last = b.karte("faktor", 1800, 420, "Last je Zone", faktor=0.5)
         b.verbinde(maschinen, "Q_Bel", halbe_last, "ein")
-        for zone, versatz in ((zone_a, 0), (zone_b, 180)):
+        for zone, heizung, versatz in ((zone_a, heizung_a, 0),
+                                       (zone_b, heizung_b, 180)):
             lasten = b.karte(
                 "innere_lasten", 1580, 420 + versatz, "Innere Lasten",
                 personen=20.0, waerme_je_person=150.0, feuchte_je_person=150.0,
                 grundflaeche=FLAECHE_M2 / 2.0,
             )
-            b.verbinde(tagesprofil, "lastgang_1", lasten, "belegung")
             b.verbinde(halbe_last, "ausgang", lasten, "weitere_waerme")
-            b.verbinde(lasten, "waermelast", zone, "waermelast")
-            b.verbinde(lasten, "feuchtelast", zone, "feuchtelast")
+            lasten_verdrahten(b, tagesprofil, None, lasten, zone,
+                              gebaeudeheizung=heizung)
 
-        b.verbinde(zone_a, "QH_stat", heizung_a, "QH_stat")
-        b.verbinde(zone_b, "QH_stat", heizung_b, "QH_stat")
-        for karte in (zuluft, abluft, erhitzer, kuehler, waescher, maschinen,
-                      heizung_a, heizung_b):
-            b.pfeil(karte, bilanz)
-        # Erst die benannten Groessen auf ihre Steckplaetze, dann den Pfeil: Ein
-        # Pfeil auf den Datenlogger belegt die freien Plaetze der Reihe nach, und
-        # zwar so viele, wie die Gegenkarte Messwerte anbietet. Stand er zuerst,
-        # verschob ein neuer Ausgang an einer Karte alle folgenden Nummern - das
-        # Anlegen der Kuehlflaeche liess so jede Vorlage mit "Der Anschluss
-        # 'wert_5' ist schon belegt" scheitern.
-        b.verbinde(wrg, "Q_WRG", logger, "wert_5")
-        b.pfeil(zone_a, logger)
-        b.pfeil(kaskade, logger)
+        auswertung_verdrahten(
+            b, (zuluft, abluft, erhitzer, kuehler, waescher, maschinen,
+                heizung_a, heizung_b),
+            bilanz, logger,
+            protokoll=((wrg, "Q_WRG", "wert_5"),),
+            pfeile=(zone_a, kaskade),
+        )
 
     return b.anlage

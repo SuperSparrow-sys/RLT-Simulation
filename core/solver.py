@@ -147,6 +147,10 @@ class Stundenergebnis:
     taktet: bool
     #: Ausgewiesen ist das Mittel zweier Durchgaenge statt eines Stands.
     gemittelt: bool
+    #: Wo die groesste Restabweichung sitzt - (karte_id, name) oder None.
+    #: Nur gesetzt, wenn die Stunde an der Iterationsgrenze stehengeblieben
+    #: ist; sonst gibt es nichts zu benennen.
+    wo: tuple | None = None
 
 
 class Solver:
@@ -412,6 +416,36 @@ class Solver:
             ein[port.schluessel] = wert
         return ein
 
+    def _groesste_aenderung(self, alt, neu):
+        """Welche Groesse traegt die groesste Aenderung? (karte_id, name)
+
+        Nur fuer Stunden gerufen, die die Iterationsgrenze erreicht haben -
+        also hoechstens einmal je Stunde, nicht in der Schleife. Die Auskunft
+        entscheidet, wie eine Restabweichung zu lesen ist: 26 in einer
+        Kuehlleistung sind 26 Kilowatt und keine Aussage ueber die Regelung,
+        100 in einer Stellgroesse sind ein voller Anschlagwechsel. Ohne den
+        Namen misst jede Schranke Kilowatt mit demselben Mass wie Kelvin.
+        """
+        groesste, wo = 0.0, None
+        for karte_id, werte in neu.items():
+            vorher = alt.get(karte_id, {})
+            for name, wert in werte.items():
+                vor = vorher.get(name)
+                if type(wert) is Luft and type(vor) is Luft:
+                    kandidaten = ((abs(wert.T - vor.T), f"{name}.T"),
+                                  (abs(wert.x - vor.x), f"{name}.x"),
+                                  (_volumenabweichung(wert.V, vor.V), f"{name}.V"))
+                elif isinstance(wert, (int, float)) and isinstance(vor, (int, float)):
+                    d = (_volumenabweichung(wert, vor) if _ist_volumenstrom(name)
+                         else abs(wert - vor))
+                    kandidaten = ((d, name),)
+                else:
+                    continue
+                for d, benennung in kandidaten:
+                    if d > groesste:
+                        groesste, wo = d, (karte_id, benennung)
+        return wo
+
     def _abweichung(self, alt, neu):
         """Die groesste Aenderung zwischen zwei Durchgaengen.
 
@@ -668,6 +702,7 @@ class Solver:
                 abweichung=letzte_abweichung,
                 taktet=False,
                 gemittelt=True,
+                wo=self._groesste_aenderung(vorher, ausgaben),
             )
         # Nur bei MAX_ITERATIONEN = 1 - dann gibt es keinen zweiten Stand, mit
         # dem sich mitteln liesse.
@@ -678,6 +713,7 @@ class Solver:
             abweichung=letzte_abweichung,
             taktet=False,
             gemittelt=False,
+            wo=self._groesste_aenderung(vorher, ausgaben),
         )
 
     # -- Lauf -------------------------------------------------------------
@@ -706,12 +742,23 @@ class Solver:
                         "stunde": nummer,
                         "zeitpunkt": str(stunde.get("zeitpunkt", "")),
                         "abweichung": abweichung,
+                        # Wo der Rest sitzt - erst damit ist er zu lesen
+                        # (siehe _groesste_aenderung).
+                        "karte": (
+                            self.graph.karten[ergebnis.wo[0]].name
+                            if ergebnis.wo else ""
+                        ),
+                        "groesse": ergebnis.wo[1] if ergebnis.wo else "",
                         # Deutsche Schreibweise wie ueberall, wo eine Zahl
                         # als Text erscheint (siehe core/bericht.py,
                         # format_zahl): dieser Satz steht im Bericht.
                         "text": (
                             f"Stunde {nummer} nicht konvergiert, "
                             f"größte Änderung {abweichung:.4f}".replace(".", ",")
+                            + (
+                                f" an „{self.graph.karten[ergebnis.wo[0]].name}“"
+                                f" ({ergebnis.wo[1]})" if ergebnis.wo else ""
+                            )
                         ),
                     }
                 )

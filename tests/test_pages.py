@@ -16,6 +16,26 @@ def app(tmp_path, monkeypatch):
         yield anwendung
 
 
+def editor_quelltext(klient):
+    """Der ganze Editor als ein Text, ueber die Anwendung geholt.
+
+    Er steht in mehreren Dateien - editor.js legt die Sammlung an, die
+    editor-*.js tragen zusammenhaengende Gruppen von Methoden nach (siehe
+    templates/editor.html). Was diese Tests pruefen, ist der Editor, nicht eine
+    einzelne Datei; sie lesen ihn deshalb als Ganzes. Geholt wird er ueber den
+    Klienten und nicht von der Platte, damit zugleich geprueft ist, dass die
+    Anwendung jede Datei auch ausliefert.
+    """
+    verzeichnis = Path(__file__).resolve().parent.parent / "static" / "js"
+    namen = ["editor.js"] + sorted(p.name for p in verzeichnis.glob("editor-*.js"))
+    teile = []
+    for name in namen:
+        antwort = klient.get(f"/static/js/{name}")
+        assert antwort.status_code == 200, f"{name} wird nicht ausgeliefert"
+        teile.append(antwort.get_data(as_text=True))
+    return "\n".join(teile)
+
+
 def test_editor_seite_laedt_eine_anlage(app):
     with app.app_context():
         projekt = anlagen.projekt_anlegen("Referenz")
@@ -110,7 +130,7 @@ def test_editor_js_ermittelt_und_setzt_den_bericht_weg(app):
     core.bericht.STATUS_MIT_ERGEBNIS) und berichtLinkSetzen() href und
     aria-disabled darauf abstimmt."""
     klient = app.test_client()
-    js = klient.get("/static/js/editor.js").get_data(as_text=True)
+    js = editor_quelltext(klient)
 
     aktualisieren = js[js.index("async berichtLinkAktualisieren("):]
     aktualisieren = aktualisieren[: aktualisieren.index("\n  },")]
@@ -158,7 +178,7 @@ def test_entf_taste_greift_nicht_im_eingabefeld_und_fragt_nach(app):
     sie formuliert sind.
     """
     klient = app.test_client()
-    quelle = klient.get("/static/js/editor.js").get_data(as_text=True)
+    quelle = editor_quelltext(klient)
 
     assert "function istTexteingabe(" in quelle
     lauscher = quelle[quelle.index('window.addEventListener("keydown"'):]
@@ -327,7 +347,7 @@ def test_editor_js_leinwand_beachtet_bewaffnete_palette_und_kneifgeste(app):
     Leinwand-Lauscher auf eine bewaffnete Palette reagiert (Karte per Tipp
     anlegen) und dass eine Kneifgeste (zwei Zeiger) den Zoom aendert."""
     klient = app.test_client()
-    js = klient.get("/static/js/editor.js").get_data(as_text=True)
+    js = editor_quelltext(klient)
     assert "if (Palette.bereit)" in js
     assert "_kneifBewegen" in js
     assert "this._zeiger.size >= 2" in js
@@ -400,7 +420,7 @@ def test_editor_js_verhindert_webkit_gesten_nur_bei_beruehrung(app):
     Trackpad-Kneifen im Desktop-Safari (Zugaenglichkeit: Zoomen fuer
     schwache Augen muss dort erhalten bleiben)."""
     klient = app.test_client()
-    js = klient.get("/static/js/editor.js").get_data(as_text=True)
+    js = editor_quelltext(klient)
     for typ in ("gesturestart", "gesturechange", "gestureend"):
         assert f'"{typ}"' in js
     funktion = js[js.index("function nurBeiBeruehrungVerhindern("):]
@@ -464,7 +484,7 @@ def test_editor_js_leinwand_zoomt_ueber_webkit_gesten_statt_sie_nur_zu_sperren(a
     aufrufen, und dass sich der zeigerbasierte Pfad waehrend einer
     laufenden Geste zurueckhaelt."""
     klient = app.test_client()
-    js = klient.get("/static/js/editor.js").get_data(as_text=True)
+    js = editor_quelltext(klient)
 
     for typ in ("gesturestart", "gesturechange", "gestureend"):
         stelle = js.index(f'leinwand.addEventListener("{typ}"')
@@ -491,7 +511,7 @@ def test_editor_js_zoomeumpunkt_bleibt_innerhalb_der_zoomgrenzen(app):
     liesse sich per Geste ueber "Einpassen" hinaus heraus- oder in absurde
     Groessen hineinzoomen."""
     klient = app.test_client()
-    js = klient.get("/static/js/editor.js").get_data(as_text=True)
+    js = editor_quelltext(klient)
     funktion = js[js.index("_zoomeUmPunkt(zoomZiel"):]
     funktion = funktion[: funktion.index("\n  },")]
     assert "this.ZOOM_MAX" in funktion
@@ -506,7 +526,7 @@ def test_editor_js_mausrad_zoom_um_zeigerpunkt(app):
     Das Mausrad nutzt jetzt denselben Weg wie Kneifgeste und WebKit-Geste:
     _zoomeUmPunkt() mit dem Zeigerpunkt (nicht der Fingermitte)."""
     klient = app.test_client()
-    js = klient.get("/static/js/editor.js").get_data(as_text=True)
+    js = editor_quelltext(klient)
     rad = js[js.index('leinwand.addEventListener("wheel"'):]
     rad = rad[: rad.index("{ passive: false });")]
     assert "this._zoomeUmPunkt(" in rad
@@ -527,7 +547,7 @@ def test_karte_ziehen_uebersteht_pointercancel_ohne_halben_zustand(app):
     wie pointerup (Position speichern, Lauscher entfernen), sonst blieben
     Lauscher haengen und die Karte in einem halben Zustand stehen."""
     klient = app.test_client()
-    js = klient.get("/static/js/editor.js").get_data(as_text=True)
+    js = editor_quelltext(klient)
     greifen = js[js.index("karteGreifen(ereignis, karte) {"):]
     greifen = greifen[: greifen.index("\n  },\n")]
     assert "gruppe.setPointerCapture(ereignis.pointerId)" in greifen
@@ -551,7 +571,7 @@ def test_karteauswaehlen_oeffnet_panel_nicht_synchron_im_pointerdown(app):
     Bericht) - requestAnimationFrame schiebt sie einen Bildwechsel weiter,
     statt sie synchron im pointerdown-Handler auszufuehren."""
     klient = app.test_client()
-    js = klient.get("/static/js/editor.js").get_data(as_text=True)
+    js = editor_quelltext(klient)
     auswaehlen = js[js.index("karteAuswaehlen(karte, gruppe) {"):]
     auswaehlen = auswaehlen[: auswaehlen.index("\n  },")]
     assert 'requestAnimationFrame(() => this.seitenbereichOeffnen("panel"))' in auswaehlen
@@ -569,7 +589,7 @@ def test_sicht_aktualisierung_waehrend_gesten_gebuendelt_sonst_sofort(app):
     aktualisiereSicht(), dort ist eine sofortige Minikarte wichtiger als das
     Buendeln."""
     klient = app.test_client()
-    js = klient.get("/static/js/editor.js").get_data(as_text=True)
+    js = editor_quelltext(klient)
     assert "_sichtAktualisierenGebuendelt() {" in js
     assert "requestAnimationFrame(() => {" in js
 
@@ -604,7 +624,7 @@ def test_aktualisiere_minikarte_kein_fruehausstieg_und_massstab_aus_huelle_plus_
     mehr vor dem Neuzeichnen steht und dass der Massstab den gemeinsamen
     Bereich aus Huelle UND Sichtfeld nutzt."""
     klient = app.test_client()
-    js = klient.get("/static/js/editor.js").get_data(as_text=True)
+    js = editor_quelltext(klient)
     funktion = js[js.index("aktualisiereMinikarte() {"):]
     funktion = funktion[: funktion.index("\n  },\n")]
 
@@ -636,7 +656,7 @@ def test_app_hoehe_reagiert_nur_auf_eine_deutliche_verkleinerung_nicht_waehrend_
     stillstehen, und muss sich nach Gestenende wieder auf den echten Wert
     einstellen - sonst bleibt ein zu kleiner Stand haengen."""
     klient = app.test_client()
-    js = klient.get("/static/js/editor.js").get_data(as_text=True)
+    js = editor_quelltext(klient)
 
     funktion = js[js.index("function aktualisiereAppHoehe() {"):]
     funktion = funktion[: funktion.index("\n}\n")]

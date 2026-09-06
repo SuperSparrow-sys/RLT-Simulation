@@ -38,7 +38,10 @@ AUSLEGUNG
                    bei Xp 5 K also Kreisverstaerkung 0,20 - stabil.
 """
 
-from core.vorlagen.bauhilfe import Bauplatz
+from core.vorlagen.bauhilfe import (
+    Bauplatz, auswertung_verdrahten, betrieb_verdrahten,
+    kaskade_verdrahten, lasten_verdrahten, luftweg_verdrahten,
+)
 
 NAME = "Schule mit WRG und Ferien"
 BESCHREIBUNG = (
@@ -140,54 +143,27 @@ def baue(projekt_id, name=NAME):
 
         b.pfeil(wetter, aussenluft)
         b.pfeil(wetter, raum)
-        b.verbinde(aussenluft, "luft_aus", wrg, "zuluft_ein")
-        b.pfeil(wrg, erhitzer)
-        b.pfeil(erhitzer, kuehler)
-        b.pfeil(kuehler, zuluft)
-        b.pfeil(zuluft, raum)
-        b.pfeil(raum, abluft)
-        b.verbinde(abluft, "luft_aus", wrg, "abluft_ein")
-        b.verbinde(wrg, "abluft_aus", fortluft, "luft_ein")
-
-        b.verbinde(wetter, "T_AU", kaskade, "T_AU")
-        b.verbinde(raum, "T_Raum", kaskade, "T_Raum")
-        b.verbinde(zuluft, "T_aus", kaskade, "T_ZU")
-        b.verbinde(kaskade, "waermer_1", wrg, "stellgroesse")
-        b.verbinde(kaskade, "waermer_2", erhitzer, "stellgroesse")
-        b.verbinde(kaskade, "kaelter_1", kuehler, "stellgroesse")
-
-        b.pfeil(zeitplan, betrieb)
-        b.pfeil(ferien, betrieb)
-        b.pfeil(monate, betrieb)
-        b.pfeil(tagesprofil, betrieb)
-        b.verbinde(tagesprofil, "lastgang_1", grundlast, "ein")
-        b.verbinde(betrieb, "stellgrad", ventilatorstellung, "ein_1")
-        b.verbinde(grundlast, "ausgang", ventilatorstellung, "ein_2")
-        b.verbinde(ventilatorstellung, "ausgang", zuluft, "stellgroesse")
-        b.verbinde(ventilatorstellung, "ausgang", abluft, "stellgroesse")
         b.pfeil(betrieb, beleuchtung)
         lasten = b.karte("innere_lasten", 1360, 380, "Innere Lasten",
                          personen=270.0, waerme_je_person=65.0, feuchte_je_person=40.0,
                          grundflaeche=FLAECHE_M2, geraete=8.3)
-        # Der Raum hat je EINEN Eingang fuer Waerme- und Feuchtelast; die
-        # Lastenkarte zaehlt zusammen, was hineingeht. Bisher lief nur die
-        # Waerme dorthin, und die Feuchteabgabe der Menschen fehlte ganz.
-        b.verbinde(tagesprofil, "lastgang_1", lasten, "belegung")
-        b.verbinde(beleuchtung, "Q_Bel", lasten, "weitere_waerme")
-        b.verbinde(lasten, "waermelast", raum, "waermelast")
-        b.verbinde(lasten, "feuchtelast", raum, "feuchtelast")
 
-        b.verbinde(raum, "QH_stat", gebaeudeheizung, "QH_stat")
-        for karte in (zuluft, abluft, erhitzer, kuehler, beleuchtung, gebaeudeheizung):
-            b.pfeil(karte, bilanz)
-        # Erst die benannten Groessen auf ihre Steckplaetze, dann den Pfeil: Ein
-        # Pfeil auf den Datenlogger belegt die freien Plaetze der Reihe nach, und
-        # zwar so viele, wie die Gegenkarte Messwerte anbietet. Stand er zuerst,
-        # verschob ein neuer Ausgang an einer Karte alle folgenden Nummern - das
-        # Anlegen der Kuehlflaeche liess so jede Vorlage mit "Der Anschluss
-        # 'wert_5' ist schon belegt" scheitern.
-        b.verbinde(wrg, "Q_WRG", logger, "wert_5")
-        b.pfeil(raum, logger)
-        b.pfeil(kaskade, logger)
+        luftweg_verdrahten(b, aussenluft, wrg, (erhitzer, kuehler), zuluft,
+                           raum, abluft, fortluft)
+        kaskade_verdrahten(b, wetter, raum, zuluft, kaskade, {
+            "waermer_1": wrg, "waermer_2": erhitzer, "kaelter_1": kuehler,
+        })
+        betrieb_verdrahten(b, (zeitplan, ferien, monate, tagesprofil), betrieb,
+                           tagesprofil, grundlast, ventilatorstellung,
+                           (zuluft, abluft))
+        lasten_verdrahten(b, tagesprofil, beleuchtung, lasten, raum,
+                          gebaeudeheizung=gebaeudeheizung)
+        auswertung_verdrahten(
+            b,
+            (zuluft, abluft, erhitzer, kuehler, beleuchtung, gebaeudeheizung),
+            bilanz, logger,
+            protokoll=((wrg, "Q_WRG", "wert_5"),),
+            pfeile=(raum, kaskade),
+        )
 
     return b.anlage

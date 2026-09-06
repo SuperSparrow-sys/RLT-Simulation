@@ -35,7 +35,10 @@ AUSLEGUNG
                    -> SFP 0,34 W/(m3/h)
 """
 
-from core.vorlagen.bauhilfe import Bauplatz
+from core.vorlagen.bauhilfe import (
+    Bauplatz, auswertung_verdrahten, betrieb_verdrahten,
+    kaskade_verdrahten, lasten_verdrahten, luftweg_verdrahten,
+)
 
 NAME = "Museum und Archiv"
 BESCHREIBUNG = (
@@ -146,59 +149,35 @@ def baue(projekt_id, name=NAME):
 
         b.pfeil(wetter, aussenluft)
         b.pfeil(wetter, raum)
-        b.verbinde(aussenluft, "luft_aus", wrg, "zuluft_ein")
-        b.pfeil(wrg, erhitzer)
-        b.pfeil(erhitzer, kuehler)
-        b.pfeil(kuehler, befeuchter)
-        b.pfeil(befeuchter, zuluft)
-        b.pfeil(zuluft, raum)
-        b.pfeil(raum, abluft)
-        b.verbinde(abluft, "luft_aus", wrg, "abluft_ein")
-        b.verbinde(wrg, "abluft_aus", fortluft, "luft_ein")
-
-        b.verbinde(wetter, "T_AU", kaskade, "T_AU")
-        b.verbinde(raum, "T_Raum", kaskade, "T_Raum")
-        b.verbinde(zuluft, "T_aus", kaskade, "T_ZU")
-        b.verbinde(kaskade, "waermer_1", wrg, "stellgroesse")
-        b.verbinde(kaskade, "waermer_2", erhitzer, "stellgroesse")
-        b.verbinde(kaskade, "kaelter_1", kuehler, "stellgroesse")
-
-        b.verbinde(raum, "F_Raum", feuchteregler, "istwert_2")
-        b.verbinde(feuchteregler, "ausgang_2", befeuchter, "stellgroesse")
-
-        b.pfeil(zeitplan, betrieb)
-        b.pfeil(tagesprofil, betrieb)
-        b.verbinde(tagesprofil, "lastgang_1", grundlast, "ein")
-        b.verbinde(betrieb, "stellgrad", ventilatorstellung, "ein_1")
-        b.verbinde(grundlast, "ausgang", ventilatorstellung, "ein_2")
-        b.verbinde(ventilatorstellung, "ausgang", zuluft, "stellgroesse")
-        b.verbinde(ventilatorstellung, "ausgang", abluft, "stellgroesse")
         b.pfeil(betrieb, beleuchtung)
         lasten = b.karte("innere_lasten", 1580, 420, "Innere Lasten",
                          personen=60.0, waerme_je_person=75.0, feuchte_je_person=50.0,
                          grundflaeche=FLAECHE_M2)
-        # Der Raum hat je EINEN Eingang fuer Waerme- und Feuchtelast; die
-        # Lastenkarte zaehlt zusammen, was hineingeht. Bisher lief nur die
-        # Waerme dorthin, und die Feuchteabgabe der Menschen fehlte ganz.
-        b.verbinde(tagesprofil, "lastgang_1", lasten, "belegung")
-        b.verbinde(beleuchtung, "Q_Bel", lasten, "weitere_waerme")
-        b.verbinde(lasten, "waermelast", raum, "waermelast")
-        b.verbinde(lasten, "feuchtelast", raum, "feuchtelast")
 
-        b.verbinde(raum, "QH_stat", gebaeudeheizung, "QH_stat")
-        for karte in (zuluft, abluft, erhitzer, kuehler, befeuchter, beleuchtung, gebaeudeheizung):
-            b.pfeil(karte, bilanz)
+        luftweg_verdrahten(b, aussenluft, wrg, (erhitzer, kuehler, befeuchter),
+                           zuluft, raum, abluft, fortluft)
+        kaskade_verdrahten(b, wetter, raum, zuluft, kaskade, {
+            "waermer_1": wrg, "waermer_2": erhitzer, "kaelter_1": kuehler,
+        })
+        # Die Feuchte regelt ein eigener Kreis: Das Haus haelt 50 % relative
+        # Feuchte, und dafuer misst der Regler die RAUMfeuchte, nicht die der
+        # Zuluft.
+        b.verbinde(raum, "F_Raum", feuchteregler, "istwert_2")
+        b.verbinde(feuchteregler, "ausgang_2", befeuchter, "stellgroesse")
+        betrieb_verdrahten(b, (zeitplan, tagesprofil), betrieb, tagesprofil,
+                           grundlast, ventilatorstellung, (zuluft, abluft))
+        lasten_verdrahten(b, tagesprofil, beleuchtung, lasten, raum,
+                          gebaeudeheizung=gebaeudeheizung)
         b.verbinde(raum, "T_Raum", enthalpie, "t")
         b.verbinde(raum, "F_Raum", enthalpie, "x")
-        # Erst die benannten Groessen auf ihre Steckplaetze, dann den Pfeil:
-        # Ein Pfeil auf den Datenlogger belegt die freien Plaetze der Reihe
-        # nach, und zwar so viele, wie die Gegenkarte Messwerte anbietet. Stand
-        # er zuerst, verschob ein neuer Ausgang an einer Karte alle folgenden
-        # Nummern.
-        b.verbinde(wrg, "Q_WRG", logger, "wert_5")
-        b.verbinde(enthalpie, "rF", logger, "wert_6")
-        b.verbinde(enthalpie, "h", logger, "wert_7")
-        b.pfeil(raum, logger)
-        b.pfeil(kaskade, logger)
+        auswertung_verdrahten(
+            b,
+            (zuluft, abluft, erhitzer, kuehler, befeuchter, beleuchtung,
+             gebaeudeheizung),
+            bilanz, logger,
+            protokoll=((wrg, "Q_WRG", "wert_5"), (enthalpie, "rF", "wert_6"),
+                       (enthalpie, "h", "wert_7")),
+            pfeile=(raum, kaskade),
+        )
 
     return b.anlage

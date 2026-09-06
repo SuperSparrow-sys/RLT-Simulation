@@ -22,7 +22,10 @@ Zwei Dinge sind hier fest verdrahtet und sollen es bleiben:
 
 from dataclasses import dataclass
 
-from core.vorlagen.bauhilfe import Bauplatz
+from core.vorlagen.bauhilfe import (
+    Bauplatz, auswertung_verdrahten, betrieb_verdrahten,
+    kaskade_verdrahten, lasten_verdrahten, luftweg_verdrahten,
+)
 
 WOCHENTAGE = ("montag", "dienstag", "mittwoch", "donnerstag", "freitag",
               "samstag", "sonntag")
@@ -79,7 +82,7 @@ def standardgeraet(
     QH_max, QK_nenn, rueckwaermzahl=75.0,
     dp_zuluft=900.0, PE_zuluft=None, dp_abluft=700.0, PE_abluft=None,
     T_Raum_min=20.0, T_Raum_max=26.0, T_ZU_min=16.0, T_ZU_max=28.0,
-    sollwert_stat=16.0, raumname="Raum",
+    sollwert_stat=None, raumname="Raum",
     zeitplan_tage=WERKTAGE, zeitplan_von=7.0, zeitplan_bis=18.0,
     lastgang=None, beleuchtung_w_m2=8.0, beleuchtung_lux=500.0,
     personen=0.0, waerme_je_person=75.0, feuchte_je_person=50.0,
@@ -95,6 +98,18 @@ def standardgeraet(
     Luftmenge, Druck und einem Wirkungsgrad von 0,65 gerechnet - dieselbe
     Rechnung, die in den Kopfkommentaren der Anlagen steht.
     """
+    # Der Sollwert der Gebaeudeheizung ist derselbe wie der untere
+    # Raumsollwert der Kaskade. Liegt er darunter, entsteht ein Band, in dem
+    # die Heizkoerper den Raum festhalten (T_Raum = max(T_frei, Sollwert)) und
+    # die Kaskade gegen eine Abweichung integriert, die sie nicht wegregeln
+    # kann - die Produktionshalle verlor so drei Stunden je Woche, bis ihre
+    # beiden Sollwerte zusammengelegt wurden. Er steht deshalb nicht als
+    # eigene Zahl da, sondern folgt T_Raum_min; wer ihn ausdruecklich anders
+    # will, gibt ihn an. tests/test_sollwerte_passen_zusammen.py haelt die
+    # Regel fuer alle Vorlagen fest.
+    if sollwert_stat is None:
+        sollwert_stat = T_Raum_min
+
     def leistung(volumenstrom, druck):
         return volumenstrom / 3600.0 * druck / 0.65 / 1000.0
 
@@ -176,53 +191,26 @@ def standardgeraet(
     # Luftweg
     b.pfeil(wetter, aussenluft)
     b.pfeil(wetter, raum)
-    b.verbinde(aussenluft, "luft_aus", wrg, "zuluft_ein")
-    b.pfeil(wrg, erhitzer)
-    b.pfeil(erhitzer, kuehler)
-    b.pfeil(kuehler, zuluft)
-    b.pfeil(zuluft, raum)
-    b.pfeil(raum, abluft)
-    b.verbinde(abluft, "luft_aus", wrg, "abluft_ein")
-    b.verbinde(wrg, "abluft_aus", fortluft, "luft_ein")
-
-    # Regelung - erst die zurueckgewonnene Waerme, dann das Register
-    b.verbinde(wetter, "T_AU", kaskade, "T_AU")
-    b.verbinde(raum, "T_Raum", kaskade, "T_Raum")
-    b.verbinde(zuluft, "T_aus", kaskade, "T_ZU")
-    b.verbinde(kaskade, "waermer_1", wrg, "stellgroesse")
-    b.verbinde(kaskade, "waermer_2", erhitzer, "stellgroesse")
-    b.verbinde(kaskade, "kaelter_1", kuehler, "stellgroesse")
-
-    # Betrieb
-    b.pfeil(zeitplan, betrieb)
-    b.pfeil(tagesprofil, betrieb)
-    b.verbinde(tagesprofil, "lastgang_1", grundlast, "ein")
-    b.verbinde(betrieb, "stellgrad", ventilatorstellung, "ein_1")
-    b.verbinde(grundlast, "ausgang", ventilatorstellung, "ein_2")
-    b.verbinde(ventilatorstellung, "ausgang", zuluft, "stellgroesse")
-    b.verbinde(ventilatorstellung, "ausgang", abluft, "stellgroesse")
     b.pfeil(betrieb, beleuchtung)
-    # Der Raum hat EINEN Waermelasteingang; die Lastenkarte zaehlt zusammen,
-    # was hineingeht - Personen, Geraete und die Beleuchtungswaerme.
-    b.verbinde(tagesprofil, "lastgang_1", lasten, "belegung")
-    b.verbinde(beleuchtung, "Q_Bel", lasten, "weitere_waerme")
-    b.verbinde(lasten, "waermelast", raum, "waermelast")
-    b.verbinde(lasten, "feuchtelast", raum, "feuchtelast")
-    b.verbinde(raum, "QK_stat", kuehlflaeche, "QK_stat")
-    b.verbinde(raum, "QH_stat", statische_heizung, "QH_stat")
 
-    for karte in (zuluft, abluft, erhitzer, kuehler, beleuchtung, kuehlflaeche,
-                  statische_heizung):
-        b.pfeil(karte, bilanz)
-    # Erst die benannten Groessen auf ihre Steckplaetze, dann den Pfeil: Ein
-    # Pfeil auf den Datenlogger belegt die freien Plaetze der Reihe nach, und
-    # zwar so viele, wie die Gegenkarte Messwerte anbietet. Stand er zuerst,
-    # verschob ein neuer Ausgang an einer Karte alle folgenden Nummern - das
-    # Anlegen der Kuehlflaeche liess so jede Vorlage mit "Der Anschluss
-    # 'wert_5' ist schon belegt" scheitern.
-    b.verbinde(wrg, "Q_WRG", logger, "wert_5")
-    b.pfeil(raum, logger)
-    b.pfeil(kaskade, logger)
+    luftweg_verdrahten(b, aussenluft, wrg, (erhitzer, kuehler), zuluft, raum,
+                       abluft, fortluft)
+    kaskade_verdrahten(b, wetter, raum, zuluft, kaskade, {
+        "waermer_1": wrg, "waermer_2": erhitzer, "kaelter_1": kuehler,
+    })
+    betrieb_verdrahten(b, (zeitplan, tagesprofil), betrieb, tagesprofil,
+                       grundlast, ventilatorstellung, (zuluft, abluft))
+    lasten_verdrahten(b, tagesprofil, beleuchtung, lasten, raum,
+                      gebaeudeheizung=statische_heizung,
+                      kuehlflaeche=kuehlflaeche)
+    auswertung_verdrahten(
+        b,
+        (zuluft, abluft, erhitzer, kuehler, beleuchtung, kuehlflaeche,
+         statische_heizung),
+        bilanz, logger,
+        protokoll=((wrg, "Q_WRG", "wert_5"),),
+        pfeile=(raum, kaskade),
+    )
 
     return Geraet(
         bauplatz=b, wetter=wetter, aussenluft=aussenluft, wrg=wrg,

@@ -49,7 +49,10 @@ AUSLEGUNG (nachrechenbar, nicht aus dem Gedaechtnis)
                       im ueblichen Bereich 0,3 bis 0,5.
 """
 
-from core.vorlagen.bauhilfe import Bauplatz
+from core.vorlagen.bauhilfe import (
+    Bauplatz, auswertung_verdrahten, betrieb_verdrahten,
+    kaskade_verdrahten, lasten_verdrahten, luftweg_verdrahten,
+)
 
 NAME = "Bürogebäude mit WRG"
 BESCHREIBUNG = (
@@ -207,66 +210,25 @@ def baue(projekt_id, name=NAME):
         # -- Luftweg -----------------------------------------------------
         b.pfeil(wetter, aussenluft)
         b.pfeil(wetter, raum)
-        # Zuluft- und Abluftseite der WRG ausdruecklich: beide Eingaenge
-        # nehmen Luft, die automatische Zuordnung entschiede nach der
-        # Reihenfolge der Ports statt nach der Stroemungsrichtung.
-        b.verbinde(aussenluft, "luft_aus", wrg, "zuluft_ein")
-        b.pfeil(wrg, erhitzer)
-        b.pfeil(erhitzer, kuehler)
-        b.pfeil(kuehler, zuluft)
-        b.pfeil(zuluft, raum)
-        b.pfeil(raum, abluft)
-        b.verbinde(abluft, "luft_aus", wrg, "abluft_ein")
-        b.verbinde(wrg, "abluft_aus", fortluft, "luft_ein")
-
-        # -- Regelkreis --------------------------------------------------
-        b.verbinde(wetter, "T_AU", kaskade, "T_AU")
-        b.verbinde(raum, "T_Raum", kaskade, "T_Raum")
-        b.verbinde(zuluft, "T_aus", kaskade, "T_ZU")
-        # Sequenz: erst die zurueckgewonnene Waerme, dann das Register. Die
-        # Kaskade staffelt ihre Ausgaenge (core/bausteine/sequenzregler.py,
-        # STUFEN): 'waermer_1' zieht zuerst an, 'waermer_2' erst, wenn der
-        # erste am Anschlag steht. Umgekehrt herum liefe das Register gegen
-        # eine Waermerueckgewinnung an, die noch Reserve hat - und die Anlage
-        # zahlte fuer Waerme, die sie geschenkt bekommt.
-        b.verbinde(kaskade, "waermer_1", wrg, "stellgroesse")
-        b.verbinde(kaskade, "waermer_2", erhitzer, "stellgroesse")
-        b.verbinde(kaskade, "kaelter_1", kuehler, "stellgroesse")
-
-        # -- Betrieb -----------------------------------------------------
-        b.pfeil(zeitplan, betrieb)
-        b.pfeil(tagesprofil, betrieb)
-        b.verbinde(tagesprofil, "lastgang_1", grundlast, "ein")
-        # Zwei gleichrangige Forderungen an dieselbe Stellgroesse: der
-        # Anlagenbetrieb (bis 100 %) und die nie verschwindende
-        # Nachtluft-Grundlast. Das Maximalglied laesst die groessere gelten.
-        b.verbinde(betrieb, "stellgrad", ventilatorstellung, "ein_1")
-        b.verbinde(grundlast, "ausgang", ventilatorstellung, "ein_2")
-        b.verbinde(ventilatorstellung, "ausgang", zuluft, "stellgroesse")
-        b.verbinde(ventilatorstellung, "ausgang", abluft, "stellgroesse")
         b.pfeil(betrieb, beleuchtung)
-        # Die Beleuchtung gibt ihre Waerme nicht unmittelbar an den Raum: Der
-        # hat nur EINEN Waermelasteingang, und dort gehoert die Summe aller
-        # inneren Lasten hin. Die Lastenkarte zaehlt sie zusammen.
-        b.verbinde(tagesprofil, "lastgang_1", lasten, "belegung")
-        b.verbinde(beleuchtung, "Q_Bel", lasten, "weitere_waerme")
-        b.verbinde(lasten, "waermelast", raum, "waermelast")
-        b.verbinde(lasten, "feuchtelast", raum, "feuchtelast")
-        b.verbinde(raum, "QK_stat", kuehlflaeche, "QK_stat")
-        b.verbinde(raum, "QH_stat", gebaeudeheizung, "QH_stat")
 
-        # -- Auswertung --------------------------------------------------
-        for karte in (zuluft, abluft, erhitzer, kuehler, beleuchtung,
-                      kuehlflaeche, gebaeudeheizung):
-            b.pfeil(karte, bilanz)
-        # Erst die benannten Groessen auf ihre Steckplaetze, dann den Pfeil: Ein
-        # Pfeil auf den Datenlogger belegt die freien Plaetze der Reihe nach, und
-        # zwar so viele, wie die Gegenkarte Messwerte anbietet. Stand er zuerst,
-        # verschob ein neuer Ausgang an einer Karte alle folgenden Nummern - das
-        # Anlegen der Kuehlflaeche liess so jede Vorlage mit "Der Anschluss
-        # 'wert_5' ist schon belegt" scheitern.
-        b.verbinde(wrg, "Q_WRG", logger, "wert_5")
-        b.pfeil(raum, logger)
-        b.pfeil(kaskade, logger)
+        luftweg_verdrahten(b, aussenluft, wrg, (erhitzer, kuehler), zuluft,
+                           raum, abluft, fortluft)
+        kaskade_verdrahten(b, wetter, raum, zuluft, kaskade, {
+            "waermer_1": wrg, "waermer_2": erhitzer, "kaelter_1": kuehler,
+        })
+        betrieb_verdrahten(b, (zeitplan, tagesprofil), betrieb, tagesprofil,
+                           grundlast, ventilatorstellung, (zuluft, abluft))
+        lasten_verdrahten(b, tagesprofil, beleuchtung, lasten, raum,
+                          gebaeudeheizung=gebaeudeheizung,
+                          kuehlflaeche=kuehlflaeche)
+        auswertung_verdrahten(
+            b,
+            (zuluft, abluft, erhitzer, kuehler, beleuchtung, kuehlflaeche,
+             gebaeudeheizung),
+            bilanz, logger,
+            protokoll=((wrg, "Q_WRG", "wert_5"),),
+            pfeile=(raum, kaskade),
+        )
 
     return b.anlage

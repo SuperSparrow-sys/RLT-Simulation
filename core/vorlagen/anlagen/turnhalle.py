@@ -46,7 +46,10 @@ AUSLEGUNG
                    -> SFP 0,34 W/(m3/h)
 """
 
-from core.vorlagen.bauhilfe import Bauplatz
+from core.vorlagen.bauhilfe import (
+    Bauplatz, auswertung_verdrahten, betrieb_verdrahten,
+    kaskade_verdrahten, lasten_verdrahten,
+)
 from core.vorlagen.anlagen._geraet import WOCHENTAGE, betriebszeiten
 
 NAME = "Turnhalle"
@@ -161,49 +164,33 @@ def baue(projekt_id, name=NAME):
         b.verbinde(abluft, "luft_aus", wrg, "abluft_ein")
         b.verbinde(wrg, "abluft_aus", fortluft, "luft_ein")
 
-        b.verbinde(wetter, "T_AU", kaskade, "T_AU")
-        b.verbinde(halle, "T_Raum", kaskade, "T_Raum")
-        b.verbinde(zuluft, "T_aus", kaskade, "T_ZU")
-        b.verbinde(kaskade, "waermer_1", wrg, "stellgroesse")
-        b.verbinde(kaskade, "waermer_2", erhitzer, "stellgroesse")
-        b.verbinde(kaskade, "kaelter_1", kuehler, "stellgroesse")
-
+        # Der Luftweg oben bleibt ausdruecklich: Die ausfuehrliche Raumkarte
+        # traegt nummerierte Zu- und Abluftanschluesse, und welcher gemeint
+        # ist, soll hier stehen und nicht geraten werden.
+        kaskade_verdrahten(b, wetter, halle, zuluft, kaskade, {
+            "waermer_1": wrg, "waermer_2": erhitzer, "kaelter_1": kuehler,
+        })
         b.verbinde(halle, "T_Raum", raumthermostat, "istwert")
         b.verbinde(raumthermostat, "ausgang", thermostat_umkehr, "ein")
         b.verbinde(thermostat_umkehr, "ausgang", heizanforderung, "ein")
         b.verbinde(heizanforderung, "ausgang", heizkoerper, "QH_stat")
         b.verbinde(heizkoerper, "QH", halle, "QH_stat")
 
-        b.pfeil(zeitplan, betrieb)
-        b.pfeil(tagesprofil, betrieb)
-        b.verbinde(tagesprofil, "lastgang_1", grundlast, "ein")
-        b.verbinde(betrieb, "stellgrad", ventilatorstellung, "ein_1")
-        b.verbinde(grundlast, "ausgang", ventilatorstellung, "ein_2")
-        b.verbinde(ventilatorstellung, "ausgang", zuluft, "stellgroesse")
-        b.verbinde(ventilatorstellung, "ausgang", abluft, "stellgroesse")
+        betrieb_verdrahten(b, (zeitplan, tagesprofil), betrieb, tagesprofil,
+                           grundlast, ventilatorstellung, (zuluft, abluft))
         b.pfeil(betrieb, beleuchtung)
         lasten = b.karte("innere_lasten", 1360, 420, "Innere Lasten",
                          personen=60.0, waerme_je_person=120.0, feuchte_je_person=200.0,
                          grundflaeche=FLAECHE_M2)
-        # Der Raum hat je EINEN Eingang fuer Waerme- und Feuchtelast; die
-        # Lastenkarte zaehlt zusammen, was hineingeht. Bisher lief nur die
-        # Waerme dorthin, und die Feuchteabgabe der Menschen fehlte ganz.
-        b.verbinde(tagesprofil, "lastgang_1", lasten, "belegung")
-        b.verbinde(beleuchtung, "Q_Bel", lasten, "weitere_waerme")
-        b.verbinde(lasten, "waermelast", halle, "waermelast")
-        b.verbinde(lasten, "feuchtelast", halle, "feuchtelast")
-
-        for karte in (zuluft, abluft, erhitzer, kuehler, beleuchtung, heizkoerper):
-            b.pfeil(karte, bilanz)
-        # Erst die benannten Groessen auf ihre Steckplaetze, dann den Pfeil: Ein
-        # Pfeil auf den Datenlogger belegt die freien Plaetze der Reihe nach, und
-        # zwar so viele, wie die Gegenkarte Messwerte anbietet. Stand er zuerst,
-        # verschob ein neuer Ausgang an einer Karte alle folgenden Nummern - das
-        # Anlegen der Kuehlflaeche liess so jede Vorlage mit "Der Anschluss
-        # 'wert_5' ist schon belegt" scheitern.
-        b.verbinde(wrg, "Q_WRG", logger, "wert_5")
-        b.verbinde(heizkoerper, "QH", logger, "wert_6")
-        b.pfeil(halle, logger)
-        b.pfeil(kaskade, logger)
+        # Die ausfuehrliche Raumkarte nimmt QH_stat als EINGANG entgegen (der
+        # Heizkoerper speist ihn oben), nicht als Forderung - deshalb hier ohne
+        # gebaeudeheizung.
+        lasten_verdrahten(b, tagesprofil, beleuchtung, lasten, halle)
+        auswertung_verdrahten(
+            b, (zuluft, abluft, erhitzer, kuehler, beleuchtung, heizkoerper),
+            bilanz, logger,
+            protokoll=((wrg, "Q_WRG", "wert_5"), (heizkoerper, "QH", "wert_6")),
+            pfeile=(halle, kaskade),
+        )
 
     return b.anlage

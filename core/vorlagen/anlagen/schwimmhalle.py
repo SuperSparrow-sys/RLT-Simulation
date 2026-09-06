@@ -41,7 +41,10 @@ AUSLEGUNG
                    -> SFP 0,43 W/(m3/h)
 """
 
-from core.vorlagen.bauhilfe import Bauplatz
+from core.vorlagen.bauhilfe import (
+    Bauplatz, auswertung_verdrahten, betrieb_verdrahten,
+    kaskade_verdrahten, lasten_verdrahten,
+)
 
 NAME = "Schwimmhalle"
 BESCHREIBUNG = (
@@ -187,10 +190,12 @@ def baue(projekt_id, name=NAME):
         b.verbinde(verteiler, "luft_aus_2", wrg, "abluft_ein")
         b.verbinde(wrg, "abluft_aus", fortluft, "luft_ein")
 
-        b.verbinde(wetter, "T_AU", kaskade, "T_AU")
-        b.verbinde(halle, "T_Raum", kaskade, "T_Raum")
-        b.verbinde(zuluft, "T_aus", kaskade, "T_ZU")
-        b.verbinde(kaskade, "waermer_1", wrg, "stellgroesse")
+        # Der Luftweg oben bleibt ausdruecklich: Diese Anlage fuehrt einen Teil
+        # der Abluft ueber einen Verteiler in die Mischkammer zurueck, statt
+        # geradeaus durch die Rueckgewinnung zu laufen.
+        kaskade_verdrahten(b, wetter, halle, zuluft, kaskade, {
+            "waermer_1": wrg, "waermer_2": erhitzer, "kaelter_1": kuehler,
+        })
         # Bypass gegenlaeufig zur Rueckgewinnung: Fordert die Kaskade keine
         # Waerme mehr, soll die Abluft am Waermetauscher vorbei - sonst heizt
         # er die Zuluft weiter auf, obwohl niemand das will. Das Umkehrglied
@@ -198,40 +203,25 @@ def baue(projekt_id, name=NAME):
         bypass = b.karte("umkehrglied", 920, 20, "Bypass-Klappe", bezug=100.0)
         b.verbinde(kaskade, "waermer_1", bypass, "ein")
         b.verbinde(bypass, "ausgang", wrg, "stellgroesse_bypass")
-        b.verbinde(kaskade, "waermer_2", erhitzer, "stellgroesse")
-        b.verbinde(kaskade, "kaelter_1", kuehler, "stellgroesse")
 
-        b.pfeil(zeitplan, betrieb)
-        b.pfeil(tagesprofil, betrieb)
-        b.verbinde(tagesprofil, "lastgang_1", grundlast, "ein")
-        b.verbinde(tagesprofil, "lastgang_1", verdunstung, "ein")
+        betrieb_verdrahten(b, (zeitplan, tagesprofil), betrieb, tagesprofil,
+                           grundlast, ventilatorstellung, (zuluft, abluft))
         # Die Beckenverdunstung ist die grosse Feuchtequelle, aber nicht die
         # einzige: 60 Badegaeste geben 100 g/h ab, zusammen 6 kg/h neben den
         # 75 kg/h aus dem Becken. Beides laeuft ueber die Lastenkarte in den
         # einen Feuchteeingang der Halle.
+        b.verbinde(tagesprofil, "lastgang_1", verdunstung, "ein")
         b.verbinde(verdunstung, "ausgang", lasten, "weitere_feuchte")
-        b.verbinde(betrieb, "stellgrad", ventilatorstellung, "ein_1")
-        b.verbinde(grundlast, "ausgang", ventilatorstellung, "ein_2")
-        b.verbinde(ventilatorstellung, "ausgang", zuluft, "stellgroesse")
-        b.verbinde(ventilatorstellung, "ausgang", abluft, "stellgroesse")
         b.verbinde(halle, "F_Raum", feuchteregler, "istwert_2")
         b.verbinde(feuchteregler, "ausgang_2", mischkammer, "umluftanteil")
         b.pfeil(betrieb, beleuchtung)
-        b.verbinde(beleuchtung, "Q_Bel", lasten, "weitere_waerme")
-        b.verbinde(lasten, "waermelast", halle, "waermelast")
-        b.verbinde(lasten, "feuchtelast", halle, "feuchtelast")
-
-        b.verbinde(halle, "QH_stat", gebaeudeheizung, "QH_stat")
-        for karte in (zuluft, abluft, erhitzer, kuehler, beleuchtung, gebaeudeheizung):
-            b.pfeil(karte, bilanz)
-        # Erst die benannten Groessen auf ihre Steckplaetze, dann den Pfeil: Ein
-        # Pfeil auf den Datenlogger belegt die freien Plaetze der Reihe nach, und
-        # zwar so viele, wie die Gegenkarte Messwerte anbietet. Stand er zuerst,
-        # verschob ein neuer Ausgang an einer Karte alle folgenden Nummern - das
-        # Anlegen der Kuehlflaeche liess so jede Vorlage mit "Der Anschluss
-        # 'wert_5' ist schon belegt" scheitern.
-        b.verbinde(wrg, "Q_WRG", logger, "wert_5")
-        b.pfeil(halle, logger)
-        b.pfeil(kaskade, logger)
+        lasten_verdrahten(b, tagesprofil, beleuchtung, lasten, halle,
+                          gebaeudeheizung=gebaeudeheizung)
+        auswertung_verdrahten(
+            b, (zuluft, abluft, erhitzer, kuehler, beleuchtung, gebaeudeheizung),
+            bilanz, logger,
+            protokoll=((wrg, "Q_WRG", "wert_5"),),
+            pfeile=(halle, kaskade),
+        )
 
     return b.anlage

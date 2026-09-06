@@ -266,5 +266,17 @@
   <script src="{{ url_for('static', filename='js/wetterauswahl.js') }}"></script>
   <script src="{{ url_for('static', filename='js/simulation.js') }}"></script>
   <script src="{{ url_for('static', filename='js/editor.js') }}"></script>
+  {# Der Editor war mit 2017 Zeilen zu gross geworden, um ihn beim Lesen im
+     Kopf zu behalten. Diese Dateien tragen unveraenderte Methoden derselben
+     Editor-Sammlung nach und muessen deshalb NACH editor.js stehen - dort
+     wird sie angelegt. Vor dem DOMContentLoaded-Block am Ende von editor.js
+     sind sie in jedem Fall, denn der laeuft erst, wenn alle Skripte geladen
+     sind. tests/test_editor_ansicht.py haelt fest, dass keine fehlt. #}
+  <script src="{{ url_for('static', filename='js/editor-pfeile.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/editor-karten.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/editor-auswahl.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/editor-sicht.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/editor-bereiche.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/editor-gesten.js') }}"></script>
 </body>
 </html>
