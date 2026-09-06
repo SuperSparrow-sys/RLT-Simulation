@@ -6,6 +6,7 @@ erzeugt - ein neuer Kartentyp ist deshalb genau eine neue Datei.
 """
 
 import copy
+import math
 from dataclasses import dataclass
 
 # Portarten
@@ -427,6 +428,87 @@ def druckverlust(V: float, V_nenn: float, dp_nenn: float) -> float:
     if not V_nenn:
         return 0.0
     return dp_nenn * (V / V_nenn) ** 2
+
+
+#: Waermetechnische Guete eines Registers im Auslegungspunkt.
+#:
+#: eps = 1 - exp(-NTU) ist der Anteil der moeglichen Temperaturdifferenz, den
+#: ein Register tatsaechlich ueberbrueckt. 0,6 ist fuer ein Rippenrohrregister
+#: im Lueftungsbau die uebliche Groessenordnung. Der Wert geht nur schwach in
+#: das Ergebnis ein: zwischen eps_nenn 0,5 und 0,7 aendert sich der Exponent
+#: der Teillastkennlinie von 0,87 auf 0,91 (nachgerechnet, siehe
+#: tests/test_register_teillast.py). Er ist deshalb hier fest und kein
+#: Parameter, den jemand einstellen muesste.
+REGISTER_GUETE_NENN = 0.6
+
+#: Wie der Waermeuebergang der Luftseite mit der Geschwindigkeit waechst.
+#: alpha ~ v^0,8 ist die uebliche Naeherung fuer turbulente Rohrstroemung
+#: (Dittus-Boelter); bei einem Rippenrohrregister bestimmt die Luftseite den
+#: Uebergang, weil die Rippen dort sitzen.
+LUFTSEITE_EXPONENT = 0.8
+
+
+def uebertragbare_leistung(anteil_ventil: float, V: float, V_nenn: float) -> float:
+    """Anteil der Nennleistung, den ein Register bei DIESER Luftmenge schafft.
+
+    Ein Register uebertraegt
+
+        Q = eps * m_L * cp * (T_Wasser - T_Luft),   eps = 1 - exp(-NTU)
+
+    mit NTU = UA / (m_L * cp). Faellt der Volumenstrom, faellt UA mit V^0,8
+    (Luftseite), der Massenstrom aber mit V - der Wirkungsgrad eps steigt
+    also, die uebertragene Leistung faellt trotzdem, und zwar mit rund V^0,9.
+
+    Frueher rechneten Erhitzer und Kuehler ihre Leistung allein aus der
+    Ventilstellung: ein 70-kW-Register gab auch bei einem Fuenftel der
+    Luftmenge 70 kW ab, was einer Temperaturerhoehung von ueber 300 K
+    entsprach. Die Mappe rechnet ebenso - sie faehrt aber durchgehend auf
+    Nennvolumenstrom und kennt den Fall gar nicht. Bei V = V_nenn liefert
+    diese Funktion genau 1,0; der Abgleich gegen die Mappe bleibt damit
+    unberuehrt.
+
+    Ueber dem Nennvolumenstrom wird nicht extrapoliert: Ein Register waechst
+    nicht, wenn man mehr Luft hindurchschickt.
+    """
+    if V <= 0.0 or V_nenn <= 0.0:
+        return 0.0
+    verhaeltnis = min(V / V_nenn, 1.0)
+
+    ntu_nenn = -math.log(1.0 - REGISTER_GUETE_NENN)
+    ntu = ntu_nenn * verhaeltnis ** (LUFTSEITE_EXPONENT - 1.0)
+    guete = 1.0 - math.exp(-ntu)
+    return guete * verhaeltnis / REGISTER_GUETE_NENN
+
+
+def bypassfaktor(bf_nenn: float, V: float, V_nenn: float) -> float:
+    """Bypassfaktor eines Kuehlregisters bei DIESER Luftmenge.
+
+    Der Bypassfaktor sagt, welcher Anteil der Luft die Kuehlflaeche nicht
+    beruehrt - je kleiner, desto naeher kommt die Austrittsluft der
+    Oberflaechentemperatur. Er ist keine Konstante des Bauteils, sondern haengt
+    an der Verweilzeit: BF = exp(-NTU), und NTU waechst, wenn die Luft
+    langsamer stroemt.
+
+    Mit NTU(r) = NTU_nenn * r^-0,2 (siehe uebertragbare_leistung) folgt
+
+        BF(r) = BF_nenn ^ (r^-0,2)
+
+    Bei Nennvolumenstrom kommt genau der eingestellte Wert heraus. Bei einem
+    Fuenftel der Luftmenge sinkt ein Bypassfaktor von 0,55 auf 0,44 - die Luft
+    wird kaelter, die insgesamt uebertragene Kaelteleistung faellt trotzdem,
+    weil viel weniger Luft durchgeht.
+
+    Nicht beruecksichtigt ist die Abhaengigkeit von der Kaltwassertemperatur
+    (ueber die Stoffwerte des Wassers und den wasserseitigen Uebergang). Sie
+    ist zweiter Ordnung, solange die Wassermenge konstant bleibt; der
+    eingestellte Wert gilt weiterhin als Auslegungswert des Registers.
+    """
+    if V <= 0.0 or V_nenn <= 0.0:
+        return bf_nenn
+    if not 0.0 < bf_nenn < 1.0:
+        return bf_nenn
+    verhaeltnis = min(V / V_nenn, 1.0)
+    return bf_nenn ** (verhaeltnis ** (LUFTSEITE_EXPONENT - 1.0))
 
 
 def nach_gruppen() -> dict:

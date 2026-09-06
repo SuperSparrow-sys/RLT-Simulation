@@ -86,12 +86,22 @@ def test_geoeffneter_bypass_schaltet_die_rueckgewinnung_ab():
 
 
 def test_rueckfeuchtzahl_uebertraegt_feuchte():
+    """Die Feuchteuebertragung fuer sich, ohne Waermeuebertragung.
+
+    Die Zuluft steht hier auf 15 GradC, nicht auf 0. Mit rueckwaermzahl 0
+    behaelt sie ihre Eintrittstemperatur, und bei 0 GradC traegt Luft nur
+    3,8 g/kg - die frueher erwartete Zuluft mit 6,0 g/kg bei 0 GradC gibt es
+    physikalisch nicht. Der Tauscher begrenzt die Uebertragung inzwischen an
+    der Saettigungslinie (siehe tests/test_wrg_kondensation.py), und dieser
+    Test forderte bis dahin ein unmoegliches Ergebnis.
+    """
     p = parameter(V_nenn=10000.0, rueckwaermzahl=0.0, rueckfeuchtzahl=50.0)
     ein = {
-        "zuluft_ein": Luft(V=10000.0, T=0.0, x=2.0),
+        "zuluft_ein": Luft(V=10000.0, T=15.0, x=2.0),
         "abluft_ein": Luft(V=10000.0, T=20.0, x=10.0),
         "stellgroesse": 100.0,
         "stellgroesse_bypass": 0.0,
     }
     aus, _ = Waermerueckgewinnung().berechne(ein, p, {})
+    # 15 GradC tragen rund 10,8 g/kg - 6,0 sind moeglich.
     assert aus["zuluft_aus"].x == pytest.approx(2.0 + 0.5 * 8.0)

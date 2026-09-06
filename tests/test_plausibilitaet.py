@@ -52,6 +52,7 @@ ERWARTETE_PRUEFUNGEN = [
     "Ab der zweiten Stunde bleibt die Restabweichung klein",
     "Raumtemperatur zwischen 5 und 40 °C",
     "Raumfeuchte nie negativ und nie ueber der Saettigung",
+    "Kein Luftzustand der Anlage ist übersättigt",
     "Heizwaerme im Winter groesser als im Sommer",
     "Kaelte im Sommer groesser als im Winter",
     "Heizleistung wird nie negativ",

@@ -7,6 +7,25 @@ bleiben - eine genauere Zustandsgleichung wuerde andere Zahlen liefern.
 
 import math
 
+#: Gesamtdruck, auf den alle Feuchtegroessen bezogen sind, in Pa.
+#:
+#: Ein Bar, nicht die Normatmosphaere von 101 325 Pa. So steht es in der Mappe,
+#: und der Luftdruck schwankt ohnehin um mehr. Die Folge muss man aber kennen:
+#: Alle Feuchtewerte liegen dadurch systematisch um rund 1,2 Prozent ueber den
+#: Zahlen der ueblichen h,x-Tafeln - bei 20 GradC sind es 14,88 statt
+#: 14,70 g/kg. Wer die Ergebnisse mit einem Diagramm vergleicht, sieht diesen
+#: Unterschied und soll wissen, woher er kommt.
+#: Geprueft in tests/bausteine/test_stoffdaten.py.
+GESAMTDRUCK = 100000.0
+
+#: Verhaeltnis der Molmassen von Wasserdampf und trockener Luft (18,015/28,96).
+#:
+#: Frueher stand hier zweimal eine andere Zahl: x_saett rechnete mit 0,622,
+#: rel_feuchte mit 0,6222. Die beiden Funktionen sind zueinander invers - mit
+#: verschiedenen Konstanten ergab gesaettigte Luft nicht 100 Prozent relative
+#: Feuchte, sondern 99,96. Der Fehler ist klein, aber er ist einer.
+MOLMASSENVERHAELTNIS = 0.622
+
 
 def p_saett(T: float) -> float:
     """Saettigungsdampfdruck in Pa bei der Temperatur T in °C."""
@@ -22,7 +41,7 @@ def p_saett(T: float) -> float:
 def x_saett(T: float) -> float:
     """Saettigungsfeuchte in g/kg bei der Temperatur T in °C."""
     p = p_saett(T)
-    return 0.622 * p / (100000.0 - p) * 1000.0
+    return MOLMASSENVERHAELTNIS * p / (GESAMTDRUCK - p) * 1000.0
 
 
 def enthalpie(T: float, x: float) -> float:
@@ -32,5 +51,6 @@ def enthalpie(T: float, x: float) -> float:
 
 def rel_feuchte(T: float, x: float) -> float:
     """Relative Feuchte in Prozent."""
-    p_dampf = x / 1000.0 / (0.6222 + x / 1000.0) * 100000.0
+    anteil = x / 1000.0
+    p_dampf = anteil / (MOLMASSENVERHAELTNIS + anteil) * GESAMTDRUCK
     return p_dampf / p_saett(T) * 100.0

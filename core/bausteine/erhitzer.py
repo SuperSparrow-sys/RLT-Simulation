@@ -3,6 +3,7 @@
 from core.bausteine.basis import (
     AUSGANG, EINGANG, LUFT, MESSWERT, SIGNAL, STELLGROESSE, WAERME, ZAHL, ZULUFT,
     Baustein, Luft, Param, Port, druckverlust, registriere,
+    uebertragbare_leistung,
 )
 
 
@@ -47,7 +48,16 @@ class Erhitzer(Baustein):
         luft = ein.get("luft_ein", Luft())
         u = float(ein.get("stellgroesse", 0.0))
 
-        QH = 0.0 if luft.V <= 0 else u / 100.0 * p["QH_max"]
+        # Die Ventilstellung fordert an, das Register liefert - aber nur so
+        # viel, wie es bei DIESER Luftmenge uebertragen kann. Ohne die zweite
+        # Grenze gaebe ein 70-kW-Register auch bei einem Fuenftel der Luft
+        # 70 kW ab, was ueber 300 K Temperaturerhoehung entspraeche. Bei
+        # Nennvolumenstrom ist der Faktor genau 1,0; die Mappe faehrt
+        # durchgehend dort und bleibt deshalb unberuehrt.
+        moeglich = p["QH_max"] * uebertragbare_leistung(
+            u / 100.0, luft.V, p["V_nenn"]
+        )
+        QH = 0.0 if luft.V <= 0 else min(u / 100.0 * p["QH_max"], moeglich)
 
         T_aus = luft.T
         if luft.V > 0:

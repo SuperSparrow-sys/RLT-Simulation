@@ -158,7 +158,12 @@ def _absolute_feuchte(temperatur, rel_feuchte_prozent):
     Saettigungsdampfdruck-Formel wie im Rechenkern."""
     rel_feuchte_prozent = max(0.0, min(100.0, rel_feuchte_prozent))
     p_dampf = rel_feuchte_prozent / 100.0 * stoffdaten.p_saett(temperatur)
-    return 622.2 * p_dampf / (100000.0 - p_dampf)
+    # Dieselben Konstanten wie core.bausteine.stoffdaten - sonst laufen Hin-
+    # und Rueckrechnung auseinander (frueher standen hier 622,2 gegen 622).
+    return (
+        stoffdaten.MOLMASSENVERHAELTNIS * 1000.0
+        * p_dampf / (stoffdaten.GESAMTDRUCK - p_dampf)
+    )
 
 
 def abrufen(breite, laenge, jahr, ort=""):

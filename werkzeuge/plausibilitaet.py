@@ -81,6 +81,45 @@ def _raumreihe(ergebnis, groesse):
     return []
 
 
+#: Wieviel Uebersaettigung als Rundungsrest durchgeht, in g/kg.
+#: Der Rechenkern arbeitet mit Naeherungsformeln fuer den Saettigungsdampfdruck;
+#: ein Zehntel Gramm je Kilogramm liegt in deren Genauigkeit und ist keine
+#: Aussage ueber die Anlage.
+SAETTIGUNG_TOLERANZ = 0.1
+
+
+def uebersaettigte_zustaende(stunden):
+    """Alle Luftzustaende der Anlage, die mehr Wasser tragen als moeglich.
+
+    Geht ueber JEDEN Luftanschluss JEDER Karte in JEDER Stunde, nicht nur ueber
+    die Raumluft. Uebersaettigte Luft entsteht dort, wo Wasser eingetragen oder
+    Zustaende gemischt werden - am Befeuchter, am Luftwaescher, hinter der
+    Mischkammer -, und der Raum sieht davon unter Umstaenden nichts mehr, weil
+    er selbst wieder trocknet.
+
+    Rueckgabe: eine Liste von Befunden mit Stunde, Kartennummer, Anschluss und
+    dem Ueberschuss in g/kg. Eine leere Liste heisst "nichts gefunden" - bei
+    einem leeren Lauf heisst sie auch "nichts geprueft".
+    """
+    from core.bausteine import stoffdaten as st_modul
+    from core.bausteine.basis import Luft as LuftKlasse
+
+    befunde = []
+    for nummer, stunde in enumerate(stunden, start=1):
+        for karte_id, werte in stunde.items():
+            for schluessel, wert in werte.items():
+                if not isinstance(wert, LuftKlasse) or wert.V <= 0:
+                    continue
+                grenze = st_modul.x_saett(wert.T)
+                if wert.x > grenze + SAETTIGUNG_TOLERANZ:
+                    befunde.append({
+                        "stunde": nummer, "karte_id": karte_id,
+                        "anschluss": schluessel, "T": wert.T, "x": wert.x,
+                        "x_saett": grenze, "ueberschuss": wert.x - grenze,
+                    })
+    return befunde
+
+
 def _karte_mit_typ(graph, typ, filter_=None):
     """Erste Karte eines Typs; mit `filter_` gezielt unter mehreren gleichen
     Typs (z. B. Zu- und Abluftventilator) - ausgewaehlt ueber ihre Parameter."""
@@ -214,6 +253,24 @@ def pruefungen(ergebnis):
         not ueber,
         f"{len(ueber)} Stunden ausserhalb"
         + (f", erste Stunde {ueber[0]}" if ueber else ""),
+    )
+
+    # 4b - Kein Luftzustand der ganzen Kette traegt mehr Wasser als moeglich.
+    # Die Pruefung darueber sieht nur den Raum; uebersaettigte Luft entsteht
+    # aber am Befeuchter, am Waescher oder beim Mischen und kann bis zum Raum
+    # laengst wieder abgetrocknet sein.
+    uebersaettigt = uebersaettigte_zustaende(lauf.stunden)
+    erste = uebersaettigt[0] if uebersaettigt else None
+    pruefe(
+        "Kein Luftzustand der Anlage ist übersättigt",
+        not uebersaettigt,
+        f"{len(uebersaettigt)} Zustände über der Sättigungslinie"
+        + (
+            f" - erster: Stunde {erste['stunde']}, Karte {erste['karte_id']}, "
+            f"{erste['anschluss']} mit {erste['x']:.1f} statt höchstens "
+            f"{erste['x_saett']:.1f} g/kg bei {erste['T']:.1f} °C"
+            if erste else ""
+        ),
     )
 
     # 5/6 - Geheizt wird im Winter, gekuehlt im Sommer - nicht umgekehrt.

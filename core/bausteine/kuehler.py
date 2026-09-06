@@ -8,7 +8,7 @@ Die Oberflaechentemperatur wird wie in der Excel als Kaltwassertemperatur plus
 from core.bausteine import stoffdaten as st
 from core.bausteine.basis import (
     AUSGANG, EINGANG, KAELTE, LUFT, MESSWERT, SIGNAL, STELLGROESSE, ZAHL, ZULUFT,
-    Baustein, Luft, Param, Port, druckverlust, registriere,
+    Baustein, Luft, Param, Port, bypassfaktor, druckverlust, registriere,
 )
 
 
@@ -66,21 +66,31 @@ class Kuehler(Baustein):
         "warnung": "Warnung",
     }
 
-    def oberflaechentemperatur(self, T_ein, p):
+    def oberflaechentemperatur(self, T_ein, p, V=None):
         """Anlage!T3 - die Temperatur, an die der Kuehler die Luft heranfuehrt.
 
         Sie liegt zwischen Kaltwasser und Eintrittsluft; wo genau, sagt der
         Kontaktfaktor. Ist die Eintrittsluft KAELTER als das Kaltwasser, liegt
         sie darueber - dann waermt der Kuehler, statt zu kuehlen. berechne()
         warnt in diesem Fall (siehe dort).
+
+        Der Kontaktfaktor ist der Bypassfaktor des Registers und keine
+        Konstante des Bauteils: Stroemt weniger Luft, bleibt sie laenger an
+        der Flaeche und kommt dem Kaltwasser naeher. Wird V uebergeben, gilt
+        der eingestellte Wert als AUSLEGUNGSwert bei V_nenn und wird auf die
+        aktuelle Luftmenge umgerechnet (basis.bypassfaktor). Ohne V - etwa aus
+        einer Auswertung heraus - bleibt es beim eingestellten Wert.
         """
-        return p["T_KW_mittel"] + p["kontaktfaktor"] * (T_ein - p["T_KW_mittel"])
+        faktor = p["kontaktfaktor"]
+        if V is not None:
+            faktor = bypassfaktor(faktor, V, p["V_nenn"])
+        return p["T_KW_mittel"] + faktor * (T_ein - p["T_KW_mittel"])
 
     def berechne(self, ein, p, zustand):
         luft = ein.get("luft_ein", Luft())
         u = float(ein.get("stellgroesse", 0.0))
 
-        T_O = self.oberflaechentemperatur(luft.T, p)
+        T_O = self.oberflaechentemperatur(luft.T, p, luft.V)
         x_O = st.x_saett(T_O)
 
         T_aus = luft.T - u / 100.0 * (luft.T - T_O)
