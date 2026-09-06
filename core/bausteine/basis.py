@@ -511,6 +511,41 @@ def bypassfaktor(bf_nenn: float, V: float, V_nenn: float) -> float:
     return bf_nenn ** (verhaeltnis ** (LUFTSEITE_EXPONENT - 1.0))
 
 
+def strangparameter():
+    """Der Parameter, mit dem eine Luftbehandlungskarte ihren Einbauort nennt.
+
+    Ein Erhitzer, ein Kuehler, ein Waescher oder ein Befeuchter ist im
+    Abluftkanal genau dasselbe Geraet wie im Zuluftkanal - die Rolle seiner
+    Luftanschluesse ist es nicht. Sie entscheidet, welche Pfeile das Programm
+    annimmt: (Abluft -> Zuluft) steht in core/graph.py unter VERBOTEN, damit
+    ein Pfeil von der Waermerueckgewinnung zur Fortluft nicht versehentlich den
+    Zuluftstrang erwischt. Ohne diesen Parameter liesse sich deshalb keine
+    dieser Karten in den Abluftstrang setzen - eine adiabate Abluftkuehlung,
+    das ueblichste Verfahren der indirekten Verdunstungskuehlung, war schlicht
+    nicht baubar.
+
+    Die Rolle bleibt also streng, statt die Anschluesse neutral zu machen: Ein
+    Erhitzer sitzt fast immer in der Zuluft, und ein neutraler Anschluss haenge
+    ebenso bereitwillig im falschen Strang.
+
+    Karten, die diesen Parameter fuehren, brauchen dazu ein ports_fuer() mit
+    strangrolle() - siehe core/bausteine/ventilator.py. core.anlagen zieht die
+    Anschluesse nach, wenn der Parameter sich aendert.
+    """
+    return [
+        Param(
+            "rolle", "Einbau im Zuluft- oder Abluftstrang", "-", ZULUFT,
+            auswahl=(wahl(ZULUFT, "Zuluft"), wahl(ABLUFT, "Abluft")),
+            darstellung=AUSWAHL,
+        ),
+    ]
+
+
+def strangrolle(p):
+    """Die Luftrolle, die zum eingestellten Einbauort gehoert."""
+    return ABLUFT if p.get("rolle") == ABLUFT else ZULUFT
+
+
 def nach_gruppen() -> dict:
     """Alle Bausteine nach Palettengruppe sortiert."""
     gruppen: dict = {}

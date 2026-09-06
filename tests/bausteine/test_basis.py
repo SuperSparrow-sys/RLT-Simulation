@@ -315,8 +315,9 @@ def test_alle_parameter_deklarieren_eine_darstellung_und_ganzzahlige_dezimalstel
 
     Die Gesamtzahl unten ist Absicht: Sie zwingt dazu, einen neu hinzugefuegten
     Parameter hier bewusst zur Kenntnis zu nehmen, statt ihn stillschweigend
-    mitlaufen zu lassen. Zuletzt gestiegen auf 142, als der Sequenzregler seine
-    Stufenzahlen als Parameter bekam."""
+    mitlaufen zu lassen. Zuletzt gestiegen auf 155, als die Karten "Innere
+    Lasten" und "Statische Kuehlung" dazukamen und der Raum einen Sollwert fuer
+    seine Kuehlflaeche bekam."""
     from core.bausteine import lade_alle
 
     lade_alle()
@@ -331,7 +332,7 @@ def test_alle_parameter_deklarieren_eine_darstellung_und_ganzzahlige_dezimalstel
             anzahl += 1
             assert p.darstellung in gueltig, f"{klasse.KENNUNG}.{p.schluessel}"
             assert isinstance(p.dezimalstellen, int)
-    assert anzahl == 142
+    assert anzahl == 155
 
 
 def test_alle_auswahl_parameter_tragen_wert_und_label():
@@ -353,7 +354,9 @@ def test_alle_auswahl_parameter_tragen_wert_und_label():
                     f"{klasse.KENNUNG}.{p.schluessel}: {eintrag!r}"
                 )
                 assert eintrag["wert"] and eintrag["label"]
-    assert gefunden == 10  # 2 (Dampfart) + 3 (Pumpenart) + 3 (Regelart) + 2 (Rolle)
+    # 2 (Dampfart) + 3 (Pumpenart) + 3 (Regelart) + 10 (Einbauort, an den
+    # fuenf Luftbehandlungskarten je Zuluft und Abluft)
+    assert gefunden == 18
 
 
 def test_wahl_erzeugt_ein_json_taugliches_dict():

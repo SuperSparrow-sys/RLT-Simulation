@@ -4,7 +4,21 @@ from core.bausteine.basis import (
     AUSGANG, EINGANG, LUFT, MESSWERT, SIGNAL, STELLGROESSE, WAERME, ZAHL, ZULUFT,
     Baustein, Luft, Param, Port, druckverlust, registriere,
     uebertragbare_leistung,
+    strangparameter, strangrolle,
 )
+
+
+def _ports(rolle):
+    """Die Anschluesse des Erhitzers. Die Luftrolle haengt am Einbauort -
+    siehe core/bausteine/basis.py, strangparameter().
+    """
+    return [
+        Port("luft_ein", LUFT, EINGANG, rolle),
+        Port("luft_aus", LUFT, AUSGANG, rolle),
+        Port("stellgroesse", SIGNAL, EINGANG, STELLGROESSE),
+        Port("T_aus", SIGNAL, AUSGANG, MESSWERT),
+        Port("QH", SIGNAL, AUSGANG, WAERME),
+    ]
 
 
 @registriere
@@ -14,7 +28,7 @@ class Erhitzer(Baustein):
     GRUPPE = "Luftbehandlung"
     SYMBOL = "erhitzer.svg"
 
-    PARAMETER = [
+    PARAMETER = strangparameter() + [
         Param("V_nenn", "Nennvolumenstrom (V_nenn)", "m³/h", 8200.0,
               darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
         Param("dp_nenn", "Druckverlust bei Nennvolumenstrom (dp_nenn)", "Pa", 240.0,
@@ -28,13 +42,11 @@ class Erhitzer(Baustein):
                       "diesen Wert, 40 % ergeben 40 % davon."),
     ]
 
-    PORTS = [
-        Port("luft_ein", LUFT, EINGANG, ZULUFT),
-        Port("luft_aus", LUFT, AUSGANG, ZULUFT),
-        Port("stellgroesse", SIGNAL, EINGANG, STELLGROESSE),
-        Port("T_aus", SIGNAL, AUSGANG, MESSWERT),
-        Port("QH", SIGNAL, AUSGANG, WAERME),
-    ]
+    PORTS = _ports(ZULUFT)
+
+    @classmethod
+    def ports_fuer(cls, p):
+        return _ports(strangrolle(p))
 
     AUSGABEN = ["T_aus", "F_aus", "QH", "dp"]
     AUSGABE_LABEL = {

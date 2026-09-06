@@ -426,6 +426,75 @@ def bau_statische_heizung(projekt_id):
     return b.anlage_id
 
 
+def bau_statische_kuehlung(projekt_id):
+    """Ein Raum mit mehr innerer Last, als seine Zuluft forttragen kann.
+
+    1000 m3/h nehmen bei 8 K Untertemperatur rund 2,7 kW auf; die Lastenkarte
+    gibt 6 kW. Ohne Kuehlflaeche stiege der Raum ueber 30 GradC - mit ihr steht
+    er bei 26.
+    """
+    b = _anlage(
+        projekt_id, "Statische Kühlung", "Beispiel zum Baustein Statische Kühlung."
+    )
+    wetter = _wetter(b)
+    au = _aussenluft(b, wetter)
+    vent = _zuluftventilator(b, 440, 200, V_max=1000.0)
+    b.pfeil(au, vent)
+    raum = b.karte(
+        "einfacher_raum", 640, 200, "Raum", spez_transmission=0.6,
+        sollwert_stat=20.0, sollwert_kuehl=26.0,
+    )
+    b.pfeil(vent, raum)
+    b.pfeil(wetter, raum)
+    fort = _fortluft(b, 840, 120)
+    b.pfeil(raum, fort)
+    lasten = b.karte(
+        "innere_lasten", 440, 360, "Innere Lasten",
+        personen=20.0, grundflaeche=100.0, geraete=45.0,
+    )
+    b.verbinde(lasten, "waermelast", raum, "waermelast")
+    b.verbinde(lasten, "feuchtelast", raum, "feuchtelast")
+    kuehlung = b.karte(
+        "statische_kuehlung", 640, 360, "Kühldecke", QK_nenn=10.0
+    )
+    b.verbinde(raum, "QK_stat", kuehlung, "QK_stat")
+    bil = _bilanz(b, 840, 360)
+    b.pfeil(kuehlung, bil)
+    return b.anlage_id
+
+
+def bau_innere_lasten(projekt_id):
+    """Dieselbe Karte allein: 20 Personen und Geraete in einem Raum ohne
+    Kuehlflaeche - man sieht, wie weit die Raumtemperatur davon steigt."""
+    b = _anlage(
+        projekt_id, "Innere Lasten", "Beispiel zum Baustein Innere Lasten."
+    )
+    wetter = _wetter(b)
+    au = _aussenluft(b, wetter)
+    vent = _zuluftventilator(b, 440, 200, V_max=2000.0)
+    b.pfeil(au, vent)
+    raum = b.karte(
+        "einfacher_raum", 640, 200, "Raum", spez_transmission=0.6,
+        sollwert_stat=20.0,
+    )
+    b.pfeil(vent, raum)
+    b.pfeil(wetter, raum)
+    fort = _fortluft(b, 840, 200)
+    b.pfeil(raum, fort)
+    profil = b.karte(
+        "tageslastprofil", 240, 360, "Tageslastprofil",
+        lastgang_1=[0.0] * 7 + [1.0] * 10 + [0.0] * 7,
+    )
+    lasten = b.karte(
+        "innere_lasten", 440, 360, "Innere Lasten",
+        personen=20.0, grundflaeche=100.0, geraete=10.0,
+    )
+    b.verbinde(profil, "lastgang_1", lasten, "belegung")
+    b.verbinde(lasten, "waermelast", raum, "waermelast")
+    b.verbinde(lasten, "feuchtelast", raum, "feuchtelast")
+    return b.anlage_id
+
+
 def bau_raum(projekt_id):
     b = _anlage(projekt_id, "Raum", "Beispiel zum Baustein Raum.")
     wetter = _wetter(b)
@@ -857,6 +926,8 @@ BAUPLAENE = {
     "sammler": bau_sammler,
     "einfacher_raum": bau_einfacher_raum,
     "statische_heizung": bau_statische_heizung,
+    "statische_kuehlung": bau_statische_kuehlung,
+    "innere_lasten": bau_innere_lasten,
     "raum": bau_raum,
     "p_regler": bau_p_regler,
     "sequenzregler": bau_sequenzregler,

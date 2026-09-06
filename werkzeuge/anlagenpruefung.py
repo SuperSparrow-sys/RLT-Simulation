@@ -74,11 +74,18 @@ def kennzahlen(modul, graph, lauf):
     flaeche = getattr(modul, "FLAECHE_M2", 0.0) or 1.0
     luftmenge = getattr(modul, "LUFTMENGE_M3H", 0.0)
 
-    waerme = sum(_alle_reihen(graph, lauf, "erhitzer", "QH"))
-    waerme += sum(_alle_reihen(graph, lauf, "dampfbefeuchter", "QH"))
-    waerme += sum(_alle_reihen(graph, lauf, "warmwasser", "QH"))
-    waerme += sum(_alle_reihen(graph, lauf, "zirkulation", "QH"))
-    kaelte = sum(_alle_reihen(graph, lauf, "kuehler", "QK"))
+    # Waerme und Kaelte kommen aus der Bilanz des Laufs - derselben Zahl, die
+    # die Bilanzkarte der Anlage zeigt und die im Bericht steht.
+    #
+    # Frueher stand hier eine eigene Summe ueber eine handgepflegte Liste von
+    # Kartentypen (erhitzer, dampfbefeuchter, warmwasser, zirkulation). Das ist
+    # derselbe Massstab zweimal geschrieben, und die beiden liefen
+    # auseinander, sobald ein neuer Verbraucher dazukam: Die statische Heizung
+    # fehlte in der Liste, und der Pruefstand meldete fuer das Buerogebaeude
+    # 8,0 kWh/(m2 a), waehrend die Anlage selbst 10,1 auswies. Ein Pruefstand,
+    # der etwas anderes misst als das gepruefte Werkzeug, prueft das falsche.
+    waerme = lauf.bilanz.get("waerme", 0.0)
+    kaelte = lauf.bilanz.get("kaelte", 0.0)
 
     strom_ventilatoren = sum(_alle_reihen(graph, lauf, "ventilator", "PE"))
     # SFP aus der geleisteten Foerderarbeit: Strom je gefoerderten Kubikmeter.

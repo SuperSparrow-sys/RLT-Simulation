@@ -30,6 +30,10 @@ AUSLEGUNG
                    WRG (75 %): 9000 x 0,34 x 32 x 0,25                = 24,5 kW
                    -> Erhitzer 60 kW in der Luft, Heizkoerper 40 kW statisch
     Kuehllast      Personen 60 x 120 W = 7,2 kW, Beleuchtung 12 W/m2 = 10,8 kW
+                   Sport treibende Menschen geben viel Feuchte ab: 200 g/h je
+                   Person, zusammen 12,0 kg/h. Das ist der Grund, warum eine
+                   Turnhalle ohne Lueftung binnen einer Stunde beschlaegt - und
+                   es wurde vorher gar nicht gerechnet.
                    -> Kuehler 40 kW
     Zweipunkt      Schaltdifferenz 2,0 K. Sie muss BREITER sein als der Sprung,
                    den ein Schaltvorgang in der Halle bewirkt - sonst schaltet
@@ -106,8 +110,22 @@ def baue(projekt_id, name=NAME):
                           # WRG und Register wärmen, ein Kühler kühlt.
                           waermestufen=2, kaeltestufen=1)
         # Heizkoerper, geschaltet mit 2,0 K Schaltdifferenz - siehe Kopf.
-        raumthermostat = b.karte("hysterese_regler", 700, 20, "Raumthermostat",
+        raumthermostat = b.karte("hysterese_regler", 480, 20, "Raumthermostat",
                                  sollwert=18.0, hysterese=2.0)
+        # Der Hysterese-Regler schaltet EIN, wenn der Istwert ueber dem
+        # Sollwert liegt - richtig fuer eine Kuehlung, verkehrt fuer eine
+        # Heizung. Ohne diese Umkehr heizte der Heizkoerper genau dann, wenn
+        # die Halle ohnehin zu warm war: ueber das Testreferenzjahr 88 MWh
+        # allein von Juni bis August, mehr als doppelt so viel wie im ganzen
+        # Winterhalbjahr.
+        thermostat_umkehr = b.karte("umkehrglied", 700, 20, "Heizen statt kühlen")
+        # Und der Anschluss QH_stat des Heizkoerpers nimmt KILOWATT entgegen,
+        # nicht Prozent. Aus dem Schaltausgang 0/100 wird deshalb 0/40 kW -
+        # die Nennleistung des Heizkoerpers. Bisher standen dort 100 kW, die
+        # der Heizkoerper stillschweigend auf seine 40 kW kappte; die Anlage
+        # rechnete richtig und log ueber ihre eigene Anforderung.
+        heizanforderung = b.karte("faktor", 810, 20, "Heizanforderung in kW",
+                                  faktor=0.4)
         heizkoerper = b.karte("statische_heizung", 920, 20, "Heizkörper",
                               QH_nenn=40.0)
 
@@ -151,7 +169,9 @@ def baue(projekt_id, name=NAME):
         b.verbinde(kaskade, "kaelter_1", kuehler, "stellgroesse")
 
         b.verbinde(halle, "T_Raum", raumthermostat, "istwert")
-        b.verbinde(raumthermostat, "ausgang", heizkoerper, "QH_stat")
+        b.verbinde(raumthermostat, "ausgang", thermostat_umkehr, "ein")
+        b.verbinde(thermostat_umkehr, "ausgang", heizanforderung, "ein")
+        b.verbinde(heizanforderung, "ausgang", heizkoerper, "QH_stat")
         b.verbinde(heizkoerper, "QH", halle, "QH_stat")
 
         b.pfeil(zeitplan, betrieb)
@@ -162,13 +182,28 @@ def baue(projekt_id, name=NAME):
         b.verbinde(ventilatorstellung, "ausgang", zuluft, "stellgroesse")
         b.verbinde(ventilatorstellung, "ausgang", abluft, "stellgroesse")
         b.pfeil(betrieb, beleuchtung)
-        b.verbinde(beleuchtung, "Q_Bel", halle, "waermelast")
+        lasten = b.karte("innere_lasten", 1360, 420, "Innere Lasten",
+                         personen=60.0, waerme_je_person=120.0, feuchte_je_person=200.0,
+                         grundflaeche=FLAECHE_M2)
+        # Der Raum hat je EINEN Eingang fuer Waerme- und Feuchtelast; die
+        # Lastenkarte zaehlt zusammen, was hineingeht. Bisher lief nur die
+        # Waerme dorthin, und die Feuchteabgabe der Menschen fehlte ganz.
+        b.verbinde(tagesprofil, "lastgang_1", lasten, "belegung")
+        b.verbinde(beleuchtung, "Q_Bel", lasten, "weitere_waerme")
+        b.verbinde(lasten, "waermelast", halle, "waermelast")
+        b.verbinde(lasten, "feuchtelast", halle, "feuchtelast")
 
         for karte in (zuluft, abluft, erhitzer, kuehler, beleuchtung, heizkoerper):
             b.pfeil(karte, bilanz)
-        b.pfeil(halle, logger)
-        b.pfeil(kaskade, logger)
+        # Erst die benannten Groessen auf ihre Steckplaetze, dann den Pfeil: Ein
+        # Pfeil auf den Datenlogger belegt die freien Plaetze der Reihe nach, und
+        # zwar so viele, wie die Gegenkarte Messwerte anbietet. Stand er zuerst,
+        # verschob ein neuer Ausgang an einer Karte alle folgenden Nummern - das
+        # Anlegen der Kuehlflaeche liess so jede Vorlage mit "Der Anschluss
+        # 'wert_5' ist schon belegt" scheitern.
         b.verbinde(wrg, "Q_WRG", logger, "wert_5")
         b.verbinde(heizkoerper, "QH", logger, "wert_6")
+        b.pfeil(halle, logger)
+        b.pfeil(kaskade, logger)
 
     return b.anlage

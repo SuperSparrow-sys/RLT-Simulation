@@ -20,7 +20,16 @@ AUSLEGUNG
                                                               -------
                                                                64,6 kW
                    -> Erhitzer 80 kW
-    Kuehllast      Personen und Geraete rund 30 W/m2         = 45 kW
+    Innere Last    Beleuchtung 10 W/m2 x 1500 m2                 = 15,0 kW
+                   270 Schueler und Lehrer x 65 W                = 17,6 kW
+                   Geraete (Tafeln, Rechner) 8,3 W/m2            = 12,4 kW
+                                                                   --------
+                                                                   45,0 kW
+                   270 Personen auf 1500 m2 sind zehn Klassen zu 25 Schuelern
+                   plus Lehrkraefte. Kinder geben rund 65 W trockene Waerme ab,
+                   weniger als Erwachsene, und 40 g/h Feuchte - zusammen
+                   10,8 kg/h, die vorher gar nicht gerechnet wurden.
+    Kuehllast      45 kW innere Last, 30 W/m2
                    -> Kuehler 60 kW
     Ventilator     12000 m3/h, 850 Pa, Wirkungsgrad 0,65     = 4,36 kW
                    -> SFP 0,36 W/(m3/h)
@@ -79,7 +88,15 @@ def baue(projekt_id, name=NAME):
                          rolle="zuluft", V_max=LUFTMENGE_M3H, dp_max=850.0,
                          dp_konst=850.0, PE_max=4.4, regelart="F")
         raum = b.karte("einfacher_raum", 1140, 200, "Klassenräume",
-                       spez_transmission=1.0, sollwert_stat=16.0)
+                       spez_transmission=1.0, sollwert_stat=20.0)
+        # Die Gebaeudeheizung. Ohne sie meldet der Raum seine
+        # Unterdeckung (QH_stat) und niemand nimmt sie entgegen: Er bleibt
+        # trotzdem auf seinem Sollwert, und die Waerme dafuer taucht in
+        # keiner Bilanz auf - das Gebaeude heizte sich umsonst. Der
+        # Lueftungserhitzer deckt das nicht; er waermt die Zuluft, nicht
+        # die Huelle. Auslegung: 1,0 kW/K x 32 K = 32 kW
+        gebaeudeheizung = b.karte("statische_heizung", 1140, 620,
+                                  "Gebäudeheizung", QH_nenn=35.0)
         abluft = b.karte("ventilator", 1360, 200, "Abluftventilator",
                          rolle="abluft", V_max=LUFTMENGE_M3H, dp_max=650.0,
                          dp_konst=650.0, PE_max=3.3, regelart="F")
@@ -149,12 +166,28 @@ def baue(projekt_id, name=NAME):
         b.verbinde(ventilatorstellung, "ausgang", zuluft, "stellgroesse")
         b.verbinde(ventilatorstellung, "ausgang", abluft, "stellgroesse")
         b.pfeil(betrieb, beleuchtung)
-        b.verbinde(beleuchtung, "Q_Bel", raum, "waermelast")
+        lasten = b.karte("innere_lasten", 1360, 380, "Innere Lasten",
+                         personen=270.0, waerme_je_person=65.0, feuchte_je_person=40.0,
+                         grundflaeche=FLAECHE_M2, geraete=8.3)
+        # Der Raum hat je EINEN Eingang fuer Waerme- und Feuchtelast; die
+        # Lastenkarte zaehlt zusammen, was hineingeht. Bisher lief nur die
+        # Waerme dorthin, und die Feuchteabgabe der Menschen fehlte ganz.
+        b.verbinde(tagesprofil, "lastgang_1", lasten, "belegung")
+        b.verbinde(beleuchtung, "Q_Bel", lasten, "weitere_waerme")
+        b.verbinde(lasten, "waermelast", raum, "waermelast")
+        b.verbinde(lasten, "feuchtelast", raum, "feuchtelast")
 
-        for karte in (zuluft, abluft, erhitzer, kuehler, beleuchtung):
+        b.verbinde(raum, "QH_stat", gebaeudeheizung, "QH_stat")
+        for karte in (zuluft, abluft, erhitzer, kuehler, beleuchtung, gebaeudeheizung):
             b.pfeil(karte, bilanz)
+        # Erst die benannten Groessen auf ihre Steckplaetze, dann den Pfeil: Ein
+        # Pfeil auf den Datenlogger belegt die freien Plaetze der Reihe nach, und
+        # zwar so viele, wie die Gegenkarte Messwerte anbietet. Stand er zuerst,
+        # verschob ein neuer Ausgang an einer Karte alle folgenden Nummern - das
+        # Anlegen der Kuehlflaeche liess so jede Vorlage mit "Der Anschluss
+        # 'wert_5' ist schon belegt" scheitern.
+        b.verbinde(wrg, "Q_WRG", logger, "wert_5")
         b.pfeil(raum, logger)
         b.pfeil(kaskade, logger)
-        b.verbinde(wrg, "Q_WRG", logger, "wert_5")
 
     return b.anlage

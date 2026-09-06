@@ -29,6 +29,7 @@ Entsprechung des VBA-Unterprogramms Speicher().
 """
 
 from dataclasses import dataclass, field
+from functools import lru_cache
 
 from core import config
 from core.bausteine import basis
@@ -73,6 +74,7 @@ def _volumenabweichung(neu, alt):
     return abs(neu - alt) / max(VOLUMEN_BEZUG_MIN, abs(alt))
 
 
+@lru_cache(maxsize=None)
 def _ist_volumenstrom(name):
     """Traegt diese Ausgabe einen Volumenstrom in m3/h?
 
@@ -81,6 +83,10 @@ def _ist_volumenstrom(name):
     'V'. Beide muessen relativ gemessen werden, sonst zaehlt ein Kubikmeter je
     Stunde so viel wie ein Kelvin - und eine grosse Anlage gilt schon bei
     anderthalb Zehntausendstel Restabweichung als nicht eingeschwungen.
+
+    Gemerkt, weil die Frage im Abweichungsmass millionenfach gestellt wird
+    und die Antwort allein am Namen haengt: Ein Jahreslauf ruft sie ueber
+    hundert Millionen Mal mit ein paar Dutzend verschiedenen Namen auf.
     """
     return name == "V" or name.startswith("V_")
 
@@ -169,6 +175,17 @@ class Solver:
         ziele = {}
         for v in self.graph.verbindungen:
             ziele.setdefault(v.von_port.id, []).append(v.nach_port.id)
+
+        # Dieselbe Auskunft in der Gegenrichtung, fuer _eingaenge(): Woher
+        # bekommt dieser Eingang seinen Wert? Dort wurde bisher fuer JEDEN
+        # Anschluss JEDER Karte in JEDEM Durchgang die ganze Verbindungsliste
+        # durchsucht - bei hundert Durchgaengen mal 8760 Stunden sind das
+        # Milliarden Vergleiche fuer eine Antwort, die sich waehrend des ganzen
+        # Laufs nicht aendert. Genommen wird weiterhin die ERSTE passende
+        # Verbindung, wie vorher auch.
+        self._quelle_von = {}
+        for v in self.graph.verbindungen:
+            self._quelle_von.setdefault(v.nach_port.id, v)
 
         belegt = {v.nach_port.id for v in self.graph.verbindungen}
 
@@ -384,14 +401,11 @@ class Solver:
         for port in karte.ports:
             if port.richtung != basis.EINGANG:
                 continue
-            quellen = [
-                v for v in self.graph.verbindungen if v.nach_port.id == port.id
-            ]
-            if not quellen:
+            v = self._quelle_von.get(port.id)
+            if v is None:
                 if port.art == basis.LUFT:
                     ein[port.schluessel] = Luft()
                 continue
-            v = quellen[0]
             wert = ausgaben.get(v.von_port.karte_id, {}).get(v.von_port.schluessel)
             if wert is None:
                 wert = Luft() if port.art == basis.LUFT else 0.0
@@ -399,23 +413,57 @@ class Solver:
         return ein
 
     def _abweichung(self, alt, neu):
+        """Die groesste Aenderung zwischen zwei Durchgaengen.
+
+        Diese Schleife ist die teuerste Stelle des ganzen Programms: Sie laeuft
+        je Durchgang einmal ueber jede Ausgabe jeder Karte, und ein Jahreslauf
+        macht bis zu 876 000 Durchgaenge. Sie ist deshalb bewusst flach
+        geschrieben - _volumenabweichung() steht hier ausgeschrieben, und
+        statt max() mit drei Argumenten stehen einzelne Vergleiche. Beides
+        liefert dasselbe Ergebnis; nachgemessen bleiben die Jahresbilanzen aller
+        Vorlagen bis auf die letzte Stelle gleich.
+        """
         groesste = 0.0
+        bezug_min = VOLUMEN_BEZUG_MIN
         for karte_id, werte in neu.items():
-            vorher = alt.get(karte_id, {})
+            vorher = alt.get(karte_id)
+            if vorher is None:
+                # Eine Karte, die es im Vorstand gar nicht gab - der erste
+                # Durchgang einer Stunde. Eine Karte ganz OHNE Ausgaben sagt
+                # dazu nichts und wird uebergangen, wie bisher auch.
+                if werte:
+                    return float("inf")
+                continue
             for name, wert in werte.items():
-                if isinstance(wert, Luft):
-                    vor = vorher.get(name)
-                    if not isinstance(vor, Luft):
+                vor = vorher.get(name)
+                if type(wert) is Luft:
+                    if type(vor) is not Luft:
                         return float("inf")
-                    groesste = max(
-                        groesste,
-                        abs(wert.T - vor.T), abs(wert.x - vor.x),
-                        _volumenabweichung(wert.V, vor.V),
-                    )
+                    d = wert.T - vor.T
+                    if d < 0.0:
+                        d = -d
+                    if d > groesste:
+                        groesste = d
+                    d = wert.x - vor.x
+                    if d < 0.0:
+                        d = -d
+                    if d > groesste:
+                        groesste = d
+                    alt_V = vor.V
+                    if alt_V < 0.0:
+                        alt_V = -alt_V
+                    d = wert.V - vor.V
+                    if d < 0.0:
+                        d = -d
+                    d /= bezug_min if alt_V < bezug_min else alt_V
+                    if d > groesste:
+                        groesste = d
                 elif isinstance(wert, (int, float)):
-                    vor = vorher.get(name)
                     if not isinstance(vor, (int, float)):
                         return float("inf")
+                    d = wert - vor
+                    if d < 0.0:
+                        d = -d
                     # Die mitgeschriebenen Volumenstroeme (V_<name>, siehe
                     # "Eingangsgroessen mitschreiben" weiter unten) sind reine
                     # Zahlen, tragen aber m3/h. Ohne diesen Zweig zaehlte eine
@@ -423,9 +471,10 @@ class Solver:
                     # eine grosse Anlage galt schon bei vier Zehntausendstel
                     # Restabweichung als nicht eingeschwungen.
                     if _ist_volumenstrom(name):
-                        groesste = max(groesste, _volumenabweichung(wert, vor))
-                    else:
-                        groesste = max(groesste, abs(wert - vor))
+                        alt_V = vor if vor >= 0.0 else -vor
+                        d /= bezug_min if alt_V < bezug_min else alt_V
+                    if d > groesste:
+                        groesste = d
         return groesste
 
     @staticmethod
@@ -534,11 +583,26 @@ class Solver:
                 neue_zustaende[karte_id] = zustand_neu
                 iterationszustaende[karte_id] = zustand_neu
 
-                # Eingangsgroessen mitschreiben, damit sie protokolliert werden koennen
+                # Eingangsgroessen mitschreiben, damit sie protokolliert werden
+                # koennen.
+                #
+                # 'ein' enthaelt zweierlei: die wirklich anliegenden Zustaende an
+                # den Lufteingaengen, und an jedem LuftAUSGANG eine Luft, die
+                # allein die stromabwaerts abgenommene Menge traegt (siehe
+                # _eingaenge). Von der zweiten Art ist nur der Volumenstrom eine
+                # Aussage; ihre Temperatur ist nie gesetzt. Frueher stand sie
+                # trotzdem als 'T_luft_aus' im Protokoll und war in jeder Stunde
+                # jeder Anlage 0 GradC - eine Spalte, die aussah wie ein Messwert
+                # und keiner war.
+                abnahmemarken = {
+                    port.schluessel for port in karte.ports
+                    if port.art == basis.LUFT and port.richtung == basis.AUSGANG
+                }
                 for schluessel, wert in ein.items():
                     if isinstance(wert, Luft):
                         werte.setdefault(f"V_{schluessel}", wert.V)
-                        werte.setdefault(f"T_{schluessel}", wert.T)
+                        if schluessel not in abnahmemarken:
+                            werte.setdefault(f"T_{schluessel}", wert.T)
                     elif isinstance(wert, (int, float)):
                         werte.setdefault(f"in_{schluessel}", wert)
                 if "luft_ein" in ein and isinstance(ein["luft_ein"], Luft):

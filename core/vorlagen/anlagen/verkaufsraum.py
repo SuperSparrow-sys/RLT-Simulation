@@ -13,8 +13,25 @@ AUSLEGUNG
     Transmission   viel Glasfront -> rund 1,5 kW/K
     Heizlast       1,5 x 32 K + 7000 x 0,34 x 32 x 0,25 = 48,0 + 19,0 = 67,0 kW
                    -> Erhitzer 80 kW
-    Innere Last    Beleuchtung 25 W/m2 x 1200 m2                     = 30 kW
-                   -> Kuehler 70 kW (Beleuchtung, Personen, Sonne)
+    Innere Last    Beleuchtung 25 W/m2 x 1200 m2                     = 30,0 kW
+                   Kunden und Personal 100 Pers. x 75 W            =  7,5 kW
+                   Kassen, Kuehlmoebel, Technik 6 W/m2 dauerhaft   =  7,2 kW
+                                                                     -------
+                                                                     44,7 kW
+                   100 Personen auf 1200 m2 sind 12 m2 je Person - fuer eine
+                   Verkaufsflaeche zur Hauptzeit ein ueblicher Ansatz.
+    Kuehllast      7000 m3/h tragen bei 10 K Untertemperatur 23,8 kW ab. Bei
+                   32 GradC aussen und 26 GradC im Raum:
+                       innere Last                                  44,7 kW
+                       Transmission 1,5 kW/K x 6 K                  +9,0 kW
+                       Zuluft                                      -23,8 kW
+                                                                     -------
+                                                                     29,9 kW
+                   Die hoechste Forderung ueber das Testreferenzjahr liegt bei
+                   36,7 kW - der Auslegungsfall oben ist nicht die schlimmste
+                   Stunde, weil die Belegung nachmittags mit der Aussenluft
+                   zusammenfaellt. Nachgemessen, nicht geschaetzt.
+                   -> Kuehlflaeche 40 kW, Kuehler im Geraet 70 kW
     Ventilator     7000 m3/h, 850 Pa, Wirkungsgrad 0,65              = 2,54 kW
                    -> SFP 0,36 W/(m3/h)
 """
@@ -47,7 +64,11 @@ def baue(projekt_id, name=NAME):
         projekt_id, name, BESCHREIBUNG,
         luftmenge=LUFTMENGE_M3H, flaeche=FLAECHE_M2, transmission=1.5,
         QH_max=80.0, QK_nenn=70.0, dp_zuluft=850.0, dp_abluft=650.0,
-        raumname="Verkaufsfläche", sollwert_stat=12.0,
+        raumname="Verkaufsfläche", sollwert_stat=19.0, T_Raum_min=19.0,
+        personen=100.0, geraete_w_m2=0.0, grundlast_w_m2=6.0,
+        sollwert_kuehl=26.0, QK_flaeche=40.0,
+        # Gebaeudeheizung: 1,5 kW/K x 32 K = 48 kW
+        QH_statisch=50.0,
         zeitplan_tage=WOCHENTAGE[:6], zeitplan_von=7.0, zeitplan_bis=21.0,
         lastgang=tagesgang(0.2, 1.0, 0.3, tagstunden=(6, 21)),
         beleuchtung_w_m2=25.0, beleuchtung_lux=750.0,

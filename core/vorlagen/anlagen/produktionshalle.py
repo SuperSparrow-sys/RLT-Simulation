@@ -23,7 +23,13 @@ AUSLEGUNG
                                                                        -------
                                                                       134,4 kW
                    -> Erhitzer 160 kW
-    Innere Last    Maschinen und Beleuchtung 20 W/m2 x 3000 m2       = 60 kW
+    Innere Last    Maschinen und Beleuchtung 18 W/m2 x 3000 m2     = 54 kW
+                   40 Beschaeftigte x 150 W (koerperliche Arbeit)  =  6 kW
+                                                                     -------
+                                                                     60 kW
+                   Die 20 W/m2 der Auslegung stehen also weiter, nur getrennt
+                   nach Maschinen und Menschen. Deren Feuchteabgabe von je
+                   150 g/h ergibt 6,0 kg/h, die vorher fehlte.
                    Die Luftmenge folgt der Last, nicht der Flaeche. Abfuehrbar
                    sind bei 30 GradC Hallentemperatur und 14 GradC erreichbarer
                    Zuluft (mehr gibt ein Kuehler mit 6 GradC Kaltwasser nicht
@@ -87,9 +93,18 @@ def baue(projekt_id, name=NAME):
         zonenverteiler = b.karte("verteiler", 1140, 200, "Zonenverteiler",
                                  anteile={"luft_aus_1": 50.0, "luft_aus_2": 50.0})
         zone_a = b.karte("einfacher_raum", 1360, 120, "Fertigung",
-                         spez_transmission=1.25, sollwert_stat=15.0)
+                         spez_transmission=1.25, sollwert_stat=17.0)
         zone_b = b.karte("einfacher_raum", 1360, 300, "Montage",
-                         spez_transmission=1.25, sollwert_stat=15.0)
+                         spez_transmission=1.25, sollwert_stat=17.0)
+        # Die Gebaeudeheizung je Zone. Ohne sie meldet der Raum seine
+        # Unterdeckung (QH_stat) und niemand nimmt sie entgegen: Er bleibt
+        # trotzdem auf seinem Sollwert, und die Waerme dafuer taucht in keiner
+        # Bilanz auf. Auslegung je Zone: 1,25 kW/K x 27 K (15 GradC innen)
+        # = 34 kW.
+        heizung_a = b.karte("statische_heizung", 1140, 620, "Gebäudeheizung Fertigung",
+                            QH_nenn=40.0)
+        heizung_b = b.karte("statische_heizung", 1360, 620, "Gebäudeheizung Montage",
+                            QH_nenn=40.0)
         zonensammler = b.karte("sammler", 1580, 200, "Zonensammler")
         abluft = b.karte("ventilator", 1800, 200, "Abluftventilator",
                          rolle="abluft", V_max=LUFTMENGE_M3H, dp_max=800.0,
@@ -103,7 +118,7 @@ def baue(projekt_id, name=NAME):
         fortluft = b.karte("fortluft", 260, 420, "Fortluft")
 
         kaskade = b.karte("kaskade", 480, 20, "Raum-/Zuluft-Kaskade",
-                          T_Raum_min=22.0, T_AU_min=15.0, T_Raum_max=30.0,
+                          T_Raum_min=17.0, T_AU_min=15.0, T_Raum_max=30.0,
                           T_AU_max=30.0, T_ZU_min=16.0, T_ZU_max=30.0, xp=5.0,
                           # Register wärmt, Wäscher und Kühler kühlen.
                           waermestufen=2, kaeltestufen=2)
@@ -117,7 +132,7 @@ def baue(projekt_id, name=NAME):
         ventilatorstellung = b.karte("maximalwert", 1800, 620, "Ventilatorstellung")
 
         maschinen = b.karte("beleuchtung", 1580, 420, "Maschinen und Beleuchtung",
-                            spez_leistung=20.0, grundflaeche=FLAECHE_M2,
+                            spez_leistung=18.0, grundflaeche=FLAECHE_M2,
                             nennbeleuchtung=500.0)
         bilanz = b.karte("bilanz", 2240, 200, "Jahresbilanz",
                          preis_strom=280.0, preis_waerme=95.0, preis_kaelte=95.0,
@@ -181,16 +196,37 @@ def baue(projekt_id, name=NAME):
         b.verbinde(ventilatorstellung, "ausgang", wrg_stellung, "ein")
         b.verbinde(wrg_stellung, "ausgang", wrg, "stellgroesse")
         b.pfeil(betrieb, maschinen)
-        # Die innere Last verteilt sich auf beide Zonen; jede sieht die Haelfte.
+        # Die Maschinenlast verteilt sich auf beide Zonen; jede sieht die
+        # Haelfte. Dasselbe gilt fuer die Belegschaft: 40 Beschaeftigte, je
+        # zwanzig in einer Zone. Koerperliche Arbeit gibt 150 W Waerme und
+        # 150 g/h Feuchte je Person ab - die Feuchte wurde vorher gar nicht
+        # gerechnet, obwohl eine Montagehalle im Winter davon beschlaegt.
         halbe_last = b.karte("faktor", 1800, 420, "Last je Zone", faktor=0.5)
         b.verbinde(maschinen, "Q_Bel", halbe_last, "ein")
-        b.verbinde(halbe_last, "ausgang", zone_a, "waermelast")
-        b.verbinde(halbe_last, "ausgang", zone_b, "waermelast")
+        for zone, versatz in ((zone_a, 0), (zone_b, 180)):
+            lasten = b.karte(
+                "innere_lasten", 1580, 420 + versatz, "Innere Lasten",
+                personen=20.0, waerme_je_person=150.0, feuchte_je_person=150.0,
+                grundflaeche=FLAECHE_M2 / 2.0,
+            )
+            b.verbinde(tagesprofil, "lastgang_1", lasten, "belegung")
+            b.verbinde(halbe_last, "ausgang", lasten, "weitere_waerme")
+            b.verbinde(lasten, "waermelast", zone, "waermelast")
+            b.verbinde(lasten, "feuchtelast", zone, "feuchtelast")
 
-        for karte in (zuluft, abluft, erhitzer, kuehler, waescher, maschinen):
+        b.verbinde(zone_a, "QH_stat", heizung_a, "QH_stat")
+        b.verbinde(zone_b, "QH_stat", heizung_b, "QH_stat")
+        for karte in (zuluft, abluft, erhitzer, kuehler, waescher, maschinen,
+                      heizung_a, heizung_b):
             b.pfeil(karte, bilanz)
+        # Erst die benannten Groessen auf ihre Steckplaetze, dann den Pfeil: Ein
+        # Pfeil auf den Datenlogger belegt die freien Plaetze der Reihe nach, und
+        # zwar so viele, wie die Gegenkarte Messwerte anbietet. Stand er zuerst,
+        # verschob ein neuer Ausgang an einer Karte alle folgenden Nummern - das
+        # Anlegen der Kuehlflaeche liess so jede Vorlage mit "Der Anschluss
+        # 'wert_5' ist schon belegt" scheitern.
+        b.verbinde(wrg, "Q_WRG", logger, "wert_5")
         b.pfeil(zone_a, logger)
         b.pfeil(kaskade, logger)
-        b.verbinde(wrg, "Q_WRG", logger, "wert_5")
 
     return b.anlage

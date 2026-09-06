@@ -9,6 +9,7 @@ from core.bausteine.basis import (
     ABLUFT, AUSGANG, AUSWAHL, EINGANG, LUFT, MESSWERT, PROZENT, SIGNAL,
     STELLGROESSE, STROM, ZAHL, ZULUFT,
     Baustein, Luft, Param, Port, registriere, wahl,
+    strangparameter, strangrolle,
 )
 
 
@@ -18,6 +19,19 @@ from core.bausteine.basis import (
 TEILLAST_MIN = 30.0
 
 
+def _ports(rolle):
+    """Die Anschluesse des Ventilators. Die Luftrolle haengt am Einbauort -
+    siehe core/bausteine/basis.py, strangparameter().
+    """
+    return [
+        Port("luft_ein", LUFT, EINGANG, rolle),
+        Port("luft_aus", LUFT, AUSGANG, rolle),
+        Port("stellgroesse", SIGNAL, EINGANG, STELLGROESSE),
+        Port("T_aus", SIGNAL, AUSGANG, MESSWERT),
+        Port("PE", SIGNAL, AUSGANG, STROM),
+    ]
+
+
 @registriere
 class Ventilator(Baustein):
     KENNUNG = "ventilator"
@@ -25,12 +39,7 @@ class Ventilator(Baustein):
     GRUPPE = "Luftbehandlung"
     SYMBOL = "ventilator.svg"
 
-    PARAMETER = [
-        Param(
-            "rolle", "Einbau im Zuluft- oder Abluftstrang", "-", "zuluft",
-            auswahl=(wahl("zuluft", "Zuluft"), wahl("abluft", "Abluft")),
-            darstellung=AUSWAHL,
-        ),
+    PARAMETER = strangparameter() + [
         Param("V_max", "Volumenstrom bei 100 % (V_max)", "m³/h", 8200.0,
               darstellung=ZAHL, dezimalstellen=0, minimum=0.0,
               hinweis="Der Ventilator bestimmt als einzige Karte die Luftmenge der "
@@ -67,13 +76,11 @@ class Ventilator(Baustein):
                       "Sobald einer ankommt, zählt dessen Wert."),
     ]
 
-    PORTS = [
-        Port("luft_ein", LUFT, EINGANG, ZULUFT),
-        Port("luft_aus", LUFT, AUSGANG, ZULUFT),
-        Port("stellgroesse", SIGNAL, EINGANG, STELLGROESSE),
-        Port("T_aus", SIGNAL, AUSGANG, MESSWERT),
-        Port("PE", SIGNAL, AUSGANG, STROM),
-    ]
+    PORTS = _ports(ZULUFT)
+
+    @classmethod
+    def ports_fuer(cls, p):
+        return _ports(strangrolle(p))
 
     AUSGABEN = ["T_aus", "F_aus", "PE", "dp", "V"]
     # Ohne diesen Eintrag heisst der Anschluss wie sein gleichnamiger

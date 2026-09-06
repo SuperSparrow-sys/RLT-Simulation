@@ -177,6 +177,35 @@ ERKLAERUNGEN = {
             "Anschluss."
         ),
     },
+    "statische_kuehlung": {
+        "beschreibung": (
+            "Das Gegenstück zur Statischen Heizung: Sie nimmt die vom Raum "
+            "gemeldete Überdeckung (QK_stat) auf und begrenzt sie auf die "
+            "eingestellte Nennleistung - die Kühldecke oder das Kühlsegel "
+            "neben der Lüftungsanlage. Gebraucht wird sie überall dort, wo "
+            "die Luftmenge nach Hygiene bemessen ist: Bei acht Kelvin "
+            "Untertemperatur trägt ein Kubikmeter Luft nur wenig Wärme fort, "
+            "und eine innere Last von 25 W/m² übersteigt das schnell. Sie "
+            "braucht einen Raum als Signalquelle, und im Raum muss ein "
+            "Sollwert der Kühlfläche stehen - sonst meldet er nie etwas."
+        ),
+    },
+    "innere_lasten": {
+        "beschreibung": (
+            "Rechnet aus, was Menschen und Geräte in einen Raum eintragen, "
+            "und zwar getrennt nach Wärme und Feuchte. Statt einer nackten "
+            "Zahl stehen hier die Größen einer Auslegung: Personenzahl, "
+            "Wärme- und Feuchteabgabe je Person, Geräteleistung je "
+            "Quadratmeter. Der Eingang „Belegung“ nimmt einen Anteil zwischen "
+            "0 und 1 entgegen, meist aus einem Tageslastprofil; die Dauerlast "
+            "läuft unabhängig davon rund um die Uhr."
+        ),
+        "hinweis": (
+            "Der Raum hat je einen Eingang für Wärme- und Feuchtelast. Was "
+            "sonst noch hineingeht - allen voran die Beleuchtungswärme - "
+            "hängt deshalb an dieser Karte und wird mitgezählt."
+        ),
+    },
     "raum": {
         "beschreibung": (
             "Der ausführliche Raum: Geometrie aus vier Wandabschnitten a bis "

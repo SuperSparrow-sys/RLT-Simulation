@@ -9,7 +9,21 @@ from core.bausteine import stoffdaten as st
 from core.bausteine.basis import (
     AUSGANG, EINGANG, KAELTE, LUFT, MESSWERT, SIGNAL, STELLGROESSE, ZAHL, ZULUFT,
     Baustein, Luft, Param, Port, bypassfaktor, druckverlust, registriere,
+    strangparameter, strangrolle,
 )
+
+
+def _ports(rolle):
+    """Die Anschluesse des Kuehlers. Die Luftrolle haengt am Einbauort -
+    siehe core/bausteine/basis.py, strangparameter().
+    """
+    return [
+        Port("luft_ein", LUFT, EINGANG, rolle),
+        Port("luft_aus", LUFT, AUSGANG, rolle),
+        Port("stellgroesse", SIGNAL, EINGANG, STELLGROESSE),
+        Port("T_aus", SIGNAL, AUSGANG, MESSWERT),
+        Port("QK", SIGNAL, AUSGANG, KAELTE),
+    ]
 
 
 @registriere
@@ -19,7 +33,7 @@ class Kuehler(Baustein):
     GRUPPE = "Luftbehandlung"
     SYMBOL = "kuehler.svg"
 
-    PARAMETER = [
+    PARAMETER = strangparameter() + [
         Param("V_nenn", "Nennvolumenstrom (V_nenn)", "m³/h", 8200.0,
               darstellung=ZAHL, dezimalstellen=0, minimum=0.0),
         Param("dp_nenn", "Druckverlust bei Nennvolumenstrom (dp_nenn)", "Pa", 240.0,
@@ -49,13 +63,11 @@ class Kuehler(Baustein):
                       "Lufttemperatur und mehr Entfeuchtung."),
     ]
 
-    PORTS = [
-        Port("luft_ein", LUFT, EINGANG, ZULUFT),
-        Port("luft_aus", LUFT, AUSGANG, ZULUFT),
-        Port("stellgroesse", SIGNAL, EINGANG, STELLGROESSE),
-        Port("T_aus", SIGNAL, AUSGANG, MESSWERT),
-        Port("QK", SIGNAL, AUSGANG, KAELTE),
-    ]
+    PORTS = _ports(ZULUFT)
+
+    @classmethod
+    def ports_fuer(cls, p):
+        return _ports(strangrolle(p))
 
     AUSGABEN = ["T_aus", "F_aus", "QK", "dp", "warnung"]
     AUSGABE_LABEL = {
@@ -98,6 +110,26 @@ class Kuehler(Baustein):
         if x_O < luft.x:
             x_aus = luft.x - u / 100.0 * (luft.x - x_O)
 
+        # Hinter einem Kuehlregister kann keine uebersaettigte Luft austreten:
+        # Was mehr Wasser traegt, als bei dieser Temperatur in der Luft bleiben
+        # kann, schlaegt sich am Register nieder und laeuft in die Wanne.
+        #
+        # Ohne diese Zeile entstand Uebersaettigung aus zwei harmlosen Anlaessen
+        # zugleich. Erstens enthaelt das Testreferenzjahr Nebelstunden, deren
+        # Feuchte knapp ueber der Saettigung liegt (13,60 GradC mit 9,900 g/kg
+        # bei 9,833 moeglich) - Messwerte bei 100 % relativer Feuchte, kein
+        # Fehler. Zweitens ist die Saettigungskurve gekruemmt: Die Formeln oben
+        # mischen den Eintrittszustand geradlinig mit dem Zustand an der
+        # Registeroberflaeche, und eine Gerade zwischen zwei Punkten auf oder
+        # dicht ueber einer nach oben gekruemmten Kurve verlaeuft dazwischen
+        # weiter darueber. Aus 0,067 g/kg Ueberschuss am Eintritt wurden so
+        # 0,118 g/kg am Austritt - die Anlage machte aus einer Nebelstunde
+        # einen physikalisch unmoeglichen Zustand und reichte ihn weiter.
+        x_aus = min(x_aus, st.x_saett(T_aus))
+
+        # Erst danach die Leistung: Was hier niederschlaegt, ist Kondensat, und
+        # seine Verdampfungswaerme gehoert zur Kuehlleistung. Die Enthalpie
+        # rechnet sie ueber x_aus mit.
         QK = 0.0
         if luft.V > 0:
             QK = luft.V / 3600.0 * 1.2 * (

@@ -1,4 +1,4 @@
-"""Die 34 Kartensymbole (static/symbole/) und die Bedienzeichen.
+"""Die Kartensymbole (static/symbole/) und die Bedienzeichen.
 
 Wie sie AUSSEHEN, entscheidet kein Test - das wurde im Browser angesehen,
 jedes einzeln und alle nebeneinander. Hier steht das Nachprüfbare: dass jedes

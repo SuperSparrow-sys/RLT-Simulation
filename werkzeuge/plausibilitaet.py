@@ -285,15 +285,18 @@ def pruefungen(ergebnis):
     # Jahr (siehe oben) faende er beide Male null und meldete einen Fehler
     # ueber den Ausschnitt statt ueber die Anlage.
     if ist_jahreslauf:
-        pruefe(
-            "Heizwaerme im Winter groesser als im Sommer",
-            _summe(waerme, winter) > _summe(waerme, sommer),
-            f"Winter {_summe(waerme, winter) / 1000:.1f} MWh, "
-            f"Sommer {_summe(waerme, sommer) / 1000:.1f} MWh",
-        )
-        # Nur, wenn die Anlage ueberhaupt kuehlt: Eine Anlage ohne Kuehler
-        # (oder eine, die im gepruepften Jahr nie kuehlen musste) wuerde sonst
-        # null gegen null vergleichen und durchfallen.
+        # Beide Vergleiche nur, wenn es die Groesse ueberhaupt gibt. Eine
+        # Anlage ohne Heizung - das Rechenzentrum kuehlt das ganze Jahr - fand
+        # sonst null gegen null und fiel durch: "Winter 0.0 MWh, Sommer
+        # 0.0 MWh". Eine Pruefung, die eine ganze Bauart nie bestehen kann,
+        # prueft nichts, sie meldet nur.
+        if _summe(waerme) > 0:
+            pruefe(
+                "Heizwaerme im Winter groesser als im Sommer",
+                _summe(waerme, winter) > _summe(waerme, sommer),
+                f"Winter {_summe(waerme, winter) / 1000:.1f} MWh, "
+                f"Sommer {_summe(waerme, sommer) / 1000:.1f} MWh",
+            )
         if _summe(kaelte) > 0:
             pruefe(
                 "Kaelte im Sommer groesser als im Winter",

@@ -60,7 +60,19 @@ ERWARTUNG = {
     # die Aussenluft halten. Der Verbrauch je Quadratmeter ist deshalb um ein
     # Vielfaches hoeher als im Buero - das ist der Kern dieser Vorlage.
     "heizwaerme_kwh_m2a": (200.0, 900.0),
-    "kaelte_kwh_m2a": (5.0, 150.0),
+    # Kaelte dagegen fast nie. Das ist kein Versehen, sondern die Bauart: Eine
+    # Schwimmhalle steht auf 30 GradC, und die Aussenluft ist in Mitteleuropa
+    # in weniger als hundert Stunden im Jahr waermer. Entfeuchtet wird ueber
+    # die Aussenluftklappe, nicht ueber ein Kaelteregister - der Kuehler steht
+    # nur fuer die wenigen schwuelen Sommerstunden da, in denen die Aussenluft
+    # feuchter ist als die Hallenluft. Gemessen ueber das Testreferenzjahr
+    # bleiben davon 0,3 kWh/(m2 a).
+    #
+    # Das Band stand vorher bei 5 bis 150 und war schlicht falsch hergeleitet:
+    # Es uebertrug die Groessenordnung eines Bueros auf eine Anlage, die aus
+    # ganz anderen Gruenden kuehlt. Die Obergrenze bleibt, damit ein Kuehler,
+    # der gegen die Heizung arbeitet, weiterhin auffaellt.
+    "kaelte_kwh_m2a": (0.0, 20.0),
     "sfp_w_m3h": (0.25, 0.95),
     "luftwechsel_1h": (4.0, 6.0),
 }
@@ -88,7 +100,15 @@ def baue(projekt_id, name=NAME):
                          rolle="zuluft", V_max=LUFTMENGE_M3H, dp_max=1000.0,
                          dp_konst=1000.0, PE_max=6.4, regelart="F")
         halle = b.karte("einfacher_raum", 1360, 200, "Schwimmhalle",
-                        spez_transmission=1.4, sollwert_stat=28.0)
+                        spez_transmission=1.4, sollwert_stat=30.0)
+        # Die Gebaeudeheizung. Ohne sie meldet der Raum seine
+        # Unterdeckung (QH_stat) und niemand nimmt sie entgegen: Er bleibt
+        # trotzdem auf seinem Sollwert, und die Waerme dafuer taucht in
+        # keiner Bilanz auf - das Gebaeude heizte sich umsonst. Der
+        # Lueftungserhitzer deckt das nicht; er waermt die Zuluft, nicht
+        # die Huelle. Auslegung: 1,4 kW/K x 40 K (28 GradC innen) = 56 kW
+        gebaeudeheizung = b.karte("statische_heizung", 1360, 620,
+                                  "Gebäudeheizung", QH_nenn=60.0)
         abluft = b.karte("ventilator", 1580, 200, "Abluftventilator",
                          rolle="abluft", V_max=LUFTMENGE_M3H, dp_max=800.0,
                          dp_konst=800.0, PE_max=5.1, regelart="F")
@@ -137,6 +157,9 @@ def baue(projekt_id, name=NAME):
         verdunstung = b.karte("faktor", 1360, 760, "Verdunstung Becken",
                               faktor=VERDUNSTUNG_KG_H)
 
+        lasten = b.karte("innere_lasten", 1580, 420, "Innere Lasten",
+                         personen=60.0, waerme_je_person=60.0,
+                         feuchte_je_person=100.0, grundflaeche=FLAECHE_M2)
         beleuchtung = b.karte("beleuchtung", 1800, 420, "Beleuchtung",
                               spez_leistung=15.0, grundflaeche=FLAECHE_M2,
                               nennbeleuchtung=300.0)
@@ -182,7 +205,11 @@ def baue(projekt_id, name=NAME):
         b.pfeil(tagesprofil, betrieb)
         b.verbinde(tagesprofil, "lastgang_1", grundlast, "ein")
         b.verbinde(tagesprofil, "lastgang_1", verdunstung, "ein")
-        b.verbinde(verdunstung, "ausgang", halle, "feuchtelast")
+        # Die Beckenverdunstung ist die grosse Feuchtequelle, aber nicht die
+        # einzige: 60 Badegaeste geben 100 g/h ab, zusammen 6 kg/h neben den
+        # 75 kg/h aus dem Becken. Beides laeuft ueber die Lastenkarte in den
+        # einen Feuchteeingang der Halle.
+        b.verbinde(verdunstung, "ausgang", lasten, "weitere_feuchte")
         b.verbinde(betrieb, "stellgrad", ventilatorstellung, "ein_1")
         b.verbinde(grundlast, "ausgang", ventilatorstellung, "ein_2")
         b.verbinde(ventilatorstellung, "ausgang", zuluft, "stellgroesse")
@@ -190,12 +217,21 @@ def baue(projekt_id, name=NAME):
         b.verbinde(halle, "F_Raum", feuchteregler, "istwert_2")
         b.verbinde(feuchteregler, "ausgang_2", mischkammer, "umluftanteil")
         b.pfeil(betrieb, beleuchtung)
-        b.verbinde(beleuchtung, "Q_Bel", halle, "waermelast")
+        b.verbinde(beleuchtung, "Q_Bel", lasten, "weitere_waerme")
+        b.verbinde(lasten, "waermelast", halle, "waermelast")
+        b.verbinde(lasten, "feuchtelast", halle, "feuchtelast")
 
-        for karte in (zuluft, abluft, erhitzer, kuehler, beleuchtung):
+        b.verbinde(halle, "QH_stat", gebaeudeheizung, "QH_stat")
+        for karte in (zuluft, abluft, erhitzer, kuehler, beleuchtung, gebaeudeheizung):
             b.pfeil(karte, bilanz)
+        # Erst die benannten Groessen auf ihre Steckplaetze, dann den Pfeil: Ein
+        # Pfeil auf den Datenlogger belegt die freien Plaetze der Reihe nach, und
+        # zwar so viele, wie die Gegenkarte Messwerte anbietet. Stand er zuerst,
+        # verschob ein neuer Ausgang an einer Karte alle folgenden Nummern - das
+        # Anlegen der Kuehlflaeche liess so jede Vorlage mit "Der Anschluss
+        # 'wert_5' ist schon belegt" scheitern.
+        b.verbinde(wrg, "Q_WRG", logger, "wert_5")
         b.pfeil(halle, logger)
         b.pfeil(kaskade, logger)
-        b.verbinde(wrg, "Q_WRG", logger, "wert_5")
 
     return b.anlage

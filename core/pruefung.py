@@ -18,7 +18,10 @@ Meldungen; wer eine neue Regel braucht, schreibt eine Funktion dazu und
 trägt sie in REGELN ein.
 """
 
+from datetime import datetime
+
 from core import graph as graph_modul
+from core import solver
 from core.bausteine import basis
 
 # Rollen, die eine Energie- oder Wassermenge tragen. Genau diese Ausgänge
@@ -235,9 +238,151 @@ def _keine_wetterquelle(graph):
     ]
 
 
+def _luftweg_ohne_volumenstrom(graph):
+    """Verdrahtete Luftwege, durch die nichts strömt.
+
+    Der schlimmste stille Fehler dieser Art: Jeder Anschluss hängt, die
+    Rechnung läuft durch, die Temperaturen sehen richtig aus - und durch den
+    ganzen Strang strömen null Kubikmeter, weil kein Ventilator ihn antreibt.
+    Ein Luftwäscher meldet dann brav seine Austrittstemperatur und verbraucht
+    kein Wasser; eine Wärmerückgewinnung überträgt nichts. Niemand sieht es an
+    den Zahlen, weil keine davon falsch aussieht. Aufgefallen ist es beim Bau
+    einer Anlage mit Abluftwäscher, der der Abluftventilator fehlte.
+
+    _luftweg_offen() findet das nicht: Dort ist ja alles verbunden.
+
+    Ermittelt wird es, indem die Prüfung EINE Stunde rechnen lässt und
+    nachsieht, wo Luft ankommt. Das ist nicht der Umweg, als der es aussieht:
+    Der Volumenstrom entsteht im Rückwärtslauf nur STROMAUFWÄRTS eines
+    Ventilators - was hinter ihm liegt, bekommt seine Menge erst im
+    Vorwärtslauf zugetragen. Beide Hälften nachzubilden hieße, den halben
+    Rechenkern ein zweites Mal zu schreiben und ihn auseinanderlaufen zu
+    lassen. So steht die Meldung dagegen auf genau der Rechnung, über die sie
+    urteilt. Eine Stunde kostet Millisekunden.
+
+    Die Probestunde ist bewusst reizlos - 0 °C, kein Sonnenschein: Gefragt ist
+    die Luftmenge, und die hängt an Ventilator und Verdrahtung, nicht am
+    Wetter.
+    """
+    # Der Zeitpunkt ist ein datetime, kein Text: Karten mit Tages- oder
+    # Wochenprofil lesen daraus Stunde und Wochentag ab.
+    probe = {
+        "zeitpunkt": datetime(2024, 1, 1, 12), "t_au": 0.0, "x_au": 4.0,
+        "str_s": 0.0, "str_o": 0.0, "str_w": 0.0, "str_n": 0.0, "str_h": 0.0,
+    }
+    stunde = solver.Solver(graph).starte([probe]).stunden[0]
+    belegt_ein = {v.nach_port.id for v in graph.verbindungen}
+
+    ohne_strom = []
+    for karte in graph.karten.values():
+        werte = stunde.get(karte.id, {})
+        for port in karte.ports:
+            if port.art != basis.LUFT or port.richtung != basis.EINGANG:
+                continue
+            if port.id not in belegt_ein:
+                continue          # meldet schon _luftweg_offen()
+            if werte.get(f"V_{port.schluessel}", 0.0) > 0.0:
+                continue
+            ohne_strom.append((karte, port))
+
+    if not ohne_strom:
+        return []
+
+    # Volumenstrom entsteht ausschliesslich an Karten, die ihn selbst
+    # bestimmen: Ihr Bedarf steht auch dann ueber null, wenn stromabwaerts
+    # nichts abgenommen wird (core/bausteine/ventilator.py). Das ist die
+    # Eigenschaft, auf die es ankommt - nicht der Kartentyp.
+    def bestimmt_selbst(karte):
+        leer = {
+            p.schluessel: 0.0 for p in karte.ports
+            if p.art == basis.LUFT and p.richtung == basis.AUSGANG
+        }
+        gefordert = karte.baustein.bedarf(leer, karte.parameter)
+        return any(menge > 0.0 for menge in gefordert.values())
+
+    if not any(bestimmt_selbst(k) for k in graph.karten.values()):
+        # Eine Anlage im Bau soll nicht unter Hinweisen verschwinden.
+        return [
+            {
+                "karte_id": ohne_strom[0][0].id,
+                "art": "kein_volumenstrom",
+                "text": (
+                    "In dieser Anlage gibt es keinen Ventilator - durch keinen "
+                    "Luftweg strömt etwas. Die Rechnung läuft trotzdem durch "
+                    "und liefert überall 0 m³/h."
+                ),
+            }
+        ]
+
+    return [
+        {
+            "karte_id": karte.id,
+            "art": "kein_volumenstrom",
+            "text": (
+                "Durch den Lufteingang "
+                f"{basis.port_label(karte.baustein.__class__, port.schluessel, port.rolle)}"
+                f" von „{karte.name}“ strömt nichts: Kein Ventilator zieht oder "
+                "drückt Luft durch diesen Strang. Die Karte rechnet mit "
+                "0 m³/h, ohne es zu melden."
+            ),
+        }
+        for karte, port in ohne_strom
+    ]
+
+
+def _raumforderung_ohne_abnehmer(graph):
+    """Ein Raum fordert Wärme oder Kälte, und niemand nimmt sie entgegen.
+
+    Der einfache Raum meldet über QH_stat, wieviel eine statische Heizung
+    beisteuern müsste, damit er seinen Sollwert hält - und über QK_stat
+    dasselbe für eine Kühlfläche. Hängt dort kein Pfeil, hält er den Sollwert
+    trotzdem: Die Rechnung setzt ihn schlicht auf den Sollwert. Die Energie
+    dafür taucht dann in keiner Bilanz auf. Das Gebäude heizt sich umsonst.
+
+    Der Fehler ist besonders tückisch, weil er die Zahlen nicht falsch
+    aussehen lässt, sondern zu GUT: Neun der zehn Anlagenvorlagen liefen so,
+    und ihr Heizwärmebedarf lag dadurch bei einem Bruchteil dessen, was ein
+    Gebäude dieser Hülle braucht. Aufgefallen ist es erst, als eine Vorlage
+    unter ihr Erwartungsband fiel.
+
+    Gemeldet wird nur, wo der zugehörige Sollwert überhaupt gesetzt ist: Eine
+    Kühlfläche mit sollwert_kuehl = 0 gibt es nicht, und ihr Anschluss soll
+    dann auch nicht angemahnt werden.
+    """
+    sollwerte = {"QH_stat": "sollwert_stat", "QK_stat": "sollwert_kuehl"}
+    belegt_aus = {v.von_port.id for v in graph.verbindungen}
+
+    meldungen = []
+    for karte in graph.karten.values():
+        for port in karte.ports:
+            if port.richtung != basis.AUSGANG or port.basis not in sollwerte:
+                continue
+            if port.id in belegt_aus:
+                continue
+            sollwert = karte.parameter.get(sollwerte[port.basis], 0.0)
+            if not sollwert:
+                continue
+            was = "Heizung" if port.basis == "QH_stat" else "Kühlfläche"
+            # Deutsche Schreibweise wie ueberall, wo eine Zahl als Text
+            # erscheint - tests/test_bericht.py haelt das fest.
+            als_text = f"{sollwert:.1f}".replace(".", ",")
+            meldungen.append({
+                "karte_id": karte.id,
+                "art": "forderung_ohne_abnehmer",
+                "text": (
+                    f"„{karte.name}“ meldet über {port.schluessel}, wieviel eine "
+                    f"statische {was} beisteuern müsste - dort hängt aber kein "
+                    f"Pfeil. Der Raum hält seinen Sollwert von {als_text} °C "
+                    "trotzdem, und die Energie dafür steht in keiner Bilanz."
+                ),
+            })
+    return meldungen
+
+
 REGELN = (
     _luftweg_offen, _ohne_bilanz, _regler_ohne_wirkung,
     _stellgroesse_ohne_quelle, _keine_wetterquelle,
+    _luftweg_ohne_volumenstrom, _raumforderung_ohne_abnehmer,
 )
 
 

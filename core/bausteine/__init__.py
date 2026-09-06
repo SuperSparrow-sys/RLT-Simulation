@@ -10,11 +10,12 @@ MODULE = [
     "erhitzer", "kuehler", "wrg", "mischkammer",
     "dampfbefeuchter", "luftwaescher", "ventilator",
     "verteiler", "sammler", "aussenluft", "fortluft", "wetterkarte",
-    "einfacher_raum", "statische_heizung", "raum",
+    "einfacher_raum", "statische_heizung", "statische_kuehlung", "raum",
     "p_regler", "sequenzregler", "hysterese_regler", "kaskade",
     "maximalwert", "faktor", "umkehrglied",
     "wochenzeitplan", "ferien", "monatsprofil", "tageslastprofil", "anlagenbetrieb",
     "heizungspumpen", "warmwasser", "zirkulation", "beleuchtung",
+    "innere_lasten",
     "enthalpierechner", "bilanz", "datenlogger",
 ]
 

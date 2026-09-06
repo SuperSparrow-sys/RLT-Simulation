@@ -25,6 +25,11 @@ AUSLEGUNG
     Befeuchtung    Von 1,5 g/kg Aussenluft im Winter auf 7,3 g/kg:
                        4000/3600 x 1,2 x 5,8 g/kg              = 7,7 kg/h
                    mit 10 % Absalzverlust 8,5 kg/h -> Dampfbefeuchter 16 kg/h
+    Innere Last    Ausstellungsbeleuchtung 12 W/m2 x 800 m2      = 9,6 kW
+                   60 Besucher x 75 W                            = 4,5 kW
+                   Ihre Feuchteabgabe von 60 x 50 g/h = 3,0 kg/h ist fuer ein
+                   Museum die wichtigere Zahl: Sie laeuft der Feuchteregelung
+                   entgegen, die das Haus auf 50 % relative Feuchte haelt.
     Kuehllast      Entfeuchtung im Sommer und innere Lasten    -> Kuehler 30 kW
     Ventilator     4000 m3/h, 800 Pa, Wirkungsgrad 0,65        = 1,37 kW
                    -> SFP 0,34 W/(m3/h)
@@ -75,7 +80,15 @@ def baue(projekt_id, name=NAME):
                          rolle="zuluft", V_max=LUFTMENGE_M3H, dp_max=800.0,
                          dp_konst=800.0, PE_max=1.4, regelart="F")
         raum = b.karte("einfacher_raum", 1360, 200, "Ausstellung und Depot",
-                       spez_transmission=0.5, sollwert_stat=18.0)
+                       spez_transmission=0.5, sollwert_stat=20.0)
+        # Die Gebaeudeheizung. Ohne sie meldet der Raum seine
+        # Unterdeckung (QH_stat) und niemand nimmt sie entgegen: Er bleibt
+        # trotzdem auf seinem Sollwert, und die Waerme dafuer taucht in
+        # keiner Bilanz auf - das Gebaeude heizte sich umsonst. Der
+        # Lueftungserhitzer deckt das nicht; er waermt die Zuluft, nicht
+        # die Huelle. Auslegung: 0,5 kW/K x 32 K = 16 kW
+        gebaeudeheizung = b.karte("statische_heizung", 1360, 620,
+                                  "Gebäudeheizung", QH_nenn=20.0)
         abluft = b.karte("ventilator", 1580, 200, "Abluftventilator",
                          rolle="abluft", V_max=LUFTMENGE_M3H, dp_max=600.0,
                          dp_konst=600.0, PE_max=1.0, regelart="F")
@@ -161,16 +174,31 @@ def baue(projekt_id, name=NAME):
         b.verbinde(ventilatorstellung, "ausgang", zuluft, "stellgroesse")
         b.verbinde(ventilatorstellung, "ausgang", abluft, "stellgroesse")
         b.pfeil(betrieb, beleuchtung)
-        b.verbinde(beleuchtung, "Q_Bel", raum, "waermelast")
+        lasten = b.karte("innere_lasten", 1580, 420, "Innere Lasten",
+                         personen=60.0, waerme_je_person=75.0, feuchte_je_person=50.0,
+                         grundflaeche=FLAECHE_M2)
+        # Der Raum hat je EINEN Eingang fuer Waerme- und Feuchtelast; die
+        # Lastenkarte zaehlt zusammen, was hineingeht. Bisher lief nur die
+        # Waerme dorthin, und die Feuchteabgabe der Menschen fehlte ganz.
+        b.verbinde(tagesprofil, "lastgang_1", lasten, "belegung")
+        b.verbinde(beleuchtung, "Q_Bel", lasten, "weitere_waerme")
+        b.verbinde(lasten, "waermelast", raum, "waermelast")
+        b.verbinde(lasten, "feuchtelast", raum, "feuchtelast")
 
-        for karte in (zuluft, abluft, erhitzer, kuehler, befeuchter, beleuchtung):
+        b.verbinde(raum, "QH_stat", gebaeudeheizung, "QH_stat")
+        for karte in (zuluft, abluft, erhitzer, kuehler, befeuchter, beleuchtung, gebaeudeheizung):
             b.pfeil(karte, bilanz)
-        b.pfeil(raum, logger)
-        b.pfeil(kaskade, logger)
-        b.verbinde(wrg, "Q_WRG", logger, "wert_5")
         b.verbinde(raum, "T_Raum", enthalpie, "t")
         b.verbinde(raum, "F_Raum", enthalpie, "x")
+        # Erst die benannten Groessen auf ihre Steckplaetze, dann den Pfeil:
+        # Ein Pfeil auf den Datenlogger belegt die freien Plaetze der Reihe
+        # nach, und zwar so viele, wie die Gegenkarte Messwerte anbietet. Stand
+        # er zuerst, verschob ein neuer Ausgang an einer Karte alle folgenden
+        # Nummern.
+        b.verbinde(wrg, "Q_WRG", logger, "wert_5")
         b.verbinde(enthalpie, "rF", logger, "wert_6")
         b.verbinde(enthalpie, "h", logger, "wert_7")
+        b.pfeil(raum, logger)
+        b.pfeil(kaskade, logger)
 
     return b.anlage

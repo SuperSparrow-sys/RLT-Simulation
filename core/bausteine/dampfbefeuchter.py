@@ -10,7 +10,22 @@ from core.bausteine.basis import (
     AUSGANG, AUSWAHL, EINGANG, LUFT, MESSWERT, PROZENT, SIGNAL, STELLGROESSE,
     WAERME, WASSER, ZAHL, ZULUFT,
     Baustein, Luft, Param, Port, registriere, wahl,
+    strangparameter, strangrolle,
 )
+
+
+def _ports(rolle):
+    """Die Anschluesse des Dampfbefeuchters. Die Luftrolle haengt am Einbauort -
+    siehe core/bausteine/basis.py, strangparameter().
+    """
+    return [
+        Port("luft_ein", LUFT, EINGANG, rolle),
+        Port("luft_aus", LUFT, AUSGANG, rolle),
+        Port("stellgroesse", SIGNAL, EINGANG, STELLGROESSE),
+        Port("T_aus", SIGNAL, AUSGANG, MESSWERT),
+        Port("QH", SIGNAL, AUSGANG, WAERME),
+        Port("wasser", SIGNAL, AUSGANG, WASSER),
+    ]
 
 
 @registriere
@@ -20,7 +35,7 @@ class Dampfbefeuchter(Baustein):
     GRUPPE = "Luftbehandlung"
     SYMBOL = "dampfbefeuchter.svg"
 
-    PARAMETER = [
+    PARAMETER = strangparameter() + [
         Param("dampftemperatur", "Temperatur des Fremddampfs", "°C", 180.0,
               darstellung=ZAHL, dezimalstellen=1,
               hinweis="Wirkt nur bei Fremddampf. Für Elektrodampf rechnet die Karte "
@@ -40,14 +55,11 @@ class Dampfbefeuchter(Baustein):
         ),
     ]
 
-    PORTS = [
-        Port("luft_ein", LUFT, EINGANG, ZULUFT),
-        Port("luft_aus", LUFT, AUSGANG, ZULUFT),
-        Port("stellgroesse", SIGNAL, EINGANG, STELLGROESSE),
-        Port("T_aus", SIGNAL, AUSGANG, MESSWERT),
-        Port("QH", SIGNAL, AUSGANG, WAERME),
-        Port("wasser", SIGNAL, AUSGANG, WASSER),
-    ]
+    PORTS = _ports(ZULUFT)
+
+    @classmethod
+    def ports_fuer(cls, p):
+        return _ports(strangrolle(p))
 
     AUSGABEN = ["T_aus", "F_aus", "QH", "wasser", "warnung"]
     AUSGABE_LABEL = {

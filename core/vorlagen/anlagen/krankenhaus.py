@@ -21,8 +21,15 @@ AUSLEGUNG
                                                                  -------
                                                                   25,9 kW
                    -> Erhitzer 35 kW
-    Kuehllast      Geraete und Beleuchtung im OP sind erheblich,
-                   rund 60 W/m2 -> 18 kW, dazu Aussenluft im Sommer
+    Innere Last    OP-Leuchten, Geraetetuerme, Monitore     54 W/m2 = 16,2 kW
+                   OP-Team 12 Personen x 150 W (stehende Arbeit) =  1,8 kW
+                                                                   --------
+                                                                    18,0 kW
+                   Die 60 W/m2 der Auslegung stehen also weiter, nur getrennt
+                   nach dem, was Geraete abgeben, und dem, was Menschen
+                   abgeben - Letztere geben auch Feuchte ab: 12 x 70 g/h unter
+                   OP-Kleidung ergibt 0,84 kg/h.
+    Kuehllast      18 kW innere Last, dazu Aussenluft im Sommer
                    -> Kuehler 45 kW
     Befeuchtung    OP-Bereiche werden befeuchtet (30 bis 50 % rF):
                        6000/3600 x 1,2 x 5,0 g/kg              = 10,0 kg/h
@@ -79,7 +86,15 @@ def baue(projekt_id, name=NAME):
                          rolle="zuluft", V_max=LUFTMENGE_M3H, dp_max=1100.0,
                          dp_konst=1100.0, PE_max=2.8, regelart="F")
         raum = b.karte("einfacher_raum", 1360, 200, "OP und Nebenräume",
-                       spez_transmission=0.3, sollwert_stat=20.0)
+                       spez_transmission=0.3, sollwert_stat=22.0)
+        # Die Gebaeudeheizung. Ohne sie meldet der Raum seine
+        # Unterdeckung (QH_stat) und niemand nimmt sie entgegen: Er bleibt
+        # trotzdem auf seinem Sollwert, und die Waerme dafuer taucht in
+        # keiner Bilanz auf - das Gebaeude heizte sich umsonst. Der
+        # Lueftungserhitzer deckt das nicht; er waermt die Zuluft, nicht
+        # die Huelle. Auslegung: 0,3 kW/K x 32 K = 9,6 kW
+        gebaeudeheizung = b.karte("statische_heizung", 1360, 620,
+                                  "Gebäudeheizung", QH_nenn=12.0)
         abluft = b.karte("ventilator", 1580, 200, "Abluftventilator",
                          rolle="abluft", V_max=LUFTMENGE_M3H, dp_max=700.0,
                          dp_konst=700.0, PE_max=1.8, regelart="F")
@@ -118,7 +133,7 @@ def baue(projekt_id, name=NAME):
         ventilatorstellung = b.karte("maximalwert", 2020, 620, "Ventilatorstellung")
 
         beleuchtung = b.karte("beleuchtung", 1800, 420, "OP-Beleuchtung und Geräte",
-                              spez_leistung=60.0, grundflaeche=FLAECHE_M2,
+                              spez_leistung=54.0, grundflaeche=FLAECHE_M2,
                               nennbeleuchtung=1000.0)
         bilanz = b.karte("bilanz", 2240, 200, "Jahresbilanz",
                          preis_strom=280.0, preis_waerme=95.0, preis_kaelte=95.0,
@@ -160,12 +175,28 @@ def baue(projekt_id, name=NAME):
         b.verbinde(ventilatorstellung, "ausgang", zuluft, "stellgroesse")
         b.verbinde(ventilatorstellung, "ausgang", abluft, "stellgroesse")
         b.pfeil(betrieb, beleuchtung)
-        b.verbinde(beleuchtung, "Q_Bel", raum, "waermelast")
+        lasten = b.karte("innere_lasten", 1580, 420, "Innere Lasten",
+                         personen=12.0, waerme_je_person=150.0, feuchte_je_person=70.0,
+                         grundflaeche=FLAECHE_M2)
+        # Der Raum hat je EINEN Eingang fuer Waerme- und Feuchtelast; die
+        # Lastenkarte zaehlt zusammen, was hineingeht. Bisher lief nur die
+        # Waerme dorthin, und die Feuchteabgabe der Menschen fehlte ganz.
+        b.verbinde(tagesprofil, "lastgang_1", lasten, "belegung")
+        b.verbinde(beleuchtung, "Q_Bel", lasten, "weitere_waerme")
+        b.verbinde(lasten, "waermelast", raum, "waermelast")
+        b.verbinde(lasten, "feuchtelast", raum, "feuchtelast")
 
-        for karte in (zuluft, abluft, erhitzer, kuehler, befeuchter, beleuchtung):
+        b.verbinde(raum, "QH_stat", gebaeudeheizung, "QH_stat")
+        for karte in (zuluft, abluft, erhitzer, kuehler, befeuchter, beleuchtung, gebaeudeheizung):
             b.pfeil(karte, bilanz)
+        # Erst die benannten Groessen auf ihre Steckplaetze, dann den Pfeil: Ein
+        # Pfeil auf den Datenlogger belegt die freien Plaetze der Reihe nach, und
+        # zwar so viele, wie die Gegenkarte Messwerte anbietet. Stand er zuerst,
+        # verschob ein neuer Ausgang an einer Karte alle folgenden Nummern - das
+        # Anlegen der Kuehlflaeche liess so jede Vorlage mit "Der Anschluss
+        # 'wert_5' ist schon belegt" scheitern.
+        b.verbinde(wrg, "Q_WRG", logger, "wert_5")
         b.pfeil(raum, logger)
         b.pfeil(kaskade, logger)
-        b.verbinde(wrg, "Q_WRG", logger, "wert_5")
 
     return b.anlage

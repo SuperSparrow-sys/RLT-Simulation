@@ -13,25 +13,58 @@ AUSLEGUNG
 
     Geometrie      400 m2 Serverflaeche, 3,0 m hoch -> 1200 m3
     Innere Last    250 W/m2 x 400 m2                                 = 100 kW
-    Luftmenge      Aus der Last hergeleitet, nicht geschaetzt. Zulaessig ist
-                   ein Temperaturhub von rund 12 K zwischen Zuluft (etwa
-                   14 GradC hinter dem Kuehler) und Abluft; daraus folgt
-                       V = 100 kW x 3600 / (1,2 x 1,007 x 12 K)
-                         = 24 800 m3/h
-                   -> 25 000 m3/h, also 20,8 facher Luftwechsel. Das ist fuer
+    Luftmenge      Aus der Last hergeleitet, nicht geschaetzt - und aus dem,
+                   was das Kuehlregister wirklich hergibt. Es hat einen
+                   Kontaktfaktor von 0,5 bei 6 GradC Kaltwasser; aus 30 GradC
+                   Rueckluft macht es damit
+                       30 - 0,5 x (30 - 6) = 18 GradC
+                   und ueber das Jahr, mit kuehlerer Mischluft, weniger. Bei einem Raumsollwert von
+                   27 GradC bleibt also ein Hub von rund 9 K:
+                       V = 100 kW x 3600 / (1,2 x 1,007 x 9 K)
+                         = 33 100 m3/h
+                   -> 33 000 m3/h, also 27,5 facher Luftwechsel. Das ist fuer
                    ein luftgekuehltes Rechenzentrum normal; die Luft traegt
                    hier die Waerme fort, sie versorgt keine Personen.
 
-                   Mit 10 000 m3/h - dem ersten Ansatz - waere der noetige Hub
-                   29,8 K gewesen und der Raum auf ueber 42 GradC gelaufen
-                   (nachgerechnet). Die Luftmenge folgt der Last, nicht der
-                   Flaeche.
+                   Zwei fruehere Ansaetze waren zu klein. Mit 10 000 m3/h
+                   waere der noetige Hub 29,8 K gewesen und der Raum auf ueber
+                   42 GradC gelaufen. Mit 25 000 m3/h unterstellte die
+                   Herleitung 14 GradC Zuluft - eine Temperatur, die dieses
+                   Register nie erreicht; der Raum lief auf 28 bis 33 GradC.
+                   Beides nachgerechnet. Die Luftmenge folgt der Last UND dem
+                   Register, nicht der Flaeche.
     Transmission   innenliegend, gedaemmt -> rund 0,4 kW/K
+    Kaltwasser     6 GradC. Mit 10 GradC erreichte das Register im Sommer
+                   nur 21 GradC Zuluft, der Raum lief auf 30,4 GradC, und in
+                   einer Stunde des Jahres blieb die Rechnung mit mehr als
+                   zwei Einheiten Restabweichung stehen: Der Kuehler stand am
+                   Anschlag, und die Regelung sprang zwischen ihm und der
+                   Zuluftbegrenzung. Mit 6 GradC bleibt der Raum bei 24,0 bis
+                   28,5 GradC, und jede Stunde schwingt ein (nachgemessen).
+                   6 GradC ist die uebliche Kaltwassertemperatur einer
+                   Kaeltemaschine.
+    Freie Kuehlung Die Klappe regelt die MISCHTEMPERATUR auf 18 GradC, also
+                   VOR dem Kuehler. Sie nimmt ihm damit gut die Haelfte der
+                   Jahresarbeit ab: 1101 statt 2190 kWh/(m2 a) (nachgemessen).
+                   Eine Stunde des Jahres schwingt dabei nicht ein - der
+                   10. Juni um 17 Uhr, mit 18,1 GradC Aussenluft genau auf dem
+                   Sollwert der Klappe. Klappe und Kuehler wechseln sich dort
+                   ab, und die Rechnung bleibt mit 26 kW Restabweichung an
+                   ihrer Iterationsgrenze stehen. Ausgewiesen ist das Mittel
+                   der beiden letzten Durchgaenge; auf die Jahresarbeit von
+                   440 MWh wirkt das mit 26 kWh, also sechs Hunderttausendstel.
+                   Ein ruhigerer Klappenregler (xp von 4 auf 8 und 12) aendert
+                   daran nichts - es ist der Uebergang selbst, nicht seine
+                   Geschwindigkeit.
     Kuehllast      100 kW innere Last + Transmission im Sommer
                    -> Kuehler 120 kW
+                   Gegenprobe an der Jahresarbeit: Alles, was die Server an
+                   Strom aufnehmen, muss als Waerme wieder heraus. 100 kW x
+                   8760 h = 876 MWh; gerechnet werden 887 MWh Kaelte.
     Erhitzer       Keiner. Ein Rechenzentrum heizt nicht.
-    Ventilator     25 000 m3/h, 900 Pa, Wirkungsgrad 0,65            = 9,62 kW
-                   -> SFP 0,38 W/(m3/h)
+    Ventilator     33 000 m3/h, 900 Pa, Wirkungsgrad 0,65           = 12,69 kW
+                   Abluft 33 000 m3/h, 600 Pa                        =  8,46 kW
+                   -> SFP 0,64 W/(m3/h) fuer beide zusammen
 """
 
 from core.vorlagen.bauhilfe import Bauplatz
@@ -44,7 +77,7 @@ BESCHREIBUNG = (
 )
 
 FLAECHE_M2 = 400.0
-LUFTMENGE_M3H = 25000.0
+LUFTMENGE_M3H = 33000.0
 #: Lichte Raumhöhe - der Prüfstand rechnet daraus den Luftwechsel.
 HOEHE_M = 3.0
 INNERE_LAST_W_M2 = 250.0
@@ -52,12 +85,19 @@ INNERE_LAST_W_M2 = 250.0
 ERWARTUNG = {
     # Kein Heizbedarf - das ist die Aussage dieser Anlage.
     "heizwaerme_kwh_m2a": (0.0, 5.0),
-    # 100 kW ueber 8760 h waeren 876 MWh = 2190 kWh/(m2*a), wenn alles ueber
-    # die Kaeltemaschine ginge. Die freie Kuehlung nimmt den groessten Teil
-    # davon ab; wieviel genau, ist gerade die Frage an die Rechnung.
-    "kaelte_kwh_m2a": (50.0, 1500.0),
+    # 100 kW ueber 8760 h sind 876 MWh = 2190 kWh/(m2*a) - so viel Waerme
+    # muss heraus, denn alles, was die Server an Strom aufnehmen, wird Waerme.
+    # Was davon die Kaeltemaschine traegt und was die freie Kuehlung, ist
+    # gerade die Frage an die Rechnung; gemessen sind es 1101 kWh/(m2*a),
+    # also gut die Haelfte. Die Obergrenze liegt deshalb unter 2190: Braeuchte
+    # die Maschine mehr, arbeitete die freie Kuehlung nicht.
+    "kaelte_kwh_m2a": (300.0, 1800.0),
     "sfp_w_m3h": (0.25, 0.95),
-    "luftwechsel_1h": (19.0, 23.0),
+    # 33 000 m3/h auf 1200 m3 Raum sind 27,5 Luftwechsel je Stunde. Fuer ein
+    # luftgekuehltes Rechenzentrum ist das normal - die Luft traegt hier die
+    # Waerme fort, sie versorgt keine Personen. Das Band stand auf 19 bis 23
+    # und gehoerte zur frueheren Luftmenge von 25 000 m3/h.
+    "luftwechsel_1h": (24.0, 32.0),
 }
 
 
@@ -72,15 +112,23 @@ def baue(projekt_id, name=NAME):
                               max_umluft=90.0)
         kuehler = b.karte("kuehler", 480, 200, "Kühler",
                           V_nenn=LUFTMENGE_M3H, dp_nenn=200.0, QK_nenn=120.0,
-                          T_KW_mittel=10.0, kontaktfaktor=0.5)
+                          T_KW_mittel=6.0, kontaktfaktor=0.5)
         zuluft = b.karte("ventilator", 700, 200, "Zuluftventilator",
                          rolle="zuluft", V_max=LUFTMENGE_M3H, dp_max=900.0,
-                         dp_konst=900.0, PE_max=9.62, regelart="F")
+                         dp_konst=900.0, PE_max=12.69, regelart="F")
         raum = b.karte("einfacher_raum", 920, 200, "Serverfläche",
-                       spez_transmission=0.4, sollwert_stat=15.0)
+                       spez_transmission=0.4, sollwert_stat=24.0)
+        # Die Gebaeudeheizung. Ohne sie meldet der Raum seine
+        # Unterdeckung (QH_stat) und niemand nimmt sie entgegen: Er bleibt
+        # trotzdem auf seinem Sollwert, und die Waerme dafuer taucht in
+        # keiner Bilanz auf - das Gebaeude heizte sich umsonst. Der
+        # Lueftungserhitzer deckt das nicht; er waermt die Zuluft, nicht
+        # die Huelle. Auslegung: 0,4 kW/K x 32 K = 12,8 kW - sie laeuft praktisch nie, weil 100 kW Serverlast den Raum von innen heizen
+        gebaeudeheizung = b.karte("statische_heizung", 920, 620,
+                                  "Gebäudeheizung", QH_nenn=15.0)
         abluft = b.karte("ventilator", 1140, 200, "Abluftventilator",
                          rolle="abluft", V_max=LUFTMENGE_M3H, dp_max=600.0,
-                         dp_konst=600.0, PE_max=6.41, regelart="F")
+                         dp_konst=600.0, PE_max=8.46, regelart="F")
         verteiler = b.karte("verteiler", 1360, 200, "Umluft/Fortluft",
                             anteile={"luft_aus_1": 80.0, "luft_aus_2": 20.0})
         fortluft = b.karte("fortluft", 260, 420, "Fortluft")
@@ -95,10 +143,21 @@ def baue(projekt_id, name=NAME):
                           # nach jedem warmen Tag zurueckwandern musste.
                           waermestufen=1, kaeltestufen=1)
         # Freie Kuehlung: je kaelter es draussen ist, desto weniger Umluft.
-        # Der Regler haelt die Zulufttemperatur bei 18 GradC, indem er den
+        # Der Regler haelt die MISCHTEMPERATUR bei 18 GradC, indem er den
         # Umluftanteil nachfuehrt - ist die Aussenluft kalt, mischt er warme
         # Abluft dazu, ist sie warm, faehrt er auf Umluft und laesst den
         # Kuehler arbeiten.
+        #
+        # Gemessen wird VOR dem Kuehler, nicht hinter ihm. Frueher hing der
+        # Istwert am Zuluftventilator, also hinter dem Kuehler - damit regelten
+        # Klappe und Kuehler dieselbe Groesse. Der Kuehler ist der schnellere
+        # von beiden: Er kuehlte die Mischluft auf 14 GradC herunter, die
+        # Klappe sah 14 statt 18 GradC und fuhr auf ihre maximalen 90 Prozent
+        # Umluft, um wieder aufzuwaermen. Bei 3,7 GradC Aussenluft lief die
+        # Kaeltemaschine dadurch mit 94 kW, obwohl draussen die Kaelte umsonst
+        # zu haben war - die freie Kuehlung sparte ueber das Jahr nichts. Vor
+        # dem Kuehler gemessen greift sie zuerst, und der Kuehler nimmt nur
+        # noch, was sie uebriglaesst.
         freikuehlung = b.karte("p_regler", 700, 20, "Freie Kühlung",
                                xp_1=5.0, xp_2=4.0, sollwert_2=18.0)
 
@@ -136,7 +195,7 @@ def baue(projekt_id, name=NAME):
         b.verbinde(raum, "T_Raum", kaskade, "T_Raum")
         b.verbinde(zuluft, "T_aus", kaskade, "T_ZU")
         b.verbinde(kaskade, "kaelter_1", kuehler, "stellgroesse")
-        b.verbinde(zuluft, "T_aus", freikuehlung, "istwert_2")
+        b.verbinde(mischkammer, "T_MI", freikuehlung, "istwert_2")
         b.verbinde(freikuehlung, "ausgang_2", mischkammer, "umluftanteil")
 
         b.pfeil(zeitplan, betrieb)
@@ -147,12 +206,27 @@ def baue(projekt_id, name=NAME):
         b.verbinde(ventilatorstellung, "ausgang", zuluft, "stellgroesse")
         b.verbinde(ventilatorstellung, "ausgang", abluft, "stellgroesse")
         b.pfeil(betrieb, server)
-        b.verbinde(server, "Q_Bel", raum, "waermelast")
+        lasten = b.karte("innere_lasten", 1360, 380, "Innere Lasten",
+                         personen=0.0, grundflaeche=FLAECHE_M2)
+        # Der Raum hat je EINEN Eingang fuer Waerme- und Feuchtelast; die
+        # Lastenkarte zaehlt zusammen, was hineingeht. Bisher lief nur die
+        # Waerme dorthin, und die Feuchteabgabe der Menschen fehlte ganz.
+        b.verbinde(tagesprofil, "lastgang_1", lasten, "belegung")
+        b.verbinde(server, "Q_Bel", lasten, "weitere_waerme")
+        b.verbinde(lasten, "waermelast", raum, "waermelast")
+        b.verbinde(lasten, "feuchtelast", raum, "feuchtelast")
 
-        for karte in (zuluft, abluft, kuehler, server):
+        b.verbinde(raum, "QH_stat", gebaeudeheizung, "QH_stat")
+        for karte in (zuluft, abluft, kuehler, server, gebaeudeheizung):
             b.pfeil(karte, bilanz)
+        # Erst die benannten Groessen auf ihre Steckplaetze, dann den Pfeil: Ein
+        # Pfeil auf den Datenlogger belegt die freien Plaetze der Reihe nach, und
+        # zwar so viele, wie die Gegenkarte Messwerte anbietet. Stand er zuerst,
+        # verschob ein neuer Ausgang an einer Karte alle folgenden Nummern - das
+        # Anlegen der Kuehlflaeche liess so jede Vorlage mit "Der Anschluss
+        # 'wert_5' ist schon belegt" scheitern.
+        b.verbinde(mischkammer, "umluftanteil_ist", logger, "wert_5")
         b.pfeil(raum, logger)
         b.pfeil(kaskade, logger)
-        b.verbinde(mischkammer, "umluftanteil_ist", logger, "wert_5")
 
     return b.anlage

@@ -33,6 +33,16 @@ class Mischkammer(Baustein):
         # Anderer Schluessel als der Eingang, weil eine Karte denselben
         # Namen nicht zweimal fuehren kann.
         Port("umluftanteil_ist", SIGNAL, AUSGANG, MESSWERT),
+        # Der Mischluftfuehler. In jedem gebauten Geraet sitzt hinter der
+        # Mischkammer ein Temperaturfuehler, und ohne ihn laesst sich keine
+        # freie Kuehlung regeln: Der Regler, der die Klappe stellt, muss VOR
+        # dem Kuehler messen. Griff er stattdessen die Zuluft hinter dem
+        # Kuehler ab, regelten Klappe und Kuehler dieselbe Groesse - der
+        # schnellere von beiden gewinnt, und die Klappe faehrt zu, waehrend
+        # draussen die Kaelte umsonst zu haben ist (siehe
+        # core/vorlagen/anlagen/rechenzentrum.py).
+        Port("T_MI", SIGNAL, AUSGANG, MESSWERT),
+        Port("F_MI", SIGNAL, AUSGANG, MESSWERT),
     ]
 
     AUSGABEN = ["T_MI", "F_MI", "umluftanteil", "umluftanteil_soll"]

@@ -182,6 +182,80 @@ def _aenderung_an_karte(zeile, pos_x, pos_y, parameter, name):
     return f"Karte '{name_neu}' geändert", None
 
 
+def _geaenderte_ports(klasse, alte_werte, neue_werte):
+    """Anschluesse, deren Deklaration sich durch die neuen Parameter aendert.
+
+    Manche Karten leiten ihre Anschluesse aus Parametern ab (graph.ports_fuer;
+    der Ventilator etwa traegt Zuluft- oder Abluftrollen, je nach Einbauort).
+    Gibt {basis: (art, richtung, rolle)} fuer alles zurueck, was anders wird.
+    """
+    def deklariert(werte):
+        return {
+            port.schluessel: (port.art, port.richtung, port.rolle)
+            for port in graph._deklarierte_ports(klasse, werte)
+        }
+
+    alt, neu = deklariert(alte_werte), deklariert(neue_werte)
+    return {
+        name: eigenschaften
+        for name, eigenschaften in neu.items()
+        if name in alt and alt[name] != eigenschaften
+    }
+
+
+def _betroffene_ports(db, karte_id, geaendert):
+    if not geaendert:
+        return []
+    stellen = ",".join("?" for _ in geaendert)
+    return db.execute(
+        f"SELECT id, basis FROM port WHERE karte_id = ? AND basis IN ({stellen})",
+        (karte_id, *geaendert),
+    ).fetchall()
+
+
+def _pruefe_portwechsel(db, karten_name, betroffen):
+    """Weist eine Aenderung ab, die einen schon verdrahteten Anschluss umwidmet.
+
+    Still umzurollen hiesse, bestehende Verbindungen zu solchen zu machen, die
+    core/graph.py selbst als verboten ansieht (Abluft an einen Zulufteingang) -
+    die Anlage saehe heil aus und waere es nicht. Die Pfeile stattdessen
+    wortlos zu loeschen, waere der Verlust von Arbeit, um die niemand gebeten
+    hat. Also sagt die Karte, was im Weg steht, und der Anwender loest den
+    Pfeil selbst.
+    """
+    if not betroffen:
+        return
+    ids = [z["id"] for z in betroffen]
+    stellen = ",".join("?" for _ in ids)
+    haengt_dran = db.execute(
+        f"SELECT COUNT(*) AS anzahl FROM verbindung "
+        f"WHERE von_port_id IN ({stellen}) OR nach_port_id IN ({stellen})",
+        (*ids, *ids),
+    ).fetchone()["anzahl"]
+    if haengt_dran:
+        raise ValueError(
+            f"An '{karten_name}' hängt schon ein Pfeil an einem Anschluss, den "
+            "diese Änderung umwidmen würde. Bitte den Pfeil erst lösen und "
+            "danach neu ziehen."
+        )
+
+
+def _schreibe_portwechsel(db, betroffen, geaendert):
+    """Muss INNERHALB des Verlaufsschritts laufen.
+
+    verlauf.schritt sichert den Ausgangszustand beim Betreten der Klammer.
+    Stuende das Schreiben davor, saehe der gesicherte Zustand die neuen
+    Anschluesse schon - ein Zuruecknehmen holte dann den alten Parameterwert
+    zurueck und liesse die Anschluesse umgestellt stehen.
+    """
+    for zeile in betroffen:
+        art, richtung, rolle = geaendert[zeile["basis"]]
+        db.execute(
+            "UPDATE port SET art = ?, richtung = ?, rolle = ? WHERE id = ?",
+            (art, richtung, rolle, zeile["id"]),
+        )
+
+
 def karte_aendern(karte_id, pos_x=None, pos_y=None, parameter=None, name=None):
     db = get_db()
     zeile = db.execute("SELECT * FROM karte WHERE id = ?", (karte_id,)).fetchone()
@@ -189,15 +263,28 @@ def karte_aendern(karte_id, pos_x=None, pos_y=None, parameter=None, name=None):
         raise KeyError(f"Karte {karte_id} gibt es nicht")
 
     werte = json.loads(zeile["parameter"])
+    geaenderte_ports, betroffene_ports = {}, []
     if parameter:
         klasse = basis.hole(zeile["typ"])
         fehlermeldungen = basis.pruefe_parameter(klasse, parameter)
         if fehlermeldungen:
             raise UngueltigeParameter(fehlermeldungen)
+        # Die Vorgaben unterlegen, wie in _karte_instanz(): Eine Karte aus der
+        # Zeit vor einem Parameter kennt ihn nicht, ports_fuer() aber schon.
+        vorher = klasse.vorgabeparameter()
+        vorher.update(werte)
         werte.update(parameter)
+        nachher = klasse.vorgabeparameter()
+        nachher.update(werte)
+        geaenderte_ports = _geaenderte_ports(klasse, vorher, nachher)
+        betroffene_ports = _betroffene_ports(db, karte_id, geaenderte_ports)
+        # Vor dem Verlaufsschritt pruefen, damit ein abgewiesener Wechsel gar
+        # nicht erst als Aenderung aufgezeichnet wird.
+        _pruefe_portwechsel(db, zeile["name"], betroffene_ports)
 
     beschreibung, buendel = _aenderung_an_karte(zeile, pos_x, pos_y, parameter, name)
     with verlauf.schritt(zeile["anlage_id"], beschreibung, buendel):
+        _schreibe_portwechsel(db, betroffene_ports, geaenderte_ports)
         db.execute(
             "UPDATE karte SET pos_x = ?, pos_y = ?, parameter = ?, name = ? "
             "WHERE id = ?",

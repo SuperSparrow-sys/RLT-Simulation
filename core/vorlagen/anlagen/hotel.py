@@ -16,7 +16,26 @@ AUSLEGUNG
     Transmission   grosse Huelle, gedaemmt -> rund 2,0 kW/K
     Heizlast       2,0 x 32 K + 6000 x 0,34 x 32 x 0,25 = 64,0 + 16,3 = 80,3 kW
                    -> Erhitzer 100 kW
-    Kuehllast      Personen und Geraete -> Kuehler 60 kW
+    Innere Last    150 Zimmer, bei voller Belegung 220 Gaeste x 75 W = 16,5 kW
+                   Geraete (Fernseher, Wasserkocher, Fluraufzuege) 3 W/m2
+                                                       4000 x 3   = 12,0 kW
+                   Dauerlast (Flurbeleuchtung, Technik) 2 W/m2    =  8,0 kW
+                   Beleuchtung 6 W/m2                             = 24,0 kW
+                                                                    -------
+                                                                    60,5 kW
+                   Feuchte 220 Gaeste x 50 g/h                    = 11,0 kg/h
+    Kuehllast      6000 m3/h tragen bei 8 K Untertemperatur nur 16,3 kW ab -
+                   Hotelzimmer werden auch nicht ueber die Lueftung gekuehlt,
+                   sondern ueber Geraete im Zimmer. Bei 32 GradC aussen und
+                   26 GradC im Raum:
+                       innere Last                                  60,5 kW
+                       Transmission 2,0 kW/K x 6 K                 +12,0 kW
+                       Zuluft 6000 x 0,34 x 10 K                   -20,4 kW
+                                                                    -------
+                                                                    52,1 kW
+                   Die hoechste Forderung ueber das Testreferenzjahr liegt
+                   bei 47,4 kW (nachgemessen).
+                   -> Kuehlflaeche 55 kW, Kuehler im Geraet 60 kW
     Warmwasser     150 Zimmer bei 60 % Belegung und 50 l je Gast und Tag:
                        150 x 0,6 x 50 l x 365 = 1642 m3/a
     Zirkulation    grosses Leitungsnetz: 3,0 m3/h bei 5 K Abkuehlung
@@ -54,6 +73,10 @@ def baue(projekt_id, name=NAME):
         luftmenge=LUFTMENGE_M3H, flaeche=FLAECHE_M2, transmission=2.0,
         QH_max=100.0, QK_nenn=60.0, dp_zuluft=750.0, dp_abluft=600.0,
         raumname="Zimmer und Flure", sollwert_stat=20.0,
+        personen=220.0, geraete_w_m2=3.0, grundlast_w_m2=2.0,
+        sollwert_kuehl=26.0, QK_flaeche=55.0,
+        # Gebaeudeheizung: 2,0 kW/K x 32 K = 64 kW
+        QH_statisch=70.0,
         zeitplan_tage=WOCHENTAGE, zeitplan_von=0.0, zeitplan_bis=24.0,
         lastgang=[0.6] * 6 + [1.0] * 4 + [0.5] * 8 + [1.0] * 4 + [0.8] * 2,
         beleuchtung_w_m2=6.0, beleuchtung_lux=200.0,
