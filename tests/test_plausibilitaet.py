@@ -18,13 +18,24 @@ from werkzeuge import plausibilitaet
 
 
 @pytest.fixture(scope="module")
-def ergebnis(tmp_path_factory):
-    """Rechnet die Testanlage einmal ueber ein Jahr; alle Pruefungen teilen sie."""
+def ergebnis(tmp_path_factory, protokoll_pfad):
+    """Rechnet die Testanlage einmal ueber ein Jahr; alle Pruefungen teilen sie.
+
+    Der Protokollpfad kommt aus conftest.py (sitzungsweit) und wird hier
+    ausdruecklich gesetzt: Eine modulweite Vorrichtung laeuft VOR den
+    funktionsweiten, ruft create_app() also noch bevor _protokoll_umbiegen
+    greift. app.create_app() entdoppelt seine Protokoll-Handler nach PFAD - ein
+    eigener Pfad hinterliesse deshalb einen zusaetzlichen Handler am
+    gemeinsamen Logger, und tests/test_app.py, das genau diese Handler zaehlt,
+    fiele fehl. Auffaellig wird das nur im vollen Lauf, denn der schnelle
+    Durchgang laesst diese Vorrichtungen aus.
+    """
     pfad = tmp_path_factory.mktemp("plausibilitaet") / "rlt.db"
     import core.config
 
     alt = core.config.DB_PATH
     core.config.DB_PATH = pfad
+    core.config.LOG_FILE = protokoll_pfad
     try:
         app = create_app()
         with app.app_context():
@@ -125,7 +136,6 @@ def test_beide_vorlagen_decken_zusammen_die_ganze_bibliothek_ab(ergebnis):
 
     fehlend = plausibilitaet.nicht_abgedeckte_typen(ergebnis)
     assert not fehlend, (
-        f"{len(fehlend)} von {len(basis.alle())} Kartentypen werden von "
-        f"keiner der beiden grossen Vorlagen tatsaechlich verbaut: "
-        f"{sorted(fehlend)}"
+        f"{len(fehlend)} von {len(basis.alle())} Kartentypen werden von keiner "
+        f"echten Anlage tatsaechlich verbaut: {sorted(fehlend)}"
     )

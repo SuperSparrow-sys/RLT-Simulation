@@ -186,6 +186,9 @@ class Ventilator(Baustein):
         """
         return {"luft_ein": p["V_max"]}
 
+    #: Der gestellte Bedarf liest genau dies aus den eigenen Ausgaben.
+    BEDARF_HAENGT_AN = ("V",)
+
     def bedarf_gestellt(self, aus_bedarf, p, werte):
         """Gestellter Bedarf - Anlage!Y20, Y42 und M42.
 

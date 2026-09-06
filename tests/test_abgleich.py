@@ -35,15 +35,50 @@ def app(tmp_path, monkeypatch):
         yield anwendung
 
 
+@pytest.fixture(scope="module")
+def referenzjahr(tmp_path_factory, protokoll_pfad):
+    """Rechnet AX_SIM 2.1 EINMAL ueber das Referenzjahr; beide Vergleiche
+    teilen sich das Ergebnis.
+
+    Der Lauf ist der teuerste des ganzen Testbestands - AX_SIM 2.1 erreicht in
+    fast jeder Stunde die Iterationsgrenze (siehe core/config.py). Ihn zweimal
+    zu rechnen, um zweimal dieselben Zahlen anzusehen, kostete rund acht
+    Minuten fuer nichts. Der dritte Vergleich unten legt die
+    Befeuchtungsregelung stillt und braucht deshalb einen eigenen Lauf.
+
+    Der Protokollpfad kommt aus conftest.py (sitzungsweit) und wird hier
+    ausdruecklich gesetzt: Eine modulweite Vorrichtung laeuft VOR den
+    funktionsweiten, ruft create_app() also noch bevor _protokoll_umbiegen
+    greift. app.create_app() entdoppelt seine Protokoll-Handler nach PFAD - ein
+    eigener Pfad hinterliesse deshalb einen zusaetzlichen Handler am
+    gemeinsamen Logger, und tests/test_app.py, das genau diese Handler zaehlt,
+    fiele fehl. Auffaellig wird das nur im vollen Lauf, denn der schnelle
+    Durchgang laesst diese Vorrichtungen aus.
+    """
+    import core.config
+
+    pfad = tmp_path_factory.mktemp("abgleich") / "rlt.db"
+    alt = core.config.DB_PATH
+    core.config.DB_PATH = pfad
+    core.config.LOG_FILE = protokoll_pfad
+    try:
+        anwendung = create_app()
+        with anwendung.app_context():
+            database.init_db()
+        yield abgleich.rechne_referenzjahr(anwendung)
+    finally:
+        core.config.DB_PATH = alt
+
+
 @pytest.mark.slow
-def test_strom_und_kaelte_stimmen_mit_der_excel_ueberein(app):
+def test_strom_und_kaelte_stimmen_mit_der_excel_ueberein(referenzjahr):
     """Die beiden Groessen, deren Regelkreise sich einpendeln.
 
     Waerme und Wasser haengen am schwingenden Befeuchtungskreis und werden
     getrennt behandelt; die Begruendung steht im Kopf dieser Aufgabe.
     """
     excel = json.loads((DATEN / "jahresbilanz.json").read_text(encoding="utf-8"))
-    eigene = abgleich.rechne_referenzjahr(app)
+    eigene = referenzjahr
 
     abweichungen = abgleich.vergleiche(eigene["bilanz"], excel)
     schlimmste = [
@@ -54,7 +89,7 @@ def test_strom_und_kaelte_stimmen_mit_der_excel_ueberein(app):
 
 
 @pytest.mark.slow
-def test_waerme_und_wasser_bleiben_auf_ihrem_gemessenen_stand(app):
+def test_waerme_und_wasser_bleiben_auf_ihrem_gemessenen_stand(referenzjahr):
     """Kennwerttest, keine Validierung gegen die Excel.
 
     Beide Groessen haengen am Befeuchtungskreis, der in beiden Werkzeugen schwingt.
@@ -67,7 +102,7 @@ def test_waerme_und_wasser_bleiben_auf_ihrem_gemessenen_stand(app):
     Messung im Kommentar. Toleranz 5 Prozent - genug fuer Rundungsunterschiede,
     eng genug, um eine echte Verschiebung zu zeigen.
     """
-    eigene = abgleich.rechne_referenzjahr(app)
+    eigene = referenzjahr
     for groesse, stand in (("waerme", STAND_WAERME_MWH), ("wasser", STAND_WASSER_M3)):
         ist = eigene["bilanz"][groesse]
         assert abs(ist - stand) / stand < 0.05, (

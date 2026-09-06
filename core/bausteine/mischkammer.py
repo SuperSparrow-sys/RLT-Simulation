@@ -120,6 +120,9 @@ class Mischkammer(Baustein):
         gesamt = sum(aus_bedarf.values())
         return {"aussenluft_ein": gesamt, "umluft_ein": 0.0}
 
+    #: Der gestellte Bedarf liest genau dies aus den eigenen Ausgaben.
+    BEDARF_HAENGT_AN = ("umluftanteil_soll",)
+
     def bedarf_gestellt(self, aus_bedarf, p, werte):
         """Gestellter Bedarf - was die Mischkammer in DIESER Stunde abnimmt.
 

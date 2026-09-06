@@ -222,7 +222,8 @@ class Solver:
         # Karten, die im Vorwaertslauf einen anderen Bedarf melden als im
         # Nenn-Rueckwaertslauf (heute nur der Ventilator).
         self._karten_mit_stellwert = [
-            karte_id for karte_id, karte in self.graph.karten.items()
+            (karte_id, tuple(karte.baustein.BEDARF_HAENGT_AN))
+            for karte_id, karte in self.graph.karten.items()
             if hasattr(karte.baustein, "bedarf_gestellt")
         ]
 
@@ -374,7 +375,17 @@ class Solver:
         Regler, der Regler an der Raumtemperatur. Im ersten Durchgang liegt noch
         nichts vor; dann gilt der Nennstrom als Startwert, wie bisher.
         """
-        stellwerte = [ausgaben.get(k) for k in self._karten_mit_stellwert]
+        # Verglichen wird nur, was in den Bedarf eingeht - die Karte sagt es
+        # selbst (Baustein.BEDARF_HAENGT_AN). Frueher stand hier die ganze
+        # Ausgabe der Karte, und weil die Austrittstemperatur des Ventilators
+        # sich in jedem Durchgang noch um ein Tausendstel bewegt, lief der
+        # Rueckwaertslauf jedes Mal neu - fuer einen Volumenstrom, der bei
+        # einer Anlage mit konstanter Luftmenge ueberhaupt nicht schwankt.
+        stellwerte = [
+            {name: ausgaben.get(k, {}).get(name) for name in namen}
+            if namen else ausgaben.get(k)
+            for k, namen in self._karten_mit_stellwert
+        ]
         if stellwerte == self._letzte_stellwerte:
             return  # nichts Neues - der Durchgang wuerde dasselbe ergeben
         self._letzte_stellwerte = stellwerte

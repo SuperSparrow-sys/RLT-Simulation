@@ -324,6 +324,21 @@ class Baustein:
         """
         raise NotImplementedError
 
+    #: Welche eigenen Ausgaben in bedarf_gestellt() eingehen.
+    #:
+    #: Der Solver ruft den zweiten Rueckwaertslauf nur dann erneut, wenn sich
+    #: etwas geaendert hat, was in ihn eingeht (core/solver.py,
+    #: _aktualisiere_gestellte_abnahme). Ohne diese Angabe muss er ALLE
+    #: Ausgaben der Karte vergleichen - und dann laeuft er in jedem Durchgang
+    #: neu, weil sich irgendeine davon immer noch um ein Tausendstel bewegt.
+    #: Gemessen an AX_SIM 2.1 waren das zwei Fuenftel der Rechenzeit fuer ein
+    #: Ergebnis, das sich nicht aendert.
+    #:
+    #: Leer heisst "unbekannt, also alles vergleichen" - die sichere Vorgabe.
+    #: Eine Karte mit bedarf_gestellt() sollte sie setzen; sie weiss als
+    #: einzige, was sie liest.
+    BEDARF_HAENGT_AN: tuple = ()
+
     def bedarf(self, aus_bedarf: dict, p: dict) -> dict:
         """Volumenstrombedarf im Rueckwaertslauf.
 
