@@ -104,7 +104,9 @@ def baue(projekt_id, name=NAME):
 
         kaskade = b.karte("kaskade", 480, 20, "Raum-/Zuluft-Kaskade",
                           T_Raum_min=22.0, T_AU_min=15.0, T_Raum_max=30.0,
-                          T_AU_max=30.0, T_ZU_min=16.0, T_ZU_max=30.0, xp=5.0)
+                          T_AU_max=30.0, T_ZU_min=16.0, T_ZU_max=30.0, xp=5.0,
+                          # Register wärmt, Wäscher und Kühler kühlen.
+                          waermestufen=2, kaeltestufen=2)
 
         zeitplan = b.karte("wochenzeitplan", 920, 620, "Schichtbetrieb",
                            **betriebszeiten(WERKTAGE, 6.0, 22.0))

@@ -63,6 +63,27 @@ def test_wegwerfbausteine_lecken_nicht_zwischen_tests():
     assert "test_dummy" not in {k.KENNUNG for k in basis.alle()}
 
 
+def test_die_bibliothek_bleibt_vollstaendig_geladen():
+    """Das Wiederherstellen des Registers darf die Bibliothek nicht abraeumen.
+
+    Die Vorrichtung in conftest.py sichert das Register vor jedem Test und
+    stellt es danach wieder her. Wurde die Bibliothek erst waehrend eines Tests
+    geladen, sicherte sie ein leeres Register und loeschte die Bausteine
+    anschliessend wieder - dauerhaft, weil Python die Module zwischenspeichert
+    und der Registrierungs-Dekorator kein zweites Mal laeuft. Jeder folgende
+    Test sah dann eine unvollstaendige Bibliothek und pruefte damit fast
+    nichts mehr.
+    """
+    from core.bausteine import MODULE, lade_alle
+
+    lade_alle()
+    echte = [k for k in basis.alle() if not k.KENNUNG.startswith("test_")]
+    assert len(echte) == len(MODULE), (
+        "Die Bausteinbibliothek ist unvollstaendig geladen - "
+        f"{len(echte)} von {len(MODULE)} Modulen im Register."
+    )
+
+
 def test_hole_meldet_unbekannten_typ():
     with pytest.raises(KeyError, match="gibt es nicht"):
         basis.hole("kein_baustein")
@@ -289,8 +310,13 @@ def test_wochenzeitplan_speichert_den_exakten_tagesanteil():
 
 
 def test_alle_parameter_deklarieren_eine_darstellung_und_ganzzahlige_dezimalstellen():
-    """Jeder der 136 Parameter muss eine gueltige Darstellungsangabe tragen -
-    sonst weiss das Parameterfenster nicht, wie es ihn zeigen soll."""
+    """Jeder Parameter muss eine gueltige Darstellungsangabe tragen - sonst
+    weiss das Parameterfenster nicht, wie es ihn zeigen soll.
+
+    Die Gesamtzahl unten ist Absicht: Sie zwingt dazu, einen neu hinzugefuegten
+    Parameter hier bewusst zur Kenntnis zu nehmen, statt ihn stillschweigend
+    mitlaufen zu lassen. Zuletzt gestiegen auf 142, als der Sequenzregler seine
+    Stufenzahlen als Parameter bekam."""
     from core.bausteine import lade_alle
 
     lade_alle()
@@ -305,7 +331,7 @@ def test_alle_parameter_deklarieren_eine_darstellung_und_ganzzahlige_dezimalstel
             anzahl += 1
             assert p.darstellung in gueltig, f"{klasse.KENNUNG}.{p.schluessel}"
             assert isinstance(p.dezimalstellen, int)
-    assert anzahl == 138
+    assert anzahl == 142
 
 
 def test_alle_auswahl_parameter_tragen_wert_und_label():

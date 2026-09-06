@@ -122,7 +122,12 @@ def standardgeraet(
     kaskade = b.karte("kaskade", 480, 20, "Raum-/Zuluft-Kaskade",
                       T_Raum_min=T_Raum_min, T_AU_min=15.0,
                       T_Raum_max=T_Raum_max, T_AU_max=30.0,
-                      T_ZU_min=T_ZU_min, T_ZU_max=T_ZU_max, xp=5.0)
+                      T_ZU_min=T_ZU_min, T_ZU_max=T_ZU_max, xp=5.0,
+                      # Verdrahtet sind waermer_1 (Rueckgewinnung),
+                      # waermer_2 (Register) und kaelter_1 (Kuehler). Weiter
+                      # darf die Regelabweichung nicht laufen, sonst laedt sie
+                      # sich wirkungslos auf.
+                      waermestufen=2, kaeltestufen=1)
 
     zeitplan = b.karte("wochenzeitplan", 920, 620, "Betriebszeiten",
                        **betriebszeiten(zeitplan_tage, zeitplan_von, zeitplan_bis))

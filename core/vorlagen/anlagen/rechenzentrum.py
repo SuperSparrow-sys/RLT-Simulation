@@ -88,7 +88,12 @@ def baue(projekt_id, name=NAME):
         # Nur die Kuehlseite der Kaskade wird gebraucht.
         kaskade = b.karte("kaskade", 480, 20, "Raumtemperaturregelung",
                           T_Raum_min=24.0, T_AU_min=15.0, T_Raum_max=27.0,
-                          T_AU_max=30.0, T_ZU_min=15.0, T_ZU_max=26.0, xp=5.0)
+                          T_AU_max=30.0, T_ZU_min=15.0, T_ZU_max=26.0, xp=5.0,
+                          # Ein Kuehler, keine Heizung. Ohne diese Angabe
+                          # lief die Regelabweichung bis 200, wirksam waren
+                          # 100 - hundert Einheiten Leerweg, die der Regler
+                          # nach jedem warmen Tag zurueckwandern musste.
+                          waermestufen=1, kaeltestufen=1)
         # Freie Kuehlung: je kaelter es draussen ist, desto weniger Umluft.
         # Der Regler haelt die Zulufttemperatur bei 18 GradC, indem er den
         # Umluftanteil nachfuehrt - ist die Aussenluft kalt, mischt er warme

@@ -90,10 +90,57 @@ class Lauf:
     stunden: list = field(default_factory=list)
     bilanz: dict = field(default_factory=dict)
     warnungen: list = field(default_factory=list)
+    # Wie viele Durchgaenge jede Stunde gebraucht hat. Ohne diese Zahl ist von
+    # aussen nicht zu sehen, wie nah eine Anlage an MAX_ITERATIONEN rechnet -
+    # und der Unterschied zwischen "in drei Durchgaengen fertig" und "hundert
+    # gebraucht und dann gemittelt" ist der zwischen einem Ergebnis und einer
+    # Schaetzung.
+    durchgaenge: list = field(default_factory=list)
+    # Je Stunde: Ist der ausgewiesene Wert das Mittel zweier Durchgaenge?
+    gemittelt: list = field(default_factory=list)
     # Stunden, in denen eine Zweipunktregelung schneller taktet, als eine
     # Stundenrechnung sie aufloesen kann - getrennt von den Warnungen, weil
     # es kein Rechenfehler ist (siehe Solver._rechne_stunde).
     takte: list = field(default_factory=list)
+
+    @property
+    def gemittelte_stunden(self):
+        """Stunden, deren Ergebnis das Mittel zweier Durchgaenge ist.
+
+        Zwei Wege fuehren dorthin (siehe _rechne_stunde): ein erkannter
+        Zweitakt, und eine Rechnung, die die Iterationsgrenze erreicht, ohne
+        sich einzuschwingen. In beiden Faellen ist das Mittel die beste
+        Aussage, die eine Stundenrechnung machen kann - aber es ist eine andere
+        Aussage als bei einer eingeschwungenen Stunde, und wer die Zahlen
+        liest, soll wissen, wie viele davon betroffen sind.
+        """
+        return sum(1 for g in self.gemittelt if g)
+
+
+@dataclass
+class Stundenergebnis:
+    """Was eine gerechnete Stunde ueber sich selbst weiss.
+
+    Frueher gab _rechne_stunde() fuenf unbenannte Werte zurueck, und ob das
+    Ergebnis ein eingeschwungener Stand oder ein Mittel war, musste die
+    aufrufende Stelle aus der Durchgangszahl erraten. Das ging in einem
+    Randfall auch schief (MAX_ITERATIONEN = 1: Grenze erreicht, aber kein
+    zweiter Stand zum Mitteln da). Jetzt sagt die Stunde es selbst.
+    """
+
+    #: Ausgaben aller Karten am Ende der Stunde.
+    ausgaben: dict
+    #: Speicherzustaende fuer die naechste Stunde.
+    zustaende: dict
+    #: Wie viele Vorwaertsdurchgaenge gebraucht wurden.
+    durchgaenge: int
+    #: Groesste verbliebene Aenderung - None, wenn die Stunde eingeschwungen
+    #: ist oder ein Zweitakt erkannt wurde (beides sind keine Warnungen).
+    abweichung: float | None
+    #: Ein erkannter Zweitakt mit nennenswertem Ausschlag.
+    taktet: bool
+    #: Ausgewiesen ist das Mittel zweier Durchgaenge statt eines Stands.
+    gemittelt: bool
 
 
 class Solver:
@@ -499,7 +546,10 @@ class Solver:
 
             letzte_abweichung = self._abweichung(vorher, ausgaben)
             if letzte_abweichung < config.MAX_AENDERUNG:
-                return ausgaben, neue_zustaende, durchgang + 1, None, False
+                return Stundenergebnis(
+                    ausgaben, neue_zustaende, durchgang + 1,
+                    abweichung=None, taktet=False, gemittelt=False,
+                )
 
             # Grenzzyklus: Der Durchgang wiederholt nicht den vorigen Stand,
             # aber den VORVORIGEN - die Rechnung pendelt zwischen zwei
@@ -522,12 +572,13 @@ class Solver:
             if vorvorher is not None:
                 zyklus = self._abweichung(vorvorher, ausgaben)
                 if zyklus < config.MAX_AENDERUNG:
-                    return (
+                    return Stundenergebnis(
                         self._mittel(vorher, ausgaben),
                         self._mittel(vorherige_zustaende, neue_zustaende),
                         durchgang + 1,
-                        None,
-                        letzte_abweichung >= TAKT_MINDESTAUSSCHLAG,
+                        abweichung=None,
+                        taktet=letzte_abweichung >= TAKT_MINDESTAUSSCHLAG,
+                        gemittelt=True,
                     )
             vorvorher = vorher
             vorherige_zustaende = neue_zustaende
@@ -546,19 +597,23 @@ class Solver:
         # taktende Befeuchtungskreis nicht mehr jede Stunde ganz an oder ganz
         # aus gerechnet wird.
         if vorvorher is not None:
-            return (
+            return Stundenergebnis(
                 self._mittel(vorher, ausgaben),
                 self._mittel(vorherige_zustaende, neue_zustaende),
                 config.MAX_ITERATIONEN,
-                letzte_abweichung,
-                False,
+                abweichung=letzte_abweichung,
+                taktet=False,
+                gemittelt=True,
             )
-        return (
+        # Nur bei MAX_ITERATIONEN = 1 - dann gibt es keinen zweiten Stand, mit
+        # dem sich mitteln liesse.
+        return Stundenergebnis(
             ausgaben,
             neue_zustaende,
             config.MAX_ITERATIONEN,
-            letzte_abweichung,
-            False,
+            abweichung=letzte_abweichung,
+            taktet=False,
+            gemittelt=False,
         )
 
     # -- Lauf -------------------------------------------------------------
@@ -578,9 +633,9 @@ class Solver:
             if abbruch is not None and abbruch():
                 break
 
-            ausgaben, zustaende, durchgaenge, abweichung, taktet = self._rechne_stunde(
-                stunde, zustaende, gefordert
-            )
+            ergebnis = self._rechne_stunde(stunde, zustaende, gefordert)
+            ausgaben, zustaende = ergebnis.ausgaben, ergebnis.zustaende
+            abweichung = ergebnis.abweichung
             if abweichung is not None:
                 lauf.warnungen.append(
                     {
@@ -596,7 +651,7 @@ class Solver:
                         ),
                     }
                 )
-            elif taktet:
+            elif ergebnis.taktet:
                 # Kein Fehler, sondern eine Aussage ueber die Anlage: hier
                 # taktet eine Zweipunktregelung schneller, als eine
                 # Stundenrechnung sie aufloesen kann. Ausgewiesen wird das
@@ -614,6 +669,8 @@ class Solver:
                     }
                 )
 
+            lauf.durchgaenge.append(ergebnis.durchgaenge)
+            lauf.gemittelt.append(ergebnis.gemittelt)
             lauf.stunden.append(ausgaben)
             for werte in ausgaben.values():
                 for name in BILANZGROESSEN:

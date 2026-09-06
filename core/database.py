@@ -117,6 +117,9 @@ CREATE TABLE IF NOT EXISTS simulation (
     gestartet_am       TEXT NOT NULL DEFAULT (datetime('now')),
     dauer_s            REAL NOT NULL DEFAULT 0,
     warnungen          TEXT NOT NULL DEFAULT '[]',
+    -- Stunden, deren Ergebnis das Mittel zweier Rechendurchgaenge ist statt
+    -- eines eingeschwungenen Stands (siehe Lauf.gemittelte_stunden).
+    gemittelte_stunden INTEGER NOT NULL DEFAULT 0,
     baustein_warnungen TEXT NOT NULL DEFAULT '[]',
     reihen_kennung     TEXT,
     reihen_index       INTEGER,
@@ -278,6 +281,14 @@ def _migriere(db):
         db.execute("ALTER TABLE simulation ADD COLUMN reihen_index INTEGER")
     if "reihen_gesamt" not in spalten:
         db.execute("ALTER TABLE simulation ADD COLUMN reihen_gesamt INTEGER")
+    # Aeltere Laeufe haben die Zahl nicht mitgezaehlt; 0 heisst dort "unbekannt"
+    # und nicht "alle Stunden eingeschwungen". Der Bericht unterscheidet das
+    # nicht, weil ein alter Lauf ohnehin keine Angabe dazu machen kann.
+    if "gemittelte_stunden" not in spalten:
+        db.execute(
+            "ALTER TABLE simulation ADD COLUMN gemittelte_stunden INTEGER NOT "
+            "NULL DEFAULT 0"
+        )
 
 
 def _aufraeume_verwaiste_laeufe(db):

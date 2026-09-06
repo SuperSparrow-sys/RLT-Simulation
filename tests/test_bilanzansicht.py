@@ -225,10 +225,12 @@ def test_bilanz_ohne_warnungen_meldet_zahl_null(app):
         sim = ergebnisse.speichere(anlage, wetter, 0, 1, lauf, graph, dauer=0.1)
 
     daten = app.test_client().get(f"/api/simulation/{sim}/bilanz").get_json()
-    # Vier Felder: Konvergenzwarnungen und taktende Stunden, je mit Zahl und
-    # Stichprobe (core/ergebnisse.py, lade_warnungen).
+    # Konvergenzwarnungen und taktende Stunden, je mit Zahl und Stichprobe,
+    # dazu die Zahl der gemittelten Stundenwerte (core/ergebnisse.py,
+    # lade_warnungen).
     assert daten["warnungen"] == {
         "anzahl": 0, "beispiele": [], "takte": 0, "takt_beispiele": [],
+        "gemittelt": 0,
     }
 
 

@@ -845,6 +845,25 @@ def baue_pdf(daten) -> bytes:
             "schneller, als eine Stundenrechnung sie auflösen kann. Ausgewiesen "
             "ist dort das Mittel beider Schaltzustände."
         )
+    # Wie viele der ausgewiesenen Stundenwerte Mittelwerte sind - auch wenn es
+    # keine sind, damit die Angabe nicht aus ihrem Fehlen erschlossen werden
+    # muss (gleichlautend in templates/bericht.html).
+    gemittelt = warnungen.get("gemittelt", 0)
+    gesamt = daten["stunden_gerechnet"] or 0
+    if gemittelt and gesamt:
+        anteil = format_zahl(100.0 * gemittelt / gesamt, 1)
+        schreiber.absatz(
+            f"{gemittelt} von {gesamt} Stundenwerten sind das Mittel zweier "
+            f"Rechendurchgänge ({anteil} %). Die Regler bauen ihre Stellgröße "
+            "über die Rechendurchgänge auf, wie in der Excel-Vorlage; schwingt "
+            "sich eine Stunde innerhalb der dort eingestellten Grenze nicht ein, "
+            "gilt das Mittel der beiden letzten Durchgänge."
+        )
+    elif gesamt:
+        schreiber.absatz(
+            f"Alle {gesamt} Stundenwerte stammen aus einem eingeschwungenen "
+            "Rechenstand."
+        )
     if not daten["baustein_warnungen"]:
         schreiber.absatz("Keine Warnungen aus Bausteinen.")
     else:

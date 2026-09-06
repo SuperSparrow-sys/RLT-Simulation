@@ -24,6 +24,68 @@ STUFEN = (
     ("kaelter_2", -100.0, 1.0),
 )
 
+#: Wieviel Regelabweichung eine Stufe abdeckt.
+STUFENBREITE = 100.0
+
+#: Vorgabe: alle Stufen stehen zur Verfuegung - so rechnete es bisher.
+WAERMESTUFEN_VORGABE = 3
+KAELTESTUFEN_VORGABE = 2
+
+
+def stufenparameter():
+    """Die beiden Parameter, mit denen eine Anlage ihre Stufenzahl angibt.
+
+    Kaskade und Sequenzregler teilen sie sich; die Regel gehoert an eine
+    Stelle, nicht an zwei.
+    """
+    return [
+        Param("waermestufen", "Genutzte Wärmestufen", "Anzahl",
+              float(WAERMESTUFEN_VORGABE), darstellung=ZAHL, dezimalstellen=0,
+              minimum=1.0, maximum=3.0,
+              hinweis="Wie viele der Ausgänge wärmer_1 bis wärmer_3 die Anlage "
+                      "wirklich verdrahtet. Die Regelabweichung läuft nur so "
+                      "weit, wie diese Stufen reichen - sonst lädt sie sich in "
+                      "einen Bereich auf, den niemand hört, und muss ihn "
+                      "später zurückwandern."),
+        Param("kaeltestufen", "Genutzte Kältestufen", "Anzahl",
+              float(KAELTESTUFEN_VORGABE), darstellung=ZAHL, dezimalstellen=0,
+              minimum=1.0, maximum=2.0,
+              hinweis="Wie viele der Ausgänge kälter_1 und kälter_2 die Anlage "
+                      "wirklich verdrahtet - siehe Wärmestufen."),
+    ]
+
+
+def stufengrenzen(p):
+    """Der Bereich, in dem die Regelabweichung noch etwas bewirkt."""
+    waerme = int(p.get("waermestufen", WAERMESTUFEN_VORGABE) or WAERMESTUFEN_VORGABE)
+    kaelte = int(p.get("kaeltestufen", KAELTESTUFEN_VORGABE) or KAELTESTUFEN_VORGABE)
+    waerme = max(1, min(waerme, WAERMESTUFEN_VORGABE))
+    kaelte = max(1, min(kaelte, KAELTESTUFEN_VORGABE))
+    return -waerme * STUFENBREITE, kaelte * STUFENBREITE
+
+
+def stufenausgaenge(e, p):
+    """Die fuenf Stufenausgaenge - nicht gefahrene bleiben auf null.
+
+    Stuende an einer nicht verdrahteten Stufe eine Anforderung, zeigte die
+    Karte Leistung an, die die Anlage gar nicht abrufen kann.
+    """
+    waerme = int(p.get("waermestufen", WAERMESTUFEN_VORGABE) or WAERMESTUFEN_VORGABE)
+    kaelte = int(p.get("kaeltestufen", KAELTESTUFEN_VORGABE) or KAELTESTUFEN_VORGABE)
+    genutzt = set()
+    for nummer in range(1, min(waerme, WAERMESTUFEN_VORGABE) + 1):
+        genutzt.add(f"waermer_{nummer}")
+    for nummer in range(1, min(kaelte, KAELTESTUFEN_VORGABE) + 1):
+        genutzt.add(f"kaelter_{nummer}")
+
+    aus = {}
+    for name, versatz, vorzeichen in STUFEN:
+        if name not in genutzt:
+            aus[name] = 0.0
+            continue
+        aus[name] = max(0.0, min(vorzeichen * (e + versatz), 100.0))
+    return aus
+
 
 @registriere
 class Sequenzregler(Baustein):
@@ -36,7 +98,7 @@ class Sequenzregler(Baustein):
     GRUPPE = "Regelung"
     SYMBOL = "sequenzregler.svg"
 
-    PARAMETER = [
+    PARAMETER = stufenparameter() + [
         Param("oberer_sw", "Oberer Sollwert - darüber wird gekühlt", "°C", 24.0,
               darstellung=ZAHL, dezimalstellen=1),
         Param("unterer_sw", "Unterer Sollwert - darunter wird geheizt", "°C", 20.0,
@@ -88,11 +150,10 @@ class Sequenzregler(Baustein):
                 delta = (istwert - p["unterer_sw"]) / 10.0
             else:
                 delta = (istwert - p["oberer_sw"]) / 10.0
-            e = max(-300.0, min(200.0, e_alt + delta))
+            unten, oben = stufengrenzen(p)
+            e = max(unten, min(oben, e_alt + delta))
 
-        aus = {}
-        for name, versatz, vorzeichen in STUFEN:
-            aus[name] = max(0.0, min(vorzeichen * (e + versatz) * 1.0, 100.0))
+        aus = stufenausgaenge(e, p)
         aus["e"] = e
         return aus, {"e": e}
 

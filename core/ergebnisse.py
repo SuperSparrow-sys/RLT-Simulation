@@ -120,9 +120,9 @@ def abschliesse(simulation_id, lauf, graph, dauer, status):
     db = get_db()
     db.execute(
         "UPDATE simulation SET status = ?, dauer_s = ?, warnungen = ?, "
-        "fortschritt = ? WHERE id = ?",
+        "gemittelte_stunden = ?, fortschritt = ? WHERE id = ?",
         (
-            status, dauer, _meldungen_json(lauf),
+            status, dauer, _meldungen_json(lauf), lauf.gemittelte_stunden,
             len(lauf.stunden), simulation_id,
         ),
     )
@@ -137,10 +137,10 @@ def speichere(anlage_id, wetterdatensatz_id, von, bis, lauf, graph, dauer, statu
     db = get_db()
     cur = db.execute(
         "INSERT INTO simulation (anlage_id, wetterdatensatz_id, von_stunde, "
-        "bis_stunde, status, dauer_s, warnungen, fortschritt) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "bis_stunde, status, dauer_s, warnungen, gemittelte_stunden, "
+        "fortschritt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (anlage_id, wetterdatensatz_id, von, bis, status, dauer,
-         _meldungen_json(lauf), len(lauf.stunden)),
+         _meldungen_json(lauf), lauf.gemittelte_stunden, len(lauf.stunden)),
     )
     simulation_id = cur.lastrowid
     _ergebnisse_einfuegen(db, simulation_id, lauf, graph)
@@ -442,7 +442,8 @@ def lade_warnungen(simulation_id, anzahl=5):
     """
     db = get_db()
     zeile = db.execute(
-        "SELECT warnungen FROM simulation WHERE id = ?", (simulation_id,)
+        "SELECT warnungen, gemittelte_stunden FROM simulation WHERE id = ?",
+        (simulation_id,),
     ).fetchone()
     gespeichert = json.loads(zeile["warnungen"]) if zeile else []
     # Aeltere Laeufe kennen das Feld 'art' nicht - was dort steht, waren
@@ -454,6 +455,12 @@ def lade_warnungen(simulation_id, anzahl=5):
         "beispiele": _stichprobe(alle, anzahl),
         "takte": len(takte),
         "takt_beispiele": _stichprobe(takte, anzahl),
+        # Nicht die Summe der beiden Zahlen darueber: Ein Zweitakt mit sehr
+        # kleinem Ausschlag wird gemittelt, aber nicht gemeldet (siehe
+        # TAKT_MINDESTAUSSCHLAG in core/solver.py). Diese Zahl sagt, wie viele
+        # Stundenwerte des Laufs Mittelwerte sind - unabhaengig davon, ob
+        # daneben eine Meldung steht.
+        "gemittelt": zeile["gemittelte_stunden"] if zeile else 0,
     }
 
 

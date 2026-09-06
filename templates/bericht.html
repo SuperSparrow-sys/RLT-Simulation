@@ -230,6 +230,24 @@
           </ul>
         </div>
       {% endif %}
+      {# Wie viele der ausgewiesenen Stundenwerte Mittelwerte sind. Steht
+         bewusst auch dann da, wenn es keine ist - wer die Zahlen weiterreicht,
+         soll nicht erst aus dem Fehlen eines Hinweises schliessen muessen,
+         dass alles eingeschwungen ist. Siehe Lauf.gemittelte_stunden. #}
+      <p class="warnhinweis warnhinweis-ok">
+        {% if daten.warnungen.gemittelt %}
+          {{ daten.warnungen.gemittelt }} von {{ daten.stunden_gerechnet }}
+          Stundenwerten sind das Mittel zweier Rechendurchgänge
+          ({{ format_zahl(100.0 * daten.warnungen.gemittelt / daten.stunden_gerechnet, 1) }} %).
+          Die Regler bauen ihre Stellgröße über die Rechendurchgänge auf, wie in
+          der Excel-Vorlage; schwingt sich eine Stunde innerhalb der dort
+          eingestellten Grenze nicht ein, gilt das Mittel der beiden letzten
+          Durchgänge.
+        {% else %}
+          Alle {{ daten.stunden_gerechnet }} Stundenwerte stammen aus einem
+          eingeschwungenen Rechenstand.
+        {% endif %}
+      </p>
       {% if daten.baustein_warnungen %}
         <div class="warnhinweis">
           <p>Warnungen aus Bausteinen</p>

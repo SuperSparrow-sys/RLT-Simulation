@@ -87,7 +87,9 @@ def baue(projekt_id, name=NAME):
 
         kaskade = b.karte("kaskade", 480, 20, "Raum-/Zuluft-Kaskade",
                           T_Raum_min=22.0, T_AU_min=15.0, T_Raum_max=24.0,
-                          T_AU_max=30.0, T_ZU_min=18.0, T_ZU_max=28.0, xp=5.0)
+                          T_AU_max=30.0, T_ZU_min=18.0, T_ZU_max=28.0, xp=5.0,
+                          # WRG und Register wärmen, ein Kühler kühlt.
+                          waermestufen=2, kaeltestufen=1)
         feuchteregler = b.karte("p_regler", 700, 20, "Feuchteregelung",
                                 xp_1=5.0, xp_2=2.0, sollwert_2=7.0)
         # Frostschutz: Bei 100 % Aussenluft ohne Umluft steht der Erhitzer
@@ -97,7 +99,9 @@ def baue(projekt_id, name=NAME):
         # sie unter 5 GradC faellt - unabhaengig davon, was die Raumkaskade
         # gerade will. Beide fordern ueber ein Maximalglied denselben Erhitzer.
         frostschutz = b.karte("sequenzregler", 920, 20, "Frostschutz",
-                              unterer_sw=5.0, oberer_sw=8.0, xp=3.0)
+                              unterer_sw=5.0, oberer_sw=8.0, xp=3.0,
+                              # Nur waermer_1 ist verdrahtet.
+                              waermestufen=1, kaeltestufen=1)
         erhitzerstellung = b.karte("maximalwert", 1140, 20, "Erhitzeranforderung")
 
         zeitplan = b.karte(

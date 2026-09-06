@@ -83,7 +83,9 @@ def baue(projekt_id, name=NAME):
 
         kaskade = b.karte("kaskade", 480, 20, "Raum-/Zuluft-Kaskade",
                           T_Raum_min=20.0, T_AU_min=15.0, T_Raum_max=22.0,
-                          T_AU_max=30.0, T_ZU_min=16.0, T_ZU_max=26.0, xp=5.0)
+                          T_AU_max=30.0, T_ZU_min=16.0, T_ZU_max=26.0, xp=5.0,
+                          # WRG und Register wärmen, ein Kühler kühlt.
+                          waermestufen=2, kaeltestufen=1)
         # Ein Regler fuer beide Richtungen: Stufe 2 (traege) befeuchtet, wenn
         # es zu trocken ist. Zum Entfeuchten dient der Kuehler, den die Kaskade
         # ohnehin fuehrt - er kuehlt die Luft unter den Taupunkt.

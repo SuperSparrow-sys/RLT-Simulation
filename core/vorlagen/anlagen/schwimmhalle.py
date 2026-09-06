@@ -115,7 +115,9 @@ def baue(projekt_id, name=NAME):
         # Temperaturregelung auf 30 GradC Hallentemperatur.
         kaskade = b.karte("kaskade", 700, 20, "Raum-/Zuluft-Kaskade",
                           T_Raum_min=30.0, T_AU_min=15.0, T_Raum_max=32.0,
-                          T_AU_max=30.0, T_ZU_min=26.0, T_ZU_max=38.0, xp=5.0)
+                          T_AU_max=30.0, T_ZU_min=26.0, T_ZU_max=38.0, xp=5.0,
+                          # WRG und Register wärmen, ein Kühler kühlt.
+                          waermestufen=2, kaeltestufen=1)
 
         zeitplan = b.karte(
             "wochenzeitplan", 1140, 620, "Badezeiten",

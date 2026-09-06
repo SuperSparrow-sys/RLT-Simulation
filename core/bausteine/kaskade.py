@@ -8,7 +8,9 @@ from core.bausteine.basis import (
     AUSGANG, EINGANG, ISTWERT, MESSWERT, SIGNAL, STELLGROESSE, ZAHL,
     Baustein, Param, Port, registriere,
 )
-from core.bausteine.sequenzregler import STUFEN
+from core.bausteine.sequenzregler import (
+    stufenausgaenge, stufengrenzen, stufenparameter,
+)
 
 
 @registriere
@@ -28,7 +30,7 @@ class RaumZuluftKaskade(Baustein):
     GRUPPE = "Regelung"
     SYMBOL = "kaskade.svg"
 
-    PARAMETER = [
+    PARAMETER = stufenparameter() + [
         # "bei T_AU" stand zweimal wortgleich an zwei verschiedenen Parametern -
         # im Parameterfenster waren die beiden Zeilen nicht zu unterscheiden.
         Param("T_Raum_min", "Unterer Raumsollwert", "°C", 22.0,
@@ -168,11 +170,16 @@ class RaumZuluftKaskade(Baustein):
         else:
             delta = raum
 
-        e = max(-300.0, min(200.0, e_alt + delta))
+        # Nur so weit integrieren, wie die Anlage Stufen verdrahtet hat -
+        # sonst laedt sich die Regelabweichung in einen wirkungslosen Bereich
+        # auf und muss ihn spaeter zurueckwandern (siehe
+        # core/bausteine/sequenzregler.py, stufengrenzen).
+        unten, oben = stufengrenzen(p)
+        e = max(unten, min(oben, e_alt + delta))
 
-        aus = {"sollwert": soll, "e": e}
-        for name, versatz, vorzeichen in STUFEN:
-            aus[name] = max(0.0, min(vorzeichen * (e + versatz), 100.0))
+        aus = stufenausgaenge(e, p)
+        aus["sollwert"] = soll
+        aus["e"] = e
         return aus, {"e": e}
 
     def anfangszustand(self, p):
