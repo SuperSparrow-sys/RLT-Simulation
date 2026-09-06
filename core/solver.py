@@ -39,6 +39,51 @@ BILANZGROESSEN = ("strom_ht", "strom_nt", "waerme", "kaelte", "wasser")
 # Wie oft der Rueckwaertslauf ueber die Karten geht (siehe _rueckwaerts).
 RUECKWAERTS_DURCHLAEUFE = 3
 
+# Bezugsgroesse fuer Volumenstromaenderungen im Abweichungsmass, in m3/h.
+#
+# Temperaturen und Feuchten werden absolut gemessen - ein halbes Kelvin ist ein
+# halbes Kelvin, gleich wie gross die Anlage ist. Bei Volumenstroemen gilt das
+# nicht: Frueher stand hier fest "durch 1000", womit die Schranke
+# MAX_AENDERUNG fuer eine Anlage mit 5000 m3/h eine relative Genauigkeit von
+# 2e-7 verlangte, fuer eine mit 25 000 m3/h aber 4e-8. Dieselbe Anlage, groesser
+# gebaut, haette fuenfmal genauer einschwingen muessen.
+#
+# Gemessen wird deshalb relativ zum Strom selbst, unterhalb dieser Grenze aber
+# weiterhin absolut - sonst geriete ein Nebenstrang mit 50 m3/h an eine
+# unerreichbar feine Schranke. Fuer Anlagen mit konstantem Volumenstrom (AX_SIM
+# 2.1) aendert sich dadurch nichts: null bleibt null.
+VOLUMEN_BEZUG_MIN = 1000.0
+
+# Ab welchem Ausschlag ein erkanntes Pendeln als Takt gilt.
+#
+# Der Zweitakt wird erkannt, wenn ein Durchgang nicht den vorigen, wohl aber
+# den vorvorigen Stand wiederholt. Das trifft auch zu, wenn beide Staende sich
+# um drei Tausendstel Kelvin unterscheiden - dann ist die Rechnung praktisch
+# eingeschwungen, ihr Mittel von jedem einzelnen nicht zu unterscheiden, und
+# die Meldung "eine Zweipunktregelung taktet" fuehrt in die Irre. Ein echter
+# Zweipunktregler schlaegt sein Stellglied voll um und bewegt die Temperatur um
+# Kelvin, nicht um Tausendstel.
+#
+# Gemittelt wird trotzdem in beiden Faellen - das ist bei kleinem Ausschlag
+# ohnehin folgenlos; nur die Meldung unterbleibt.
+TAKT_MINDESTAUSSCHLAG = 0.1
+
+
+def _volumenabweichung(neu, alt):
+    return abs(neu - alt) / max(VOLUMEN_BEZUG_MIN, abs(alt))
+
+
+def _ist_volumenstrom(name):
+    """Traegt diese Ausgabe einen Volumenstrom in m3/h?
+
+    Die Luftbehandlungskarten schreiben ihre Eintrittsmengen als
+    'V_<anschluss>' mit; Aussenluft und Fortluft nennen ihre Menge schlicht
+    'V'. Beide muessen relativ gemessen werden, sonst zaehlt ein Kubikmeter je
+    Stunde so viel wie ein Kelvin - und eine grosse Anlage gilt schon bei
+    anderthalb Zehntausendstel Restabweichung als nicht eingeschwungen.
+    """
+    return name == "V" or name.startswith("V_")
+
 
 @dataclass
 class Lauf:
@@ -318,13 +363,22 @@ class Solver:
                     groesste = max(
                         groesste,
                         abs(wert.T - vor.T), abs(wert.x - vor.x),
-                        abs(wert.V - vor.V) / 1000.0,
+                        _volumenabweichung(wert.V, vor.V),
                     )
                 elif isinstance(wert, (int, float)):
                     vor = vorher.get(name)
                     if not isinstance(vor, (int, float)):
                         return float("inf")
-                    groesste = max(groesste, abs(wert - vor))
+                    # Die mitgeschriebenen Volumenstroeme (V_<name>, siehe
+                    # "Eingangsgroessen mitschreiben" weiter unten) sind reine
+                    # Zahlen, tragen aber m3/h. Ohne diesen Zweig zaehlte eine
+                    # Aenderung um 1 m3/h so viel wie eine um 1 Kelvin, und
+                    # eine grosse Anlage galt schon bei vier Zehntausendstel
+                    # Restabweichung als nicht eingeschwungen.
+                    if _ist_volumenstrom(name):
+                        groesste = max(groesste, _volumenabweichung(wert, vor))
+                    else:
+                        groesste = max(groesste, abs(wert - vor))
         return groesste
 
     @staticmethod
@@ -398,16 +452,31 @@ class Solver:
                 # Verbindungen aufzusummieren waere dieselbe Regel zweimal
                 # geschrieben, und die beiden koennten auseinanderlaufen.
                 #
-                # Hier gilt bewusst die NENNabnahme, nicht die gestellte: die
-                # Mappe legt die Bauteile vor dem Ventilator auf den Nennstrom
-                # aus (S13 = S9 = V9 = Y9). Der Sprung der Luftmenge am
-                # Ventilator ist der Mappe getreu.
+                # Es gilt die GESTELLTE Abnahme: durch die Aussenluftklappe
+                # stroemt, was der Ventilator ansaugt, nicht was er im
+                # Auslegungsfall ansaugen wuerde. Solange die gestellte Abnahme
+                # noch nicht vorliegt - vor dem ersten Vorwaertsdurchgang -,
+                # dient der Nennstrom als Startwert.
+                #
+                # Frueher stand hier dauerhaft die Nennabnahme, mit der
+                # Begruendung, die Mappe lege die Bauteile vor dem Ventilator
+                # auf den Nennstrom aus (S13 = S9 = V9 = Y9). Das verwechselt
+                # AUSLEGUNG mit BETRIEB: dass ein Erhitzer fuer 8000 m3/h
+                # ausgelegt ist, heisst nicht, dass jede Stunde 8000 m3/h durch
+                # ihn stroemen. In AX_SIM 2.1 faellt der Unterschied nicht auf,
+                # weil dort alle Luftmengen konstant auf Nennstrom stehen
+                # (nachgemessen); in einer Anlage mit Nachtabsenkung erwaermte
+                # der Erhitzer dagegen 8000 m3/h, wovon 1600 in den Raum gingen
+                # - vier Fuenftel der Waerme wurden erzeugt, abgerechnet und
+                # weggeworfen. Siehe tests/test_teillast_luftmenge.py.
                 if karte.typ == "aussenluft":
                     ausgang = next(
                         p for p in karte.ports
                         if p.art == basis.LUFT and p.richtung == basis.AUSGANG
                     )
-                    zustand["bedarf"] = self.abnahme.get(ausgang.id, 0.0)
+                    zustand["bedarf"] = self.gestellte_abnahme.get(
+                        ausgang.id, self.abnahme.get(ausgang.id, 0.0)
+                    )
 
                 werte, zustand_neu = karte.baustein.berechne(
                     ein, karte.parameter, zustand
@@ -458,7 +527,7 @@ class Solver:
                         self._mittel(vorherige_zustaende, neue_zustaende),
                         durchgang + 1,
                         None,
-                        True,
+                        letzte_abweichung >= TAKT_MINDESTAUSSCHLAG,
                     )
             vorvorher = vorher
             vorherige_zustaende = neue_zustaende

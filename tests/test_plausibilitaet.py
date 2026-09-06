@@ -56,7 +56,7 @@ ERWARTETE_PRUEFUNGEN = [
     "Kaelte im Sommer groesser als im Winter",
     "Heizleistung wird nie negativ",
     "Der Kuehler waermt hoechstens in Ausnahmestunden und kaum",
-    "Mischlufttemperatur liegt zwischen Aussen- und Ablufttemperatur",
+    "Mischlufttemperatur liegt zwischen ihren beiden Eingängen",
     "Zulufttemperatur zwischen -15 und 45 °C",
     "Summe der Stundenwerte gleich der Jahresbilanz",
     "Im Betrieb wird mehr Strom gezogen als ausserhalb",

@@ -255,18 +255,31 @@ def test_gedrosselter_raum_sieht_keine_infiltration():
     assert a["T_frei"] > b["T_frei"]
 
 
-def test_bauteile_vor_dem_ventilator_bleiben_auf_dem_nennstrom():
-    """Anlage!S13 = S9 = V9 = Y9 - vor dem Ventilator gilt der Nennstrom.
+def test_bauteile_vor_dem_ventilator_fuehren_die_gestellte_menge():
+    """Durch die Aussenluftklappe stroemt, was der Ventilator ansaugt.
 
-    Die Gegenprobe zur vorigen Pruefung: der Sprung der Luftmenge AM Ventilator
-    ist der Mappe getreu und darf nicht mitkorrigiert werden.
+    Hier stand frueher die Umkehrung: vor dem Ventilator gelte der NENNstrom,
+    der Sprung der Luftmenge am Ventilator sei der Mappe getreu
+    (Anlage!S13 = S9 = V9 = Y9). Diese Zellenidentitaet ist richtig, traegt die
+    Folgerung aber nicht. In AX_SIM 2.1 stehen SAEMTLICHE Luftmengen konstant
+    auf ihrem Nennwert - der Ventilator moduliert nie (nachgemessen ueber eine
+    Woche). Bei konstantem Strom sind Nennstrom und gestellter Strom dasselbe;
+    die Mappe kann zwischen beiden Deutungen also gar nicht unterscheiden. Die
+    Identitaet sagt, worauf die Bauteile AUSGELEGT sind, nicht was in einer
+    Teillaststunde durch sie hindurchgeht.
+
+    Mit der falschen Deutung erwaermte ein Erhitzer in einer Anlage mit
+    Nachtabsenkung 8000 m3/h, waehrend 1600 m3/h in den Raum gingen: vier
+    Fuenftel der Waerme wurden erzeugt, in der Bilanz abgerechnet und
+    weggeworfen. Siehe tests/test_teillast_luftmenge.py.
     """
     karten, g = _gedrosselte_anlage(30.0, 30.0)
     lauf = solver.Solver(g).starte(wetterstunden(2, t_au=0.0))
 
-    assert lauf.stunden[-1][2]["V"] == pytest.approx(8000.0)   # Aussenluft
-    assert lauf.stunden[-1][3]["V_ein"] == pytest.approx(8000.0)  # Ventilatoreintritt
-    assert lauf.stunden[-1][3]["V"] == pytest.approx(2400.0)      # Ventilatoraustritt
+    letzte = lauf.stunden[-1]
+    assert letzte[3]["V"] == pytest.approx(2400.0), "Ventilatoraustritt: 30 % von 8000"
+    assert letzte[3]["V_ein"] == pytest.approx(2400.0), "am Eintritt dieselbe Menge"
+    assert letzte[2]["V"] == pytest.approx(2400.0), "und schon an der Aussenluftklappe"
 
 
 def test_raum_hinter_einem_sammler_bekommt_seine_abluftmenge():

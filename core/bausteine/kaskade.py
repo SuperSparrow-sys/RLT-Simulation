@@ -148,12 +148,25 @@ class RaumZuluftKaskade(Baustein):
 
         soll = self.gleitender_sollwert(T_AU, p)
 
+        raum = self._raumanteil(T_Raum, soll, T_ZU, p)
         if T_ZU > p["T_ZU_max"]:
-            delta = (T_ZU - p["T_ZU_max"]) / 3.0
+            # Die Begrenzung zwingt die Zuluft zurueck. Sie soll den Raum aber
+            # nur ueberstimmen, wenn beide sich WIDERSPRECHEN - will der Raum
+            # ohnehin in dieselbe Richtung (hier: mehr Kuehlung, also ein
+            # positives delta), gilt der groessere der beiden Schritte.
+            #
+            # Ohne diese Zeile bremste die Grenze eine Forderung, der sie
+            # zustimmt: Stand die Zuluft dicht an T_ZU_max, war ihr eigener
+            # Schritt fast null, und der viel groessere Schritt des zu warmen
+            # Raums fiel weg. Gemessen an core/vorlagen/anlagen/
+            # produktionshalle.py: Die Halle lief nach einer kuehlen Nacht auf
+            # 37 GradC, waehrend die Regelabweichung mit 0,03 je Durchgang
+            # nachkroch - sechs Stunden, bis die Kuehlung ansprang.
+            delta = max((T_ZU - p["T_ZU_max"]) / 3.0, raum)
         elif T_ZU < p["T_ZU_min"]:
-            delta = (T_ZU - p["T_ZU_min"]) / 3.0
+            delta = min((T_ZU - p["T_ZU_min"]) / 3.0, raum)
         else:
-            delta = self._raumanteil(T_Raum, soll, T_ZU, p)
+            delta = raum
 
         e = max(-300.0, min(200.0, e_alt + delta))
 

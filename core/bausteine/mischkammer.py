@@ -1,8 +1,8 @@
 """Mischkammer aus Aussenluft und Umluft. Formeln aus Anlage!M132 bis M134."""
 
 from core.bausteine.basis import (
-    AUSGANG, AUSSENLUFT, EINGANG, LUFT, PROZENT, SIGNAL, STELLGROESSE, UMLUFT,
-    ZULUFT, Baustein, Luft, Param, Port, registriere,
+    AUSGANG, AUSSENLUFT, EINGANG, LUFT, MESSWERT, PROZENT, SIGNAL,
+    STELLGROESSE, UMLUFT, ZULUFT, Baustein, Luft, Param, Port, registriere,
 )
 
 
@@ -26,6 +26,13 @@ class Mischkammer(Baustein):
         Port("umluft_ein", LUFT, EINGANG, UMLUFT),
         Port("luft_aus", LUFT, AUSGANG, ZULUFT),
         Port("umluftanteil", SIGNAL, EINGANG, STELLGROESSE),
+        # Der tatsaechlich gefahrene Anteil als Messwert. Ohne ihn liess
+        # sich die Klappenstellung weder protokollieren noch als Istwert
+        # fuer einen zweiten Regelkreis abgreifen - die Mischkammer war
+        # die einzige Karte, die ihre Ausgabe nicht auch herausgab.
+        # Anderer Schluessel als der Eingang, weil eine Karte denselben
+        # Namen nicht zweimal fuehren kann.
+        Port("umluftanteil_ist", SIGNAL, AUSGANG, MESSWERT),
     ]
 
     AUSGABEN = ["T_MI", "F_MI", "umluftanteil", "umluftanteil_soll"]
@@ -79,6 +86,7 @@ class Mischkammer(Baustein):
                 "luft_aus": Luft(V=V_soll, T=T, x=x, dp=0.0),
                 "T_MI": T, "F_MI": x,
                 "umluftanteil": wirksam,
+                "umluftanteil_ist": wirksam,
                 # Getrennt vom wirksamen Anteil, weil bedarf_gestellt() genau
                 # DIESEN braucht: Wuerde dort der wirksame stehen, forderte die
                 # Kammer nur noch das an, was sie ohnehin schon bekommt, und

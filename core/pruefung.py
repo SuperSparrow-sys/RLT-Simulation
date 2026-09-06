@@ -156,6 +156,66 @@ def _regler_ohne_wirkung(graph):
     return meldungen
 
 
+def _stellgroesse_ohne_quelle(graph):
+    """Geregelte Karten, deren Stellgröße nirgends herkommt.
+
+    Die Gegenrichtung zu _regler_ohne_wirkung: Dort regelt jemand ins Leere,
+    hier wartet jemand auf eine Anweisung, die nie kommt. Eine Karte ohne
+    Quelle an ihrer Stellgröße rechnet mit null Prozent - der Erhitzer heizt
+    nie, der Kühler kühlt nie, und eine Wärmerückgewinnung liegt vollständig
+    im Bypass und überträgt nichts.
+
+    Der Fehler ist besonders still, weil die Luft ordentlich durch die Karte
+    fließt: Im Bild ist die Anlage vollständig, die Rechnung läuft durch, und
+    nur die Zahlen sind falsch. Genau so blieb in einer Anlage mit
+    Wärmerückgewinnung Q_WRG dauerhaft null, während die Heizleistung fast
+    doppelt so hoch lag wie ausgelegt.
+
+    Nicht gemeldet wird, wo die Karte denselben Namen auch als Parameter führt
+    - der Ventilator etwa läuft ohne Verbindung auf seinem eingestellten Wert,
+    das ist Absicht und kein Versäumnis.
+    """
+    belegt = {v.nach_port.id for v in graph.verbindungen}
+    reserve = _reserveports(graph)
+    meldungen = []
+    for karte in graph.karten.values():
+        eigene_parameter = {p.schluessel for p in karte.baustein.PARAMETER}
+        # Nur der ERSTE Stelleingang einer Karte ist ihr Hauptschalter. Die
+        # Waermerueckgewinnung hat daneben 'stellgroesse_bypass'; dort bedeutet
+        # null "Bypass zu" und ist der richtige Vorgabewert, kein Versaeumnis.
+        # Am Baustein deklarierte Ports tragen 'schluessel'; die angelegten
+        # Anschlussinstanzen tragen zusaetzlich 'basis' - bei dynamischen Ports
+        # ist der Schluessel 'ein_2', die Basis 'ein'.
+        haupt = next(
+            (p.schluessel for p in karte.baustein.PORTS
+             if p.richtung == basis.EINGANG and p.rolle == basis.STELLGROESSE),
+            None,
+        )
+        for port in karte.ports:
+            if port.richtung != basis.EINGANG or port.rolle != basis.STELLGROESSE:
+                continue
+            if port.basis != haupt:
+                continue
+            # Ein freier Reserveanschluss einer dynamischen Karte ist ihr
+            # Angebot fuer den naechsten Pfeil, kein vergessener.
+            if port.id in reserve:
+                continue
+            if port.id in belegt or port.basis in eigene_parameter:
+                continue
+            meldungen.append(
+                {
+                    "karte_id": karte.id,
+                    "art": "stellgroesse_ohne_quelle",
+                    "text": (
+                        f"„{karte.name}“ bekommt keine Stellgröße an "
+                        f"„{port.schluessel}“ - die Karte arbeitet deshalb mit "
+                        f"0 % und bleibt ohne Wirkung."
+                    ),
+                }
+            )
+    return meldungen
+
+
 def _keine_wetterquelle(graph):
     """Eine Anlage ohne Wetterkarte rechnet jede Stunde mit demselben Wetter."""
     if not graph.karten:
@@ -175,7 +235,10 @@ def _keine_wetterquelle(graph):
     ]
 
 
-REGELN = (_luftweg_offen, _ohne_bilanz, _regler_ohne_wirkung, _keine_wetterquelle)
+REGELN = (
+    _luftweg_offen, _ohne_bilanz, _regler_ohne_wirkung,
+    _stellgroesse_ohne_quelle, _keine_wetterquelle,
+)
 
 
 def pruefe(graph):

@@ -64,6 +64,23 @@ def rechne_testjahr(app):
 
 # -- Hilfsgriffe auf den Lauf -------------------------------------------
 
+#: Beide Raumkarten. Die Pruefungen fragen nach "dem Raum", nicht nach einer
+#: bestimmten Bauart - eine Anlage mit einfachem Raum muss dieselben Pruefungen
+#: bestehen wie eine mit der bauphysikalischen Karte. Ohne diese Liste liefen
+#: alle Raumpruefungen auf einer leeren Reihe und meldeten "keine Werte" statt
+#: zu pruefen.
+RAUMTYPEN = ("raum", "einfacher_raum")
+
+
+def _raumreihe(ergebnis, groesse):
+    """Stundenwerte einer Raumgroesse, gleich welche Raumkarte verbaut ist."""
+    for typ in RAUMTYPEN:
+        werte = _reihe(ergebnis, typ, groesse)
+        if werte:
+            return werte
+    return []
+
+
 def _karte_mit_typ(graph, typ, filter_=None):
     """Erste Karte eines Typs; mit `filter_` gezielt unter mehreren gleichen
     Typs (z. B. Zu- und Abluftventilator) - ausgewaehlt ueber ihre Parameter."""
@@ -116,11 +133,16 @@ def pruefungen(ergebnis):
         )
 
     # 1 - Der Lauf muss ueberhaupt zustande kommen.
-    pruefe(
-        "Alle 8760 Stunden gerechnet",
-        len(lauf.stunden) == 8760,
-        f"{len(lauf.stunden)} Stunden",
-    )
+    # Nur bei einem Jahreslauf. werkzeuge/anlagenpruefung.py rechnet zum
+    # Entwickeln auch kuerzere Ausschnitte; dort waere diese Pruefung eine
+    # Meldung ueber den Ausschnitt, nicht ueber die Anlage.
+    ist_jahreslauf = len(lauf.stunden) >= 8000
+    if ist_jahreslauf:
+        pruefe(
+            "Alle 8760 Stunden gerechnet",
+            len(lauf.stunden) == 8760,
+            f"{len(lauf.stunden)} Stunden",
+        )
 
     # 2 - Die erste Stunde ist der Kaltstart: alle Regler und Speicher stehen auf
     # ihrem Anfangswert und muessen sich innerhalb dieser Stunde hocharbeiten -
@@ -174,7 +196,7 @@ def pruefungen(ergebnis):
     )
 
     # 3 - Der Raum bleibt in einem sinnvollen Band.
-    t_raum = _reihe(ergebnis, "raum", "T_Raum")
+    t_raum = _raumreihe(ergebnis, "T_Raum")
     pruefe(
         "Raumtemperatur zwischen 5 und 40 °C",
         t_raum and min(t_raum) > 5.0 and max(t_raum) < 40.0,
@@ -182,7 +204,7 @@ def pruefungen(ergebnis):
     )
 
     # 4 - Die Raumluft bleibt unter der Saettigung.
-    f_raum = _reihe(ergebnis, "raum", "F_Raum")
+    f_raum = _raumreihe(ergebnis, "F_Raum")
     ueber = [
         i for i, (t, x) in enumerate(zip(t_raum, f_raum))
         if x < 0.0 or x > st.x_saett(t) + 0.5
@@ -196,23 +218,32 @@ def pruefungen(ergebnis):
 
     # 5/6 - Geheizt wird im Winter, gekuehlt im Sommer - nicht umgekehrt.
     waerme_ahu = _reihe(ergebnis, "erhitzer", "QH")
-    waerme_stat = _reihe(ergebnis, "statische_heizung", "QH")
+    waerme_stat = (_reihe(ergebnis, "statische_heizung", "QH")
+                   or _raumreihe(ergebnis, "QH_stat"))
     kaelte = _reihe(ergebnis, "kuehler", "QK")
     winter = _monat(ergebnis, 1) + _monat(ergebnis, 2) + _monat(ergebnis, 12)
     sommer = _monat(ergebnis, 6) + _monat(ergebnis, 7) + _monat(ergebnis, 8)
     waerme = [a + b for a, b in zip(waerme_ahu, waerme_stat)]
-    pruefe(
-        "Heizwaerme im Winter groesser als im Sommer",
-        _summe(waerme, winter) > _summe(waerme, sommer),
-        f"Winter {_summe(waerme, winter) / 1000:.1f} MWh, "
-        f"Sommer {_summe(waerme, sommer) / 1000:.1f} MWh",
-    )
-    pruefe(
-        "Kaelte im Sommer groesser als im Winter",
-        _summe(kaelte, sommer) > _summe(kaelte, winter),
-        f"Sommer {_summe(kaelte, sommer) / 1000:.1f} MWh, "
-        f"Winter {_summe(kaelte, winter) / 1000:.1f} MWh",
-    )
+    # Der Monatsvergleich braucht ganze Monate. Bei einem Ausschnitt aus dem
+    # Jahr (siehe oben) faende er beide Male null und meldete einen Fehler
+    # ueber den Ausschnitt statt ueber die Anlage.
+    if ist_jahreslauf:
+        pruefe(
+            "Heizwaerme im Winter groesser als im Sommer",
+            _summe(waerme, winter) > _summe(waerme, sommer),
+            f"Winter {_summe(waerme, winter) / 1000:.1f} MWh, "
+            f"Sommer {_summe(waerme, sommer) / 1000:.1f} MWh",
+        )
+        # Nur, wenn die Anlage ueberhaupt kuehlt: Eine Anlage ohne Kuehler
+        # (oder eine, die im gepruepften Jahr nie kuehlen musste) wuerde sonst
+        # null gegen null vergleichen und durchfallen.
+        if _summe(kaelte) > 0:
+            pruefe(
+                "Kaelte im Sommer groesser als im Winter",
+                _summe(kaelte, sommer) > _summe(kaelte, winter),
+                f"Sommer {_summe(kaelte, sommer) / 1000:.1f} MWh, "
+                f"Winter {_summe(kaelte, winter) / 1000:.1f} MWh",
+            )
 
     # 7 - Kein Baustein liefert negative Leistung.
     #
@@ -255,19 +286,36 @@ def pruefungen(ergebnis):
     # kaelteste ihrer beiden Bestandteile werden. Ersetzt die WRG-Richtungs-
     # pruefung der Vorlage, weil diese Anlage keine WRG, sondern eine
     # Umluft-Mischkammer als Waermerueckgewinn einsetzt.
+    # Verglichen wird gegen die TATSAECHLICHEN Eingaenge der Kammer, nicht
+    # gegen Aussen- und Fortlufttemperatur. Frueher stand hier letzteres, was
+    # eine bestimmte Bauart unterstellte: dass die Aussenluft unmittelbar in
+    # die Mischkammer geht. Sitzt eine Waermerueckgewinnung davor - in der
+    # Vorlage "Schwimmhalle" ist das so -, kommt die Aussenluft dort schon
+    # vorgewaermt an (2,5 GradC draussen, 21,8 GradC an der Kammer), und die
+    # Pruefung meldete 452 Stunden lang einen Fehler, den es nicht gab.
+    # Der Solver schreibt die Eintrittstemperaturen jeder Karte mit
+    # (T_<anschluss>, siehe core/solver.py) - damit gilt die Pruefung fuer
+    # jede Bauart.
     t_mi = _reihe(ergebnis, "mischkammer", "T_MI")
-    t_au = [w["t_au"] for w in ergebnis["wetter"]]
-    t_fo = _reihe(ergebnis, "fortluft", "T_FO")
+    t_ein_au = _reihe(ergebnis, "mischkammer", "T_aussenluft_ein")
+    t_ein_um = _reihe(ergebnis, "mischkammer", "T_umluft_ein")
+    v_ein_au = _reihe(ergebnis, "mischkammer", "V_aussenluft_ein")
+    v_ein_um = _reihe(ergebnis, "mischkammer", "V_umluft_ein")
     ausserhalb = [
-        i for i, (mi, au, fo) in enumerate(zip(t_mi, t_au, t_fo))
-        if not (min(au, fo) - 0.1 <= mi <= max(au, fo) + 0.1)
+        i for i, (mi, a, u, va, vu) in enumerate(
+            zip(t_mi, t_ein_au, t_ein_um, v_ein_au, v_ein_um))
+        # Nur Stunden mit Luft auf beiden Seiten: fliesst nur eine, ist die
+        # Mischung trivial, und die andere Temperatur steht auf null.
+        if va > 1.0 and vu > 1.0
+        and not (min(a, u) - 0.1 <= mi <= max(a, u) + 0.1)
     ]
-    pruefe(
-        "Mischlufttemperatur liegt zwischen Aussen- und Ablufttemperatur",
-        not ausserhalb,
-        f"{len(ausserhalb)} Stunden ausserhalb"
-        + (f", erste Stunde {ausserhalb[0]}" if ausserhalb else ""),
-    )
+    if t_mi:
+        pruefe(
+            "Mischlufttemperatur liegt zwischen ihren beiden Eingängen",
+            not ausserhalb,
+            f"{len(ausserhalb)} Stunden ausserhalb"
+            + (f", erste Stunde {ausserhalb[0]}" if ausserhalb else ""),
+        )
 
     # 9 - Zulufttemperatur (nach dem Zuluftventilator, unmittelbar vor dem Raum)
     # bleibt in einem technisch plausiblen Band.
@@ -298,26 +346,37 @@ def pruefungen(ergebnis):
     betrieb = _reihe(ergebnis, "anlagenbetrieb", "betrieb")
     strom_an = [s for s, b in zip(strom_stunden, betrieb) if b > 0.5]
     strom_aus = [s for s, b in zip(strom_stunden, betrieb) if b <= 0.5]
-    pruefe(
-        "Im Betrieb wird mehr Strom gezogen als ausserhalb",
-        strom_an and strom_aus
-        and sum(strom_an) / len(strom_an) > sum(strom_aus) / len(strom_aus),
-        f"im Betrieb {sum(strom_an) / max(len(strom_an), 1):.2f} kW, "
-        f"ausserhalb {sum(strom_aus) / max(len(strom_aus), 1):.2f} kW",
-    )
+    # Eine Anlage im Dauerbetrieb - Museum, Krankenhaus, Rechenzentrum - hat
+    # keine Stunden ausserhalb der Betriebszeit. Der Vergleich hat dann keine
+    # Grundlage und wird nicht gefuehrt, statt mangels Gegenprobe durchzufallen.
+    if strom_an and strom_aus:
+        pruefe(
+            "Im Betrieb wird mehr Strom gezogen als ausserhalb",
+            sum(strom_an) / len(strom_an) > sum(strom_aus) / len(strom_aus),
+            f"im Betrieb {sum(strom_an) / len(strom_an):.2f} kW, "
+            f"ausserhalb {sum(strom_aus) / len(strom_aus):.2f} kW",
+        )
 
     # 12 - Der spezifische Heizwaermebedarf (AHU-Erhitzer PLUS die statische
     # Zusatzheizung, denn beide beheizen denselben Raum) liegt in einer
     # ueblichen Groessenordnung fuer ein Bestandsgebaeude.
+    # Die Flaeche kennt nur die ausfuehrliche Raumkarte, die ihre Geometrie
+    # fuehrt. Anlagen mit einem einfachen Raum (core/bausteine/
+    # einfacher_raum.py) haben keine - dort entfaellt diese Pruefung, statt
+    # dass sie mit einer erfundenen Flaeche rechnet oder die ganze Pruefreihe
+    # mit einem KeyError abbricht. Auf welche Flaeche sich der Verbrauch
+    # bezieht, sagt bei diesen Anlagen ihr eigenes Erwartungsband
+    # (werkzeuge/anlagenpruefung.py).
     raum_kid = _karte_mit_typ(ergebnis["graph"], "raum")
-    raum_karte = ergebnis["graph"].karten[raum_kid]
-    flaeche = raum_karte.baustein.geometrie(raum_karte.parameter)["grundflaeche"]
-    spezifisch = _summe(waerme) / flaeche if flaeche else 0.0
-    pruefe(
-        "Spezifischer Heizwaermebedarf zwischen 10 und 400 kWh/(m² a)",
-        10.0 < spezifisch < 400.0,
-        f"{spezifisch:.1f} kWh/(m² a) bei {flaeche:.0f} m²",
-    )
+    if raum_kid is not None:
+        raum_karte = ergebnis["graph"].karten[raum_kid]
+        flaeche = raum_karte.baustein.geometrie(raum_karte.parameter)["grundflaeche"]
+        spezifisch = _summe(waerme) / flaeche if flaeche else 0.0
+        pruefe(
+            "Spezifischer Heizwaermebedarf zwischen 10 und 400 kWh/(m² a)",
+            10.0 < spezifisch < 400.0,
+            f"{spezifisch:.1f} kWh/(m² a) bei {flaeche:.0f} m²",
+        )
 
     return ergebnisse
 

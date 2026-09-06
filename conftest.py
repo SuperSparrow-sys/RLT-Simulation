@@ -7,12 +7,19 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 
 @pytest.fixture(scope="session")
-def _protokoll_pfad(tmp_path_factory):
+def protokoll_pfad(tmp_path_factory):
+    """Ein einziger Protokollpfad fuer die ganze Testreihe.
+
+    Ohne den Unterstrich im Namen, damit modulweite Vorrichtungen ihn
+    ausdruecklich anfordern koennen - sie laufen vor _protokoll_umbiegen und
+    muessen sich sonst einen eigenen Pfad nehmen, was einen zweiten
+    Protokoll-Handler hinterliesse (siehe tests/test_anlagen_vorlagen.py).
+    """
     return tmp_path_factory.mktemp("protokoll") / "rlt.log"
 
 
 @pytest.fixture(autouse=True)
-def _protokoll_umbiegen(_protokoll_pfad, monkeypatch):
+def _protokoll_umbiegen(protokoll_pfad, monkeypatch):
     """Biegt den Protokollpfad fuer die gesamte Testreihe auf eine
     voruebergehende, gemeinsame Datei um - so wie core.config.DB_PATH es in
     den einzelnen Testdateien schon tut (dort bewusst je Test neu, weil jeder
@@ -27,4 +34,4 @@ def _protokoll_umbiegen(_protokoll_pfad, monkeypatch):
     create_app()-Aufrufen geteilten Logger - ein je Test wechselnder Pfad
     wuerde ueber die Testreihe hinweg einen Handler je Test anhaeufen, statt
     genau den einen, den app.py fuer denselben Pfad wiederverwendet."""
-    monkeypatch.setattr("core.config.LOG_FILE", _protokoll_pfad)
+    monkeypatch.setattr("core.config.LOG_FILE", protokoll_pfad)

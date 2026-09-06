@@ -292,6 +292,28 @@ def _belegte_ports(anlage_id):
     return belegt
 
 
+def _dynamische_ports_nachziehen(db, karten_ids, belegt):
+    """Laesst dynamische Anschluesse nachwachsen, deren Vorgaenger belegt sind.
+
+    Karten wie Bilanz, Maximalwert und Datenlogger vermehren ihre Eingaenge:
+    ist 'waerme_1' belegt, waechst 'waerme_2' nach. Das gilt fuer BEIDE Wege,
+    die eine Verbindung anlegen koennen - das automatische Verdrahten ueber
+    einen Pfeil und das ausdrueckliche Verbinden zweier Anschluesse. Frueher
+    stand die Regel nur im ersten; wer eine Bilanz von Hand verdrahtete, bekam
+    genau einen Anschluss je Sorte und sass dann fest. Von Hand verbunden wird
+    aber gerade dort, wo das Raten nicht genuegt.
+    """
+    for karte_id in karten_ids:
+        karte = _lade_karte(karte_id)
+        for port in graph.fehlende_ports(karte, belegt):
+            db.execute(
+                "INSERT INTO port (karte_id, schluessel, basis, art, richtung, rolle, "
+                "nummer) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (karte.id, port.schluessel, port.basis, port.art, port.richtung,
+                 port.rolle, port.nummer),
+            )
+
+
 def pfeil_anlegen(anlage_id, von_karte_id, nach_karte_id):
     if von_karte_id == nach_karte_id:
         raise ValueError("Eine Karte kann nicht mit sich selbst verbunden werden")
@@ -360,16 +382,8 @@ def _pfeil_schreiben(
             }
         )
 
-    # dynamische Ports nachwachsen lassen
     neu_belegt = belegt | {v.id for v, _ in paare} | {n.id for _, n in paare}
-    for karte in (von, nach):
-        for port in graph.fehlende_ports(karte, neu_belegt):
-            db.execute(
-                "INSERT INTO port (karte_id, schluessel, basis, art, richtung, rolle, "
-                "nummer) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (karte.id, port.schluessel, port.basis, port.art, port.richtung,
-                 port.rolle, port.nummer),
-            )
+    _dynamische_ports_nachziehen(db, (von.id, nach.id), neu_belegt)
 
     db.commit()
     return {"id": pfeil_id, "verbindungen": verbindungen, "mehrdeutig": mehrdeutig}
@@ -477,6 +491,10 @@ def verbindung_anlegen(anlage_id, von_port_id, nach_port_id):
                 "INSERT INTO verbindung (pfeil_id, von_port_id, nach_port_id) "
                 "VALUES (?, ?, ?)",
                 (cur.lastrowid, von_port_id, nach_port_id),
+            )
+            _dynamische_ports_nachziehen(
+                db, (von["karte_id"], nach["karte_id"]),
+                belegt | {von_port_id, nach_port_id},
             )
             db.commit()
     except Exception:
