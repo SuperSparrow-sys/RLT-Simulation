@@ -16,6 +16,22 @@ def app(tmp_path, monkeypatch):
         yield anwendung
 
 
+#: Die gemeinsamen Stylesheets in ihrer Einbindungsreihenfolge, dazu das des
+#: Editors - fruehere Tests lasen die eine style.css, die inzwischen in vier
+#: Dateien aufgeteilt ist (siehe deren Kopfkommentare). Was sie pruefen, ist
+#: die Oberflaeche, nicht eine Datei; sie lesen sie deshalb als Ganzes.
+STYLESHEETS = ("grundlage.css", "bedienelemente.css", "listen.css", "editor.css")
+
+
+def oberflaechen_css(klient):
+    teile = []
+    for name in STYLESHEETS:
+        antwort = klient.get(f"/static/css/{name}")
+        assert antwort.status_code == 200, f"{name} wird nicht ausgeliefert"
+        teile.append(antwort.get_data(as_text=True))
+    return "\n".join(teile)
+
+
 def editor_quelltext(klient):
     """Der ganze Editor als ein Text, ueber die Anwendung geholt.
 
@@ -208,21 +224,28 @@ def test_startseite_bindet_ihr_eigenes_script_ein(app):
     assert "js/start.js" in html
 
 
-def test_startseite_bindet_wetter_abruf_css_ein(app):
-    """Das eigene Stylesheet des Wetterabrufs - ohne dieses Tag bleibt das
-    Formular unformatiert (siehe Kommentar in wetter-abruf.css, weshalb es
-    eine eigene Datei statt style.css ist)."""
+def test_wetterseite_bindet_wetter_abruf_css_ein(app):
+    """Ohne dieses Tag bleiben die beiden Wege zu einem Datensatz unformatiert
+    (siehe Kommentar in wetter-abruf.css, weshalb es eine eigene Datei ist).
+
+    Die Startseite bindet es nicht mehr ein: Sie zeigt seit der
+    Vereinheitlichung der Navigation kein einziges dieser Elemente mehr - die
+    Wetterdaten haben eine eigene Seite und stehen in der Kopfleiste.
+    """
     klient = app.test_client()
-    html = klient.get("/").get_data(as_text=True)
-    assert "css/wetter-abruf.css" in html
+    assert "css/wetter-abruf.css" in klient.get("/wetter").get_data(as_text=True)
+    assert "css/wetter-abruf.css" not in klient.get("/").get_data(as_text=True)
 
 
-def test_startseite_enthaelt_das_abrufformular(app):
+def test_wetterseite_enthaelt_das_abrufformular(app):
     """Formularfelder fuer den Online-Abruf (Ort, Jahr-Mehrfachauswahl,
     Absenden) - ohne sie kann start.js nichts an sie binden und der zweite
-    Weg zu Wetterdaten (neben dem Datei-Upload) fehlt stillschweigend."""
+    Weg zu Wetterdaten (neben dem Datei-Upload) fehlt stillschweigend.
+
+    Der Wetterbereich hat eine eigene Seite; auf der Startseite steht nur
+    noch, ob Datensaetze da sind, und der Weg hierher."""
     klient = app.test_client()
-    html = klient.get("/").get_data(as_text=True)
+    html = klient.get("/wetter").get_data(as_text=True)
     assert 'id="form-wetter-abruf"' in html
     assert 'id="feld-wetter-abruf-ort"' in html
     assert 'id="feld-wetter-abruf-jahre"' in html
@@ -232,23 +255,22 @@ def test_startseite_enthaelt_das_abrufformular(app):
     assert 'value="eigene"' in html
 
 
-def test_startseite_bindet_loeschen_css_ein(app):
-    """Das eigene Stylesheet fuer Loeschen/Umbenennen - ohne dieses Tag
-    bleiben die neuen Aktionsknoepfe unformatiert (siehe Kommentar in
-    loeschen.css, weshalb es eine eigene Datei statt style.css ist)."""
-    klient = app.test_client()
-    html = klient.get("/").get_data(as_text=True)
-    assert "css/loeschen.css" in html
-
-
-def test_editor_seite_bindet_loeschen_css_ein(app):
+def test_jede_seite_bindet_das_gemeinsame_stylesheet_ein(app):
+    """Die kleinen Aktionsknoepfe (Umbenennen/Loeschen) standen bis zur
+    Vereinheitlichung in einer eigenen Datei (loeschen.css), die nur Start-
+    und Editorseite einbanden - auf der Wetterseite war "Löschen" deshalb
+    weder rot noch stand es rechts in seiner Spalte. Sie sind jetzt Teil von
+    style.css, und das bindet jede Seite ein."""
     with app.app_context():
         projekt = anlagen.projekt_anlegen("Referenz")
         anlage = ax_sim_2_1.baue(projekt, "AX_SIM 2.1")
 
     klient = app.test_client()
-    html = klient.get(f"/anlage/{anlage}").get_data(as_text=True)
-    assert "css/loeschen.css" in html
+    for pfad in ("/", "/anlagen", "/wetter", "/bausteine", f"/anlage/{anlage}"):
+        html = klient.get(pfad).get_data(as_text=True)
+        for name in STYLESHEETS[:3]:
+            assert f"css/{name}" in html, (pfad, name)
+        assert "css/loeschen.css" not in html, pfad
 
 
 def test_startseite_bindet_kein_editor_script_ein(app):
@@ -289,7 +311,7 @@ def test_style_css_schaltet_das_ueberscrollen_ab(app):
     ohne das schiebt sich auf iOS die ganze Seite mit, wenn man ueber den
     Rand eines Bereichs hinaus zieht."""
     klient = app.test_client()
-    css = klient.get("/static/css/style.css").get_data(as_text=True)
+    css = oberflaechen_css(klient)
     block = css[css.index("html, body {"):]
     block = block[:block.index("}")]
     assert "overscroll-behavior: none;" in block
@@ -301,8 +323,8 @@ def test_style_css_verwendet_dvh_mit_vh_rueckfallwert(app):
     100vh stehen (Browser ohne dvh-Unterstuetzung ueberspringen die zweite
     Zeile und behalten den vh-Wert)."""
     klient = app.test_client()
-    css = klient.get("/static/css/style.css").get_data(as_text=True)
-    for regel in (".app {", ".start {"):
+    css = oberflaechen_css(klient)
+    for regel in (".app {", ".seite {"):
         block = css[css.index(regel):]
         block = block[:block.index("}")]
         assert "height: 100vh;" in block
@@ -385,7 +407,7 @@ def test_style_css_setzt_html_body_auf_der_editorseite_fest(app):
     Kneifgeste bekannt unzuverlaessig, deshalb beides zusammen ("iOS body
     scroll lock", siehe Kommentar in style.css)."""
     klient = app.test_client()
-    css = klient.get("/static/css/style.css").get_data(as_text=True)
+    css = oberflaechen_css(klient)
     block = css[css.index("html.seite-editor,"):]
     block = block[: block.index("}") + 1]
     assert "position: fixed;" in block
@@ -402,7 +424,7 @@ def test_alle_scrollbaren_flaechen_haben_overscroll_behavior_contain(app):
     aufgezaehlt - eine kuenftig neu hinzukommende Scrollflaeche faellt sonst
     unbemerkt wieder durch dasselbe Loch."""
     klient = app.test_client()
-    css = klient.get("/static/css/style.css").get_data(as_text=True)
+    css = oberflaechen_css(klient)
     bloecke = css.split("}")
     fehlend = []
     for block in bloecke:
@@ -457,9 +479,12 @@ def test_style_css_schliesst_touch_action_luecken_fuer_die_kneifgeste(app):
     Fehlerleiste, die auch auf anderen, nicht festgesetzten Seiten
     vorkommen."""
     klient = app.test_client()
-    css = klient.get("/static/css/style.css").get_data(as_text=True)
+    css = oberflaechen_css(klient)
 
-    for selektor in (".minikarte-huelle {", ".legende-inhalt {"):
+    # "\n" davor: gesucht ist die Beschreibung der Klasse, nicht eine
+    # Verfeinerung, die ihren Namen enthaelt (etwa
+    # ".werkzeugmenue-inhalt .legende[open] > .legende-inhalt").
+    for selektor in ("\n.minikarte-huelle {", "\n.legende-inhalt {"):
         block = css[css.index(selektor):]
         block = block[: block.index("}") + 1]
         assert "touch-action: none;" in block
@@ -691,7 +716,7 @@ def test_leinwand_svg_hat_eigenen_behaelter_statt_flex_auf_dem_svg_selbst(app):
     assert 'id="leinwand" width="100%" height="100%"' in html
     assert 'id="minikarte" viewBox="0 0 168 108" width="168" height="108"' in html
 
-    css = klient.get("/static/css/style.css").get_data(as_text=True)
+    css = oberflaechen_css(klient)
     flaeche = css[css.index(".leinwand-flaeche {"):]
     flaeche = flaeche[: flaeche.index("}") + 1]
     assert "position: absolute;" in flaeche
@@ -713,9 +738,15 @@ def test_alle_kopfleisten_sprechen_dieselbe_formensprache(app):
     Browser grau und eckig zeichnete; der Editor die Pillen, die
     style.css beschreibt („Kopfleiste des Editors").
 
-    Es gilt jetzt überall dieselbe Regel: der Weg zurück ist .zurueck-knopf,
-    jeder benannte Weg eine Pille (.leiste-knopf), und genau EINE gefüllte
-    Pille (.leiste-knopf-haupt) trägt den Zweck der Seite.
+    Es gilt jetzt überall dieselbe Regel: Die Wege zwischen den Bereichen
+    stehen in der Hauptnavigation (.hauptweg) und sind flach - sie sind Wege,
+    keine Handlungen. Der Weg ZURÜCK aus einer Arbeitsfläche heraus (Editor,
+    Bericht) ist .zurueck-knopf. Und genau EINE gefüllte Pille
+    (.leiste-knopf-haupt) trägt den Zweck der Seite.
+
+    Vorher trug jede Seite ihre eigene Leiste, und die Bereiche waren nur von
+    der Startseite aus erreichbar - die zwölf Anlagenvorlagen überhaupt nur
+    aus einem Dialog heraus.
     """
     klient = app.test_client()
     with app.app_context():
@@ -724,13 +755,18 @@ def test_alle_kopfleisten_sprechen_dieselbe_formensprache(app):
 
     start = klient.get("/").get_data(as_text=True)
     kopf = start[start.index('<header class="leiste">'):start.index("</header>")]
-    assert 'class="leiste-knopf" href' in kopf          # Bausteine: benannter Weg
+    assert 'class="hauptweg"' in kopf                   # die Bereiche
     assert kopf.count("leiste-knopf-haupt") == 1        # + Projekt: der Zweck
     assert 'class="knopf-haupt"' not in kopf         # nicht die alte, eckige Form
 
-    lehre = klient.get("/bausteine").get_data(as_text=True)
-    assert 'class="zurueck-knopf"' in lehre
-    assert "lehre-zurueck" not in lehre
+    # Der Erklärbereich und der Katalog tragen dieselbe Leiste - ohne eigene
+    # gefüllte Pille, denn ihr Zweck ist das Lesen und Aussuchen selbst.
+    for pfad in ("/bausteine", "/anlagen"):
+        html = klient.get(pfad).get_data(as_text=True)
+        kopf = html[html.index('<header class="leiste">'):html.index("</header>")]
+        assert 'class="hauptweg"' in kopf, pfad
+        assert kopf.count("leiste-knopf-haupt") == 0, pfad
+        assert "lehre-zurueck" not in html, pfad
 
     # Der Bericht braucht einen gerechneten Lauf; hier reicht die Vorlage der
     # Seite selbst, deshalb nur die Klassen im Quelltext der Vorlage.

@@ -47,6 +47,11 @@ from core.vorlagen.bauhilfe import (
 )
 
 NAME = "Schwimmhalle"
+#: Wohin die Anlage im Katalog gehoert (siehe core/vorlagen/__init__.py,
+#: alle()). Drei Gruppen statt zehn Einzelbezeichnungen: Zwoelf Karten in
+#: einer Reihe sind kein Katalog, und eine Gruppe je Anlage waere keine
+#: Gliederung, sondern dieselbe Reihe mit Ueberschriften.
+GRUPPE = "Sonderbau"
 BESCHREIBUNG = (
     "500 m² Wasserfläche, hohe Verdunstungslast, Umluft über Mischkammer, "
     "Entfeuchtung über den Kühler, Raumtemperatur 30 °C"

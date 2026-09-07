@@ -1,0 +1,233 @@
+/* Der Anlagenkatalog - die Seite, auf der die zwoelf mitgelieferten Anlagen
+   ueberhaupt erst sichtbar sind.
+
+   Formensprache wie ueberall: dieselbe Leiste, dieselben Abstaende, dieselben
+   Karten wie die Projektliste der Startseite (style.css). Neu ist nur die
+   Gliederung in Gruppen und die aufklappbare Auslegung. */
+
+/* -- Suche ---------------------------------------------------------------- */
+
+.katalog-suche {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0 28px;
+}
+
+.katalog-suche-feld {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  max-width: 460px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.katalog-suche-feld:focus-within {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px var(--blue-tint);
+}
+
+.katalog-suche-feld input {
+  flex: 1 1 auto;
+  border: none;
+  background: none;
+  padding: 9px 0;
+  font: inherit;
+  color: var(--text);
+}
+
+.katalog-suche-feld input:focus { outline: none; }
+
+.katalog-lupe {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  color: var(--text-secondary);
+}
+
+.katalog-treffer {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* -- Gruppen und Karten --------------------------------------------------- */
+
+.katalog-gruppe { margin-bottom: 36px; }
+
+.katalog-gruppe-titel {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.katalog-gruppe-hinweis {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.katalog-karten {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.katalog-karte {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.katalog-karte-kopf { padding: 16px 18px 12px; }
+
+.katalog-karte-titel {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.katalog-karte-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+/* Die Eckdaten als Zahlenband: drei Groessen, die man beim Vergleichen
+   nebeneinander sehen will - Flaeche, Luftmenge, Luftwechsel. */
+.katalog-eckdaten {
+  display: flex;
+  gap: 22px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border-light);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.katalog-eckwert { display: flex; flex-direction: column; gap: 2px; }
+
+.katalog-eckwert-zahl {
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.katalog-eckwert-name {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* -- Auslegung ------------------------------------------------------------ */
+
+.katalog-auslegung { border-top: 1px solid var(--border-light); }
+
+.katalog-auslegung > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 18px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  list-style: none;
+  color: var(--text-secondary);
+}
+
+.katalog-auslegung > summary::-webkit-details-marker { display: none; }
+.katalog-auslegung > summary:hover { color: var(--text); }
+
+.katalog-auslegung .aufklapp-zeichen {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 120ms;
+}
+
+.katalog-auslegung[open] .aufklapp-zeichen { transform: rotate(90deg); }
+
+.katalog-auslegung-inhalt {
+  padding: 2px 18px 16px;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.katalog-angabe {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 4px 12px;
+  padding: 5px 0;
+  border-top: 1px dotted var(--border-light);
+}
+
+.katalog-angabe:first-child { border-top: none; }
+
+.katalog-angabe-stichwort {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.katalog-angabe-zeilen {
+  margin: 0;
+  white-space: pre-wrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.katalog-baender {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-light);
+}
+
+.katalog-baender-titel {
+  margin: 0 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.katalog-band {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.katalog-band-wert { color: var(--text-secondary); }
+
+/* -- Fuss ----------------------------------------------------------------- */
+
+.katalog-karte-fuss {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 18px;
+  margin-top: auto;
+  border-top: 1px solid var(--border-light);
+}
+
+.katalog-leer {
+  padding: 28px 0;
+  color: var(--text-secondary);
+}

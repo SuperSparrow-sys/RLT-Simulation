@@ -1,0 +1,32 @@
+{# Die Hauptnavigation, auf jeder Seite dieselbe.
+
+   Vorher trug jede Seite ihre eigene Kopfleiste: die Startseite einen Link
+   "Bausteine" und einen Knopf "+ Projekt", die Bausteinseite einen
+   Zurueck-Pfeil. Wer auf der Bausteinseite stand, kam nur ueber den Umweg
+   ueber die Startseite zu den Anlagen - und die zwoelf Anlagenvorlagen waren
+   ueberhaupt nur aus einem Dialog heraus zu erreichen, den man erst findet,
+   wenn man schon ein Projekt hat.
+
+   Aufrufen mit dem Namen des Bereichs, in dem man steht:
+       {% with aktiv = "anlagen" %}{% include "navigation.html" %}{% endwith %}
+   Der aktive Eintrag wird hervorgehoben und traegt aria-current, damit auch
+   ein Screenreader ihn nennt. #}
+<header class="leiste">
+  <a class="titel titel-weg" href="{{ url_for('pages.index') }}">RLT-Simulation</a>
+  <nav class="hauptweg" aria-label="Bereiche">
+    <a class="hauptweg-eintrag{{ ' ist-hier' if aktiv == 'start' }}"
+       href="{{ url_for('pages.index') }}"
+       {% if aktiv == 'start' %}aria-current="page"{% endif %}>Start</a>
+    <a class="hauptweg-eintrag{{ ' ist-hier' if aktiv == 'anlagen' }}"
+       href="{{ url_for('katalog.seite') }}"
+       {% if aktiv == 'anlagen' %}aria-current="page"{% endif %}>Anlagen</a>
+    <a class="hauptweg-eintrag{{ ' ist-hier' if aktiv == 'bausteine' }}"
+       href="{{ url_for('lehre.seite') }}"
+       {% if aktiv == 'bausteine' %}aria-current="page"{% endif %}>Bausteine</a>
+    <a class="hauptweg-eintrag{{ ' ist-hier' if aktiv == 'wetter' }}"
+       href="{{ url_for('pages.wetter') }}"
+       {% if aktiv == 'wetter' %}aria-current="page"{% endif %}>Wetter</a>
+  </nav>
+  <span class="leiste-fueller" aria-hidden="true"></span>
+  {{ aktionen | safe if aktionen else "" }}
+</header>

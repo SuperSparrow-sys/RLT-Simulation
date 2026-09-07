@@ -84,6 +84,11 @@ from core.vorlagen.bauhilfe import (
 from core.vorlagen.anlagen._geraet import WOCHENTAGE, betriebszeiten
 
 NAME = "Rechenzentrum"
+#: Wohin die Anlage im Katalog gehoert (siehe core/vorlagen/__init__.py,
+#: alle()). Drei Gruppen statt zehn Einzelbezeichnungen: Zwoelf Karten in
+#: einer Reihe sind kein Katalog, und eine Gruppe je Anlage waere keine
+#: Gliederung, sondern dieselbe Reihe mit Ueberschriften.
+GRUPPE = "Technik und Industrie"
 BESCHREIBUNG = (
     "400 m² Serverfläche, 100 kW Abwärme rund um die Uhr, keine Heizung, "
     "freie Kühlung über die Mischkammer, Kühler nur im Sommer"

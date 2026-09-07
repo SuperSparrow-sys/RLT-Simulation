@@ -53,6 +53,11 @@ from core.vorlagen.bauhilfe import (
 from core.vorlagen.anlagen._geraet import WOCHENTAGE, betriebszeiten
 
 NAME = "Turnhalle"
+#: Wohin die Anlage im Katalog gehoert (siehe core/vorlagen/__init__.py,
+#: alle()). Drei Gruppen statt zehn Einzelbezeichnungen: Zwoelf Karten in
+#: einer Reihe sind kein Katalog, und eine Gruppe je Anlage waere keine
+#: Gliederung, sondern dieselbe Reihe mit Ueberschriften.
+GRUPPE = "Sonderbau"
 BESCHREIBUNG = (
     "900 m² Halle mit 7 m Höhe, bauphysikalischer Raum mit Speichermasse, "
     "Heizkörper über Zweipunktregler, stoßweise Belegung 8–22 Uhr"

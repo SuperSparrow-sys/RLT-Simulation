@@ -18,6 +18,8 @@ jeweils als Kommentar daneben.
 from core import anlagen, verlauf
 
 NAME = "AX_SIM 2.1"
+#: Katalogruppe - siehe core/vorlagen/__init__.py, alle().
+GRUPPE = "Referenz"
 BESCHREIBUNG = "Zwei Lüftungsgeräte an gemeinsamer WRG, ein Raum (aus der Excel)"
 
 

@@ -39,6 +39,11 @@ AUSLEGUNG
 from core.vorlagen.anlagen._geraet import WOCHENTAGE, standardgeraet, tagesgang
 
 NAME = "Verkaufsraum"
+#: Wohin die Anlage im Katalog gehoert (siehe core/vorlagen/__init__.py,
+#: alle()). Drei Gruppen statt zehn Einzelbezeichnungen: Zwoelf Karten in
+#: einer Reihe sind kein Katalog, und eine Gruppe je Anlage waere keine
+#: Gliederung, sondern dieselbe Reihe mit Ueberschriften.
+GRUPPE = "Komfortlüftung"
 BESCHREIBUNG = (
     "1200 m² Verkaufsfläche, 25 W/m² Beleuchtung, Mo–Sa 7–21 Uhr - "
     "die inneren Lasten bestimmen den Verbrauch"

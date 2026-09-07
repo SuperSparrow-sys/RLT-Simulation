@@ -81,7 +81,7 @@ def test_statische_dateien_behalten_no_cache_mit_etag(app):
     hier als ausreichend entschieden wurde statt einer Fassungskennung im
     Dateiverweis)."""
     klient = app.test_client()
-    for pfad in ("/static/js/editor.js", "/static/css/style.css"):
+    for pfad in ("/static/js/editor.js", "/static/css/grundlage.css"):
         antwort = klient.get(pfad)
         assert antwort.headers.get("Cache-Control") == "no-cache", pfad
         assert antwort.headers.get("ETag"), pfad

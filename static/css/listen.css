@@ -1,0 +1,285 @@
+/* RLT-Simulation - Listen: Projektzeilen, Tabellen, Protokolle.
+
+   Die beiden Arten, viele gleichartige Dinge untereinander zu zeigen: der
+   Projektblock mit seinen Anlagenzeilen (Uebersicht) und die Tabelle
+   (Wetterdaten, Jahresbilanz, Stundenprotokoll, Jahresvergleich).
+
+   Wird nach bedienelemente.css eingebunden. */
+
+
+/* ---------- Jahresbilanz: rechtsbuendige Tabelle, einheitliche
+   Nachkommastellen (per .toFixed() in simulation.js/start.js gesetzt) ---------- */
+.bilanz { width: 100%; border-collapse: collapse; font-size: 13px; }
+.bilanz th, .bilanz td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-light);
+  text-align: left;
+}
+.bilanz th {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+}
+.bilanz .zahl { text-align: right; font-variant-numeric: tabular-nums; }
+/* Keine Streifen: Die Wettertabelle traegt Zwischenzeilen je Standort, und
+   die zaehlen beim Muster mit - nach jeder Gruppe kippte es, und die Streifen
+   wirkten zufaellig. Feine Trennlinien ordnen ohnehin schon, und der
+   Ueberfahr-Zustand sagt, in welcher Zeile man gerade ist. */
+.bilanz tbody tr:hover { background: var(--surface-alt); }
+.bilanz tfoot td { font-weight: 500; border-top: 2px solid var(--border); border-bottom: none; }
+
+.abbruchhinweis { color: var(--warning); font-size: 12px; margin: -8px 0 16px; }
+
+/* ---------- Stundenprotokoll (Datenlogger-Spalten, bis zu 8760 Zeilen) ---------- */
+.protokoll-huelle { max-height: 60vh; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--border-light); border-radius: var(--radius-sm); }
+.protokoll { width: 100%; border-collapse: collapse; font-size: 12px; }
+.protokoll th, .protokoll td {
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border-light);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.protokoll th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+}
+.protokoll tbody tr:nth-child(even) { background: var(--surface-alt); }
+.protokoll-hinweis { font-size: 12px; color: var(--text-secondary); margin: 0 0 12px; }
+
+.warnhinweis { margin-top: 16px; font-size: 12px; color: var(--warning); }
+.warnhinweis p { margin: 0; }
+.warnhinweis-ok { color: var(--text-secondary); }
+.warn-mehr {
+  border: none;
+  background: none;
+  color: var(--blue);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  padding: 0;
+  margin-left: 6px;
+  text-decoration: underline;
+}
+.warn-beispiele {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--text-secondary);
+  max-height: 120px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.warn-beispiele li { margin-bottom: 3px; }
+
+/* ---------- Vergleich mehrerer Wetterjahre (Vorhaben B) ----------
+   .vergleich-tabelle erweitert die vorhandene .bilanz-Tabelle nur um eine
+   waagerechte Schiene (mehrere Jahresspalten sind auf einem Tablet breiter
+   als der Dialog) statt eigene Zell-/Kopfregeln nachzubauen. */
+.vergleich-hinweis { font-size: 12.5px; color: var(--text-secondary); margin: -4px 0 14px; }
+.vergleich-tabelle-huelle { overflow-x: auto; overscroll-behavior: contain; margin-top: 4px; }
+.vergleich-tabelle { min-width: 100%; }
+.vergleich-tabelle th:first-child,
+.vergleich-tabelle td:first-child { white-space: nowrap; }
+.vergleich-kein-ergebnis { font-weight: 400; color: var(--text-tertiary); text-transform: none; }
+.vergleich-abweichung { font-size: 11px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.vergleich-zeile-kosten td,
+.vergleich-zeile-warnungen td { border-top: 2px solid var(--border); font-weight: 500; }
+.vergleich-diagramm { width: 100%; height: auto; margin-top: 18px; }
+
+/* ---------- Projekte und Anlagen als Liste ----------
+   Ein Block je Projekt, darin eine schlanke Zeile je Anlage. Vorher war jede
+   Anlage eine Kachel von 230px: Bei mehreren Projekten mit je einer Handvoll
+   Anlagen wurde daraus ein Feld aus Kaesten, in dem Name, Kartenzahl und
+   Zustand in jeder Kachel an einer anderen senkrechten Stelle standen und
+   sich deshalb nicht vergleichen liessen. */
+.projekt-block {
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+.projekt-block-kopf {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-light);
+}
+.projekt-block-name { margin: 0; font-size: 14px; font-weight: 600; }
+.projekt-block-text {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+/* Ohne Beschreibung schiebt dieser Fueller die Aktionen ans rechte Ende. */
+.projekt-block-kopf .eintrag-aktionen { margin-left: auto; }
+.projekt-block-leer,
+.projekt-block-fuss { padding: 10px 16px; margin: 0; }
+.projekt-block-leer { font-size: 12px; color: var(--text-secondary); }
+.projekt-block-fuss { border-top: 1px solid var(--border-light); }
+
+/* ---------- Die Anlagenzeile ----------
+   Ein Raster, keine Flexbox: Nur mit festen Spalten stehen Kartenzahl,
+   Zustand und Angaben in JEDER Zeile an derselben Stelle. Mit Flexbox
+   schrumpfte jede Spalte nach ihrem eigenen Inhalt - bei 820px stand
+   "42 Karten" 13px weiter rechts als "31 Karten", und damit war die
+   Vergleichbarkeit dahin, fuer die es Zeilen statt Kacheln geworden sind.
+
+   Der Verweis auf die Anlage traegt display:contents: Seine vier Kinder
+   werden dadurch selbst zu Rasterfeldern der Zeile, obwohl sie zusammen
+   einen einzigen Verweis bilden. So bleiben sie anklickbar, ohne dass ein
+   zusaetzlicher Kasten das Raster zerschneidet - und die Knoepfe stehen
+   ausserhalb des <a>, wo sie hingehoeren (ein <button> in einem <a> wuerde
+   beim Klick immer auch navigieren). */
+.anlage-zeile {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 76px 96px minmax(0, 1.6fr) auto;
+  grid-template-areas: "name karten etikett angaben aktionen";
+  align-items: center;
+  gap: 4px 14px;
+  padding: 6px 16px;
+  min-height: var(--zeilenhoehe);
+  border-bottom: 1px solid var(--border-light);
+}
+.anlage-zeile:last-of-type { border-bottom: none; }
+
+/* Grau, nicht blau: Blau ist in dieser Oberflaeche die Farbe der Handlung
+   (Hauptknopf, aktiver Eintrag der Kopfleiste, Verweis). Zum blossen Zeigen,
+   wo der Zeiger steht, war sie zu laut - und die weissen Knoepfe in der
+   Zeile standen als Loecher in einem blauen Balken. Dass die Zeile ein
+   Verweis ist, sagt jetzt die Unterstreichung des Namens. */
+.anlage-zeile:hover { background: var(--surface-alt); }
+.anlage-zeile:hover .anlage-zeile-name,
+.anlage-zeile-link:focus-visible .anlage-zeile-name {
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 3px;
+}
+
+.anlage-zeile-link { display: contents; color: var(--text); text-decoration: none; }
+
+.anlage-zeile-name {
+  grid-area: name;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.anlage-zeile-karten {
+  grid-area: karten;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.anlage-zeile .etikett { grid-area: etikett; justify-self: start; min-width: 92px; }
+.anlage-zeile-angaben {
+  grid-area: angaben;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Feste Mindestbreite: Eine Anlage ohne Lauf hat zwei Knoepfe, eine mit drei
+   ("Bericht"). Waere die Spalte inhaltsbreit, verschoebe sie in jeder Zeile
+   alles links von ihr um die Breite eines Knopfes - und der Zustand staende
+   wieder versetzt, wie in den Kacheln vorher. 264px sind die drei Knoepfe
+   samt Luecken. */
+.anlage-zeile .eintrag-aktionen {
+  grid-area: aktionen;
+  justify-self: end;
+  min-width: 264px;
+  justify-content: flex-end;
+}
+
+/* ---- Stufe 2: gestapelt (620 bis 899 Punkte) ----
+   Die Angaben rutschen unter den Namen und nehmen die Kartenzahl mit; der
+   Zustand und die Knoepfe bleiben rechts. Zuerst gibt das Beiwerk nach -
+   vorher schrumpfte der Anlagenname auf "AX_", waehrend drei Knoepfe in
+   voller Breite danebenstanden. */
+@media (max-width: 899px) {
+  .anlage-zeile {
+    grid-template-columns: 76px minmax(0, 1fr) 96px auto;
+    grid-template-areas:
+      "name   name    etikett aktionen"
+      "karten angaben etikett aktionen";
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+  .anlage-zeile-karten { text-align: left; }
+}
+
+/* ---- Stufe 3: schmal (unter 620 Punkte) ----
+   Die Knoepfe bekommen eine eigene Zeile unter dem Eintrag und duerfen
+   umbrechen. Kein verstecktes Menue: Was hier steht, steht sichtbar da. */
+@media (max-width: 619px) {
+  .anlage-zeile {
+    grid-template-columns: 76px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "name     name     etikett"
+      "karten   angaben  angaben"
+      "aktionen aktionen aktionen";
+    row-gap: 8px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+  .anlage-zeile .etikett { justify-self: end; }
+  /* In der schmalen Stufe steht die Knopfreihe allein - dort braucht sie
+     keine Mindestbreite mehr, sondern die ganze. */
+  .anlage-zeile .eintrag-aktionen {
+    justify-self: stretch;
+    min-width: 0;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+}
+
+/* Ohne eigene Begrenzung: Die Tabelle steht auf ihrer eigenen Seite
+   (templates/wetter.html) und nimmt deren Breite an - die 640px von frueher
+   stammen daher, dass sie ein Nebenkasten der Startseite war. Die Breite
+   setzt jetzt das gemeinsame Seitengeruest (.seite-haupt), damit Tabelle und
+   Klappe darunter dieselbe Kante haben wie jede andere Seite. */
+.wetter-tabelle { width: 100%; }
+
+/* -- Wetter-Tabelle: zusaetzliche Aktionsspalte -- */
+/* text-align statt display:flex: Eine Tabellenzelle mit display:flex ist keine
+   Tabellenzelle mehr und nimmt an der Spaltenaufteilung nicht mehr teil - die
+   Knoepfe klebten dadurch am linken Rand einer Spalte, die bis zum rechten
+   Tabellenrand reichte. */
+/* td vorangestellt: ".bilanz td { text-align: left }" ist spezifischer als
+   eine einzelne Klasse und gewann sonst - die Knoepfe standen am linken Rand
+   einer Spalte, die bis zum rechten Tabellenrand reicht. */
+/* Die Zwischenzeile eines Standorts ist keine Zeile, in der etwas
+   auszuwaehlen waere - sie bleibt beim Ueberfahren, wie sie ist. */
+.wetter-standort-zeile th {
+  background: var(--surface-alt);
+  font-size: 11px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+.bilanz tbody tr.wetter-standort-zeile:hover th { background: var(--surface-alt); }
+
+.bilanz td.wetter-tabelle-aktionen { text-align: right; white-space: nowrap; }
+.wetter-tabelle-aktionen > * + * { margin-left: 6px; }

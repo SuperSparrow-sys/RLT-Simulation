@@ -5,152 +5,93 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>RLT-Simulation</title>
   <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/wetter-abruf.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/loeschen.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/grundlage.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/bedienelemente.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/listen.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/start.css') }}">
 </head>
 <body>
   <div id="fehlermeldung" class="fehlermeldung" role="alert" aria-live="assertive" hidden></div>
 
-  <div class="start">
-    <!-- Dieselbe Formensprache wie die Kopfleiste des Editors (siehe
-         style.css, "Kopfleiste des Editors"): links steht, wo man ist,
-         rechts die Wege hinaus - eine Pille mit einem Wort fuer den
-         benannten Weg, genau EINE gefuellte Pille fuer den Zweck der Seite.
-         Vorher war "Bausteine" ein nackter, unterstrichener Link neben einem
-         gefuellten Knopf mit anderem Radius: dieselbe Leiste, drei
-         Formensprachen. -->
-    <header class="leiste">
-      <span class="titel">RLT-Simulation</span>
-      <span class="leiste-fueller" aria-hidden="true"></span>
-      <a class="leiste-knopf" href="{{ url_for('lehre.seite') }}">Bausteine</a>
-      <button class="leiste-knopf leiste-knopf-haupt"
-              id="btn-projekt-anlegen">+ Projekt</button>
-    </header>
+  <div class="seite">
+    {% with aktiv = "start",
+            aktionen = '<button class="leiste-knopf leiste-knopf-haupt" id="btn-projekt-anlegen">+ Projekt</button>' %}
+      {% include "navigation.html" %}
+    {% endwith %}
 
-    <main class="start-haupt">
-      <div id="start-einstieg"></div>
+    <main class="seite-haupt">
+      <div class="seiten-kopf">
+        <h1 class="seiten-titel">Übersicht</h1>
+        <p class="seiten-einleitung">
+          Die eigenen Projekte mit ihren Anlagen und dem Stand des letzten
+          Laufs. Ein Klick auf eine Anlage öffnet sie im Editor.
+        </p>
+      </div>
+
+      {# data-wetter-anzahl: static/js/start.js liest die Zahl hier ab
+         (wetterAnzahl) und hakt damit den ersten Einstiegsschritt ab. Ein
+         eigener Wetterabschnitt stand hier bis zur Vereinheitlichung der
+         Navigation - er sagte nur, ob Datensaetze da sind, und verwies auf die
+         Wetterseite, die seither in der Kopfleiste steht. Zwei Wege zur selben
+         Seite auf derselben Seite sind einer zu viel. #}
+      <div id="start-einstieg" data-wetter-anzahl="{{ wetter_anzahl }}"></div>
 
       <section class="start-abschnitt">
-        <h1 class="abschnitt-titel">Projekte</h1>
-        <div id="start-projekte"></div>
-      </section>
-
-      <section class="start-abschnitt start-abschnitt-wetter" id="wetter-abschnitt">
-        <h1 class="abschnitt-titel">Wetterdaten</h1>
-        <p class="abschnitt-hinweis">
-          Für einen Simulationslauf wird ein Wetterdatensatz gebraucht – ein volles
-          Kalenderjahr für einen Ort.
-        </p>
-
-        <div class="wetter-wege">
-          <div class="wetter-weg wetter-weg-hauptweg">
-            <h2 class="wetter-weg-titel">Online abrufen</h2>
-            <p class="wetter-weg-hinweis">
-              Ort wählen, Jahr(e) ankreuzen, fertig – von der kostenlosen
-              Open-Meteo-Archive-API, ohne Anmeldung, meist in unter einer
-              Sekunde je Jahr.
+        <h2 class="abschnitt-titel">Projekte</h2>
+        {# Serverseitig gefuellt (routes/pages.py, _projektliste): Vorher baute
+           static/js/start.js diese Liste im Browser und fragte dafuer den
+           Status JEDER Anlage einzeln nach - bis das durch war, zeigte die
+           Seite eine leere Flaeche. Das Skript bindet jetzt nur noch die
+           Handlungen an die fertigen Elemente. #}
+        <div id="start-projekte">
+          {% if projekte %}
+            {% for projekt in projekte %}
+              {% with %}{% include "projektkarte.html" %}{% endwith %}
+            {% endfor %}
+          {% else %}
+          <div class="leerhinweis-gross">
+            <h3>Noch kein Projekt vorhanden</h3>
+            <p>
+              Eine Anlage gehört immer zu einem Projekt. Zwölf fertig
+              verdrahtete Anlagen stehen im
+              <a href="{{ url_for('katalog.seite') }}">Anlagenkatalog</a> bereit
+              – oder leer anfangen.
             </p>
-            <form id="form-wetter-abruf" class="wetter-abruf-formular">
-              <label class="panel-zeile">
-                <span class="panel-label">Ort</span>
-                <select id="feld-wetter-abruf-ort">
-                  <option value="Berlin" data-breite="52.5200" data-laenge="13.4050">Berlin</option>
-                  <option value="Hamburg" data-breite="53.5511" data-laenge="9.9937">Hamburg</option>
-                  <option value="München" data-breite="48.1351" data-laenge="11.5820">München</option>
-                  <option value="Köln" data-breite="50.9375" data-laenge="6.9603">Köln</option>
-                  <option value="Frankfurt am Main" data-breite="50.1109" data-laenge="8.6821">Frankfurt am Main</option>
-                  <option value="Stuttgart" data-breite="48.7758" data-laenge="9.1829">Stuttgart</option>
-                  <option value="Leipzig" data-breite="51.3397" data-laenge="12.3731">Leipzig</option>
-                  <option value="Dresden" data-breite="51.0504" data-laenge="13.7373">Dresden</option>
-                  <option value="eigene">Eigene Koordinaten …</option>
-                </select>
-              </label>
-
-              <div class="panel-zeile panel-zeile-nebeneinander wetter-abruf-koordinaten" id="wetter-abruf-koordinaten" hidden>
-                <label class="panel-zeile">
-                  <span class="panel-label">Breite</span>
-                  <input type="number" id="feld-wetter-abruf-breite" step="0.0001" min="-90" max="90" placeholder="z. B. 52.52">
-                </label>
-                <label class="panel-zeile">
-                  <span class="panel-label">Länge</span>
-                  <input type="number" id="feld-wetter-abruf-laenge" step="0.0001" min="-180" max="180" placeholder="z. B. 13.40">
-                </label>
-                <label class="panel-zeile">
-                  <span class="panel-label">Ortsname (optional)</span>
-                  <input type="text" id="feld-wetter-abruf-ortsname" placeholder="z. B. Rostock">
-                </label>
-              </div>
-
-              <label class="panel-zeile">
-                <span class="panel-label">Jahr(e) – Strg/Cmd-Klick für mehrere</span>
-                <select id="feld-wetter-abruf-jahre" multiple size="6"></select>
-              </label>
-
-              <label class="panel-zeile">
-                <span class="panel-label">Bezeichnung (optional)</span>
-                <input type="text" id="feld-wetter-abruf-name" placeholder="Bezeichnung (optional)">
-              </label>
-
-              <button type="submit" class="knopf-haupt" id="btn-wetter-abrufen">Abrufen</button>
-            </form>
+            <button class="knopf-haupt" id="btn-erstes-projekt">Erstes Projekt anlegen</button>
           </div>
-
-          <details class="wetter-weg wetter-weg-nebenweg" id="wetter-upload-details">
-            <summary class="wetter-weg-titel">Eigene Dateien hochladen (TRY) …{% include "bedienzeichen/aufklapp.svg" %}</summary>
-            <p class="wetter-weg-hinweis">
-              Für Wetterdaten, die schon vorliegen – etwa ein Testreferenzjahr
-              vom DWD. Wähle den Ordner so aus, wie du ihn bekommen hast: gesucht
-              werden die .dat-Dateien darin, auch in Unterordnern. Ein beigelegtes
-              Handbuch und alles andere bleibt liegen und wird nicht hochgeladen.
-              Genauso gelesen werden .xls, .xlsx und .csv im Format des Blattes
-              „Wetterdaten“.
-            </p>
-            <form id="form-wetter-upload" class="wetter-formular">
-              <span class="datei-eingabe">
-                <input type="file" id="feld-wetter-ordner" class="datei-eingabe-eingabe"
-                       webkitdirectory directory multiple>
-                <label for="feld-wetter-ordner" class="datei-eingabe-knopf">Ordner auswählen</label>
-                <span class="datei-eingabe-name" id="feld-wetter-ordnername">Kein Ordner ausgewählt</span>
-              </span>
-              <span class="datei-eingabe">
-                <input type="file" id="feld-wetter-datei" class="datei-eingabe-eingabe"
-                       accept=".dat,.xls,.xlsx,.xlsm,.csv" multiple>
-                <label for="feld-wetter-datei" class="datei-eingabe-knopf">Einzelne Dateien …</label>
-                <span class="datei-eingabe-name" id="feld-wetter-dateiname">Keine Datei ausgewählt</span>
-              </span>
-              <label class="panel-zeile">
-                <span class="panel-label">Standort</span>
-                <input type="text" id="feld-wetter-ort"
-                       placeholder="z. B. Dresden_Industriegelände">
-              </label>
-              <div id="wetter-auswahl-liste" class="wetter-auswahl" hidden></div>
-              <input type="text" id="feld-wetter-name"
-                     placeholder="Bezeichnung (nur bei einer einzelnen Datei)">
-              <button type="submit" class="knopf-haupt" id="btn-wetter-hochladen">Hochladen</button>
-            </form>
-          </details>
+          {% endif %}
         </div>
-
-        <div id="start-wetter-liste"></div>
       </section>
 
-      <details class="start-abschnitt start-lehrmaterial" id="start-lehrmaterial" hidden>
-        <summary class="start-lehrmaterial-titel">{% include "bedienzeichen/aufklapp.svg" %}Beispielanlagen aus der Erklärung</summary>
-        <p class="abschnitt-hinweis">
+      {# Beispielanlagen entstehen beim Ansehen eines Kartentyps unter
+         /bausteine (core.lehrinhalte.beispielanlagen) - Lehrmaterial, kein
+         Arbeitsergebnis. Deshalb weiter unten und zugeklappt, aber mit
+         derselben Zeilenform wie jedes Projekt: ein zweites Kartenformat fuer
+         technisch gleiche Dinge waere nur eine Doppelung mehr.
+         Der gestrichelte Rahmen ist entfallen; die Einordnung leistet der
+         Satz darunter. #}
+      <details class="nebenbereich" id="start-lehrmaterial"
+               {% if not lehrmaterial %}hidden{% endif %}>
+        <summary class="nebenbereich-titel">
+          {% include "bedienzeichen/aufklapp.svg" %}Beispielanlagen aus der Erklärung
+          <span class="nebenbereich-zaehler">{{ lehrmaterial_anzahl }}</span>
+        </summary>
+        <p class="nebenbereich-satz">
           Entstehen beim Ansehen eines Kartentyps unter
-          <a href="{{ url_for('lehre.seite') }}">Bausteine</a> - kein eigenes
-          Projekt, sondern Lehrmaterial. Jede Anlage lässt sich hier genauso
-          umbenennen oder löschen wie eine eigene.
+          <a href="{{ url_for('lehre.seite') }}">Bausteine</a> – kein eigenes
+          Projekt, sondern Lehrmaterial. Jede lässt sich hier genauso öffnen,
+          umbenennen oder löschen wie eine eigene Anlage.
         </p>
-        <div id="start-lehrmaterial-inhalt"></div>
+        <div id="start-lehrmaterial-inhalt">
+          {% for projekt in lehrmaterial %}
+            {% with %}{% include "projektkarte.html" %}{% endwith %}
+          {% endfor %}
+        </div>
       </details>
     </main>
   </div>
 
-  <script src="{{ url_for('static', filename='js/zahlen.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/wetterauswahl.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/dialoge.js') }}"></script>
   <script src="{{ url_for('static', filename='js/start.js') }}"></script>
 </body>
 </html>

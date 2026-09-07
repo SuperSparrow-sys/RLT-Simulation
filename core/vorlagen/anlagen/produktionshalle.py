@@ -58,6 +58,11 @@ from core.vorlagen.bauhilfe import (
 from core.vorlagen.anlagen._geraet import WERKTAGE, betriebszeiten, tagesgang
 
 NAME = "Produktionshalle"
+#: Wohin die Anlage im Katalog gehoert (siehe core/vorlagen/__init__.py,
+#: alle()). Drei Gruppen statt zehn Einzelbezeichnungen: Zwoelf Karten in
+#: einer Reihe sind kein Katalog, und eine Gruppe je Anlage waere keine
+#: Gliederung, sondern dieselbe Reihe mit Ueberschriften.
+GRUPPE = "Technik und Industrie"
 BESCHREIBUNG = (
     "3000 m² Halle in zwei Zonen, adiabate Kühlung über einen Luftwäscher "
     "in der Abluft, Verteiler und Sammler im Luftweg"

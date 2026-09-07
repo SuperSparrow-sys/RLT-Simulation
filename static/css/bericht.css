@@ -177,12 +177,12 @@ body.seite-bericht {
 /* ---------- Druck (Browser-Drucken UND Referenz fuer das erzeugte PDF) ---------- */
 @media print {
   .bericht-kopfleiste { display: none; }
-  body.seite-bericht { background: #fff; }
+  body.seite-bericht { background: var(--surface); }
   .bericht { max-width: none; padding: 0; }
   .bericht-abschnitt { break-inside: avoid; margin-bottom: 20px; }
-  .bericht-diagramm-karte { break-inside: avoid; border-color: #999; }
+  .bericht-diagramm-karte { break-inside: avoid; border-color: var(--border-strong); }
   .bericht-diagramm-breit { break-inside: avoid; }
-  .bericht-kopf { background: none; border: 1px solid #999; }
+  .bericht-kopf { background: none; border: 1px solid var(--border-strong); }
   a[href] { color: inherit; text-decoration: none; }
   /* Kaestchen sind auf Papier nicht bedienbar - die Auswahl steckt schon
      im gedruckten Diagramm selbst (Titel/Legende zeigen, was ausgewaehlt

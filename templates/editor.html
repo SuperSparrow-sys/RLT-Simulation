@@ -14,8 +14,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
   <title>RLT-Simulation</title>
   <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/loeschen.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/grundlage.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/bedienelemente.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/listen.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/editor.css') }}">
 </head>
 <body class="seite-editor">
   <div id="fehlermeldung" class="fehlermeldung" role="alert" aria-live="assertive" hidden></div>
@@ -67,7 +69,7 @@
              gelöscht"). Auf dem iPad, wo es kein Schweben gibt, nennt der
              Hinweisstreifen nach dem Druck dasselbe noch einmal
              (zeigeHinweis() in editor.js). -->
-        <div class="leiste-gruppe verlauf-knoepfe">
+        <div class="leiste-gruppe verlauf-knoepfe" data-weicht="gesammelt">
           <button class="leiste-knopf leiste-knopf-rund" id="btn-zurueck"
                   title="Rückgängig" aria-label="Rückgängig" disabled>{% include "bedienzeichen/rueckgaengig.svg" %}</button>
           <button class="leiste-knopf leiste-knopf-rund" id="btn-vor"
@@ -78,9 +80,10 @@
 
         <div class="leiste-gruppe">
           <button class="leiste-knopf leiste-knopf-rund" id="btn-einpassen"
+                  data-weicht="gesammelt"
                   title="Ganze Anlage einpassen" aria-label="Ganze Anlage einpassen">{% include "bedienzeichen/einpassen.svg" %}</button>
 
-          <details class="legende">
+          <details class="legende" data-weicht="gesammelt">
             <summary title="Verbindungsarten" aria-label="Verbindungsarten">{% include "bedienzeichen/verbindungen.svg" %}<span class="knopf-wort">Verbindungen</span>{% include "bedienzeichen/aufklapp.svg" %}</summary>
             <div class="legende-inhalt">
               <p class="legende-titel">Karten verbinden</p>
@@ -183,13 +186,26 @@
                Editor.berichtLinkAktualisieren() setzt href und hebt die
                Abblendung auf, sobald ein Lauf mit Ergebnis vorliegt. -->
           <a class="leiste-knopf" id="link-bericht" aria-disabled="true"
+             data-weicht="knapp"
              title="Bericht des letzten Laufs">Bericht</a>
 
           <!-- Vorhaben B: dieselbe Anlage ueber mehrere Wetterjahre
                vergleichen (core/vergleich.py, core/laeufe.py
                starte_reihe()). -->
-          <button class="leiste-knopf" id="btn-vergleich"
+          <button class="leiste-knopf" id="btn-vergleich" data-weicht="knapp"
                   title="Diese Anlage über mehrere Wetterjahre vergleichen">Vergleich</button>
+
+          <!-- Ausweichmenue: Was in der Leiste keinen Platz mehr hat, zieht
+               hier ein - static/js/editor-leiste.js verschiebt die Elemente
+               und holt sie zurueck, wenn das Fenster wieder breiter wird. Es
+               werden dieselben Knoepfe verschoben, nicht zweite angelegt:
+               ein Knopf, den es zweimal gaebe, liefe irgendwann auseinander.
+               Bleibt leer und unsichtbar, solange alles in die Leiste passt. -->
+          <details class="werkzeugmenue" id="werkzeugmenue" hidden>
+            <summary class="leiste-knopf leiste-knopf-rund"
+                     title="Weitere Werkzeuge" aria-label="Weitere Werkzeuge">{% include "bedienzeichen/mehr.svg" %}</summary>
+            <div class="werkzeugmenue-inhalt" id="werkzeugmenue-inhalt"></div>
+          </details>
 
           <button class="leiste-knopf leiste-knopf-haupt" id="btn-simulieren">Simulieren</button>
         </div>
@@ -278,5 +294,6 @@
   <script src="{{ url_for('static', filename='js/editor-sicht.js') }}"></script>
   <script src="{{ url_for('static', filename='js/editor-bereiche.js') }}"></script>
   <script src="{{ url_for('static', filename='js/editor-gesten.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/editor-leiste.js') }}"></script>
 </body>
 </html>

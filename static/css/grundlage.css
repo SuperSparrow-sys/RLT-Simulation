@@ -1,0 +1,477 @@
+/* RLT-Simulation - Grundlage: Token, Grundschrift, Seitengeruest.
+
+   Oberflaeche eines Fachwerkzeugs, kein Verbraucherprodukt: ruhig, dicht,
+   klare Hierarchie. ALLE Farben und Masse stehen hier als Variablen - keine
+   Regel in dieser oder einer anderen Datei schreibt einen Farbwert fest.
+
+   Auf jeder Seite eingebunden, als erste der drei gemeinsamen Dateien:
+       grundlage.css -> bedienelemente.css -> listen.css -> <seite>.css
+   Diese Reihenfolge ist verbindlich; einige Regeln gewinnen nur, weil sie
+   spaeter stehen (jeweils am Ort vermerkt).
+
+   Aufgeteilt aus der frueheren style.css, die mit 78 kB alles von allen
+   Seiten enthielt - jede Seite lud den ganzen Editor mit. */
+
+
+/* RLT-Simulation - Oberflaeche eines Fachwerkzeugs, kein Verbraucherprodukt.
+   Ruhig, dicht, klare Hierarchie. Alle Farben stehen hier als Variablen -
+   keine Regel darunter schreibt eine Farbe fest. Stilfamilie an
+   ~/projekte/kapa-planung angelehnt, aber zurueckhaltender: keine Pillenknoepfe,
+   keine Farbverlaeufe, keine Animation ohne Zweck. */
+
+:root {
+  --bg: #f8f9fa;
+  --surface: #ffffff;
+  --surface-alt: #f1f3f4;
+  --border: #dadce0;
+  --border-light: #e8eaed;
+  --border-strong: #b0b6bd;
+
+  --text: #3c4043;
+  --text-secondary: #5f6368;
+  --text-tertiary: #80868b;
+
+  --blue: #1a73e8;
+  --blue-hover: #1765cc;
+  --blue-tint: #e8f0fe;
+
+  --danger: #d93025;
+  --danger-hover: #b3261e;
+  --danger-tint: #fce8e6;
+
+  --warning: #b06000;
+  --warning-tint: #fef7e0;
+
+  /* Der geglueckte Zustand. Es gab schon ein Gruen (--energie, fuer die
+     Energiewege der Leinwand), aber keins fuer "hat geklappt" - das Etikett
+     "Fertig" trug deshalb einen Farbwert direkt im Regelsatz. Gleiche Toene
+     wie --energie, eigener Name: Ein Energieweg und ein geglueckter Lauf
+     sind zwei Bedeutungen, die getrennt wandern koennen sollen. */
+  --erfolg: #146c2e;
+  --erfolg-tint: #e6f4ea;
+
+  --auf-farbe: #ffffff;
+  --schleier: rgba(32, 33, 36, .5);
+  --schleier-hell: rgba(255, 255, 255, .3);
+
+  /* Verbindungsarten auf der Leinwand: Luft, Signal und Energie sind drei
+     verschiedene Bedeutungen und muessen sich auch ohne Farbsinn allein an
+     Strichstaerke und Strichmuster unterscheiden lassen (siehe .pfeil-*
+     weiter unten) - die Farbe hier ist Verstaerkung, nicht der einzige
+     Traeger. */
+  --luft: #1a73e8;
+  /* Die fuenf Luftarten (core/bausteine/basis.py: AUSSENLUFT, ZULUFT,
+     ABLUFT, FORTLUFT, UMLUFT). Farbe UND Strichmuster unterscheiden sie
+     (siehe .pfeil-luft-* weiter unten) - im Schwarzweissdruck und ohne
+     Farbsinn traegt das Muster allein. Die Toene folgen der ueblichen
+     Lesart im Lueftungsbau: Aussenluft kuehl/gruenblau, Zuluft blau,
+     Abluft warm/orange, Fortluft braun (verbraucht), Umluft violett
+     (kreist im Haus). */
+  --luft-aussen: #00838f;
+  --luft-zu: #1a73e8;
+  --luft-ab: #e37400;
+  --luft-fort: #8d5a1b;
+  --luft-um: #8430ce;
+  --signal: #5f6368;
+  --energie: #146c2e;
+  --energie-tint: #e6f4ea;
+
+  /* Eine Farbe je Palettengruppe (siehe palette.js "reihenfolge" und
+     editor.js GRUPPEN_KLASSE) - immer zusammen mit dem Gruppennamen als
+     Text verwendet, nie als einzige Auskunft (siehe .karte-gruppenstreifen
+     weiter unten). */
+  --gruppe-luftbehandlung: #1a73e8;
+  --gruppe-verteilung: #8430ce;
+  --gruppe-raeume: #e37400;
+  --gruppe-regelung: #146c2e;
+  --gruppe-zeit: #5f6368;
+  --gruppe-quellen: #00838f;
+  --gruppe-verbraucher: #b06000;
+  --gruppe-sonstige: #9aa0a6;
+
+  --radius-sm: 5px;
+  --radius: 8px;
+  --radius-lg: 10px;
+
+  --schatten-1: 0 1px 2px rgba(60, 64, 67, .18), 0 1px 3px 1px rgba(60, 64, 67, .10);
+  --schatten-2: 0 4px 16px rgba(60, 64, 67, .22), 0 1px 3px rgba(60, 64, 67, .15);
+
+  --font-body: Roboto, Arial, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace;
+
+  /* Lesebreite fuer Fliesstext-Einleitungen (Startseite, /bausteine) - ein
+     einziger Wert statt je Seite ihr eigenes ch-Mass, damit beide gleich
+     breit umbrechen. 80ch ist die uebliche obere Grenze fuer eine gut lesbare
+     Zeile; die engeren Werte davor (62ch/68ch) wirkten neben den deutlich
+     breiteren Kaesten darunter zufaellig schmal. */
+  --lesebreite: 80ch;
+
+  /* ---- Masse ----
+   Die mittlere der drei Dichten. Sie standen bisher als Zahlen an vierzig
+   Stellen; wer die Oberflaeche enger oder luftiger will, aendert sie hier. */
+  --seitenbreite: 1100px;
+  --seitenrand: 24px;
+  --leistenhoehe: 52px;
+  --zeilenhoehe: 44px;      /* traegt einen 32px-Knopf mit Luft */
+  --antippziel: 32px;       /* Mindesthoehe jedes Knopfes */
+  --abschnittsluft: 32px;
+
+  /* ---- Breitenstufen der Anlagenzeile (listen.css) ----
+   Als Kommentar, nicht als Variable: Medienabfragen koennen keine
+   CSS-Variablen auswerten. Wer eine Schwelle verschiebt, findet hier, welche
+   es gibt - geaendert wird sie in listen.css bzw. editor.css.
+     Anlagenzeile:  >= 900 voll | >= 620 gestapelt | darunter schmal
+     Editorleiste:  >= 1240 voll | >= 1000 Zeichen | >= 760 gesammelt | knapp */
+}
+
+* { box-sizing: border-box; }
+
+/* Das hidden-Attribut muss immer gewinnen, egal welche Klasse hinterher
+   noch ein display setzt (z.B. .fehlermeldung/.panel-zeile mit display:flex)
+   - sonst bleibt ein per hidden ausgeblendetes Element trotzdem sichtbar,
+   weil eine gleich spezifische Klassenregel spaeter im Stylesheet steht und
+   das UA-Standardverhalten [hidden]{display:none} verdraengt. Diese Regel
+   gilt bewusst fuer die ganze Seite, nicht nur an einer Fundstelle. */
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.4;
+  /* Verhindert das Gummiband-Ueberschwingen am Rand eines Bereichs, der
+     tatsaechlich scrollt (Startseite, /bausteine, Palette, Parameterfenster)
+     - schaltet aber NICHT das Scrollen selbst ab (dafuer siehe
+     .seite-editor weiter unten). overscroll-behavior regelt nur, ob ein
+     ausgeschoepfter innerer Scrollbereich seinen Überschuss an den
+     naechsten Vorfahren weiterreicht, nicht, ob html/body selbst ein
+     natives Wischziel sind - genau das war der eigentliche Fehler auf der
+     Editorseite: html/body blieben ohne eigenes overflow ganz normal
+     scrollbar, jeder Wisch, der nirgendwo lokal "verbraucht" wurde (leere
+     Kopfleiste, ein Parameterfenster ohne eigenen Ueberlauf, ...) bewegte
+     also die Seite selbst - unabhaengig von overscroll-behavior. */
+  overscroll-behavior: none;
+}
+
+/* ---------- Editorseite: keine Seite zum Scrollen ----------
+   Siehe Task ("Es scrollt weiterhin, nach rechts und nach unten") und
+   Kommentar oben: overscroll-behavior allein schaltet nur das
+   Ueberschwingen ab, nicht die Scrollbarkeit von html/body selbst. Der
+   direkte, von der Fenstergroesse/Zoomstufe/Werkzeugleiste unabhaengige Weg
+   ist, html/body auf der Editorseite gar keine Scrollflaeche mehr sein zu
+   lassen: position:fixed + inset 0 + overflow:hidden. position:fixed statt
+   nur overflow:hidden, weil overflow:hidden allein auf iOS Safari bekannt
+   unzuverlaessig ist, sobald die Seite mit zwei Fingern aufgezogen wurde
+   (die Seite bleibt dann trotzdem wischbar) - die Kombination aus beidem
+   ist der in der Praxis verlaessliche Weg ("iOS body scroll lock").
+   .seite-editor steht auf <html> UND <body> (siehe templates/editor.html) -
+   beide muessen feststehen, sonst bleibt der jeweils andere die
+   Scroll-Wurzel. NUR die Editorseite traegt diese Klasse: Startseite,
+   /bausteine und die Fehlerseite sollen weiterhin ganz normal scrollen
+   (siehe .start/.lehre - unveraendert scrollbar). */
+html.seite-editor,
+body.seite-editor {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+/* Ueberlagerungen, die auf allen vier Seiten vorkommen (Dialoge,
+   Fehlerleiste), aber nur hier - auf der festgesetzten Editorseite -
+   keine eigene Kneifgeste anbieten sollen (siehe Task, "der zweite Weg"
+   und Kommentar bei .fehlermeldung). Auf Startseite/Bausteine bleibt die
+   Voreinstellung "auto" bestehen - dort ist Aufziehen ausdruecklich
+   erlaubt. */
+body.seite-editor .dialog-huelle,
+body.seite-editor .fehlermeldung,
+body.seite-editor .hinweismeldung {
+  touch-action: none;
+}
+/* Auf der Editorseite unterhalb der Kopfleiste (52 Punkte hoch, siehe
+   .leiste) statt darueber: sonst verdeckt eine Meldung den Anlagennamen
+   und die Knoepfe, ueber die sie gerade spricht. */
+body.seite-editor .fehlermeldung,
+body.seite-editor .hinweismeldung { top: 64px; }
+
+h1, h2, h3, p { margin: 0; }
+
+/* ---------- Tastaturfokus ----------
+   Sichtbar bei Tastaturbedienung, nicht bei einem Mausklick - so bleibt die
+   Oberflaeche ruhig, ohne den Fokus zu verstecken. Ein einziges, kraeftiges
+   Muster fuer alle interaktiven Elemente statt verstreuter Einzelregeln. */
+a, button, input, select, textarea, summary, [tabindex] {
+  outline: none;
+}
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible,
+.palette-eintrag:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline-offset: -1px;
+  border-color: var(--blue);
+}
+
+/* ---------- Fehlerleiste ----------
+   Faellt auf, ohne die Arbeit zu blockieren: schwebt oben, nimmt keinen
+   Platz vom Editor, verschwindet von selbst (siehe zeigeFehler() in
+   editor.js/start.js). z-index ueber Dialogen, sonst waere sie hinter einem
+   offenen Dialog unsichtbar, obwohl genau dann oft ein Fehler entsteht. */
+.fehlermeldung {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(80vw, 560px);
+  background: var(--danger);
+  color: var(--auf-farbe);
+  padding: 9px 16px 9px 14px;
+  border-radius: var(--radius-sm);
+  /* touch-action erst unten, mit body.seite-editor abgegrenzt - dieses
+     Element existiert auf ALLEN vier Seiten (siehe jedes templates/*.html),
+     hier direkt "none" zu setzen wuerde auch der Startseite/Bausteinen die
+     Kneifgeste ueber der Fehlerleiste wegnehmen, wo sie erlaubt bleiben
+     soll (siehe Task, "nur auf der Editorseite"). */
+  font-size: 13px;
+  line-height: 1.35;
+  z-index: 40;
+  box-shadow: var(--schatten-2);
+  /* Nichts an diesen beiden Leisten ist zum Anklicken da - und sie
+     schweben ueber der Kopfleiste. Ohne pointer-events:none verschluckt
+     die Hinweisleiste genau den Knopf, den sie nennt: "Verbindung
+     gelöscht - „Rückgängig" holt sie zurück" legte sich auf dem iPad
+     ueber ↶, und der Fingertipp dort kam nicht an (nachgestellt und
+     gemessen: der Pfeil kam nicht wieder). */
+  pointer-events: none;
+}
+/* Das Ausrufezeichen im Kreis war ein Schriftzeichen (content:"!") - jetzt
+   eine gezeichnete SVG, als Hintergrundbild statt Text. Kein <svg> in der
+   HTML: zeigeFehler()/zeigeHinweis() setzen textContent auf #fehlermeldung
+   (editor.js, bausteine.js UND das nicht zu dieser Aufgabe gehoerende
+   start.js) und wuerden ein Kind-Element dabei jedesmal mitloeschen - ein
+   Hintergrundbild auf ::before uebersteht das. Kreis (halbdurchsichtiges
+   Weiss, wie vorher --schleier-hell) und Strich fest als Weiss in der SVG
+   verdrahtet statt currentColor: die Leiste hat nur diese eine Erscheinung
+   (roter Grund, weisse Schrift, siehe .fehlermeldung), kein abgeblendeter
+   oder fokussierter Zustand wie bei einem Knopf. */
+.fehlermeldung::before {
+  content: "";
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='8' fill='%23fff' fill-opacity='.3'/%3E%3Cline x1='8' y1='4.2' x2='8' y2='9' stroke='%23fff' stroke-width='1.6' stroke-linecap='round'/%3E%3Ccircle cx='8' cy='11.6' r='.9' fill='%23fff'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-size: 16px 16px;
+}
+
+/* ---------- Hinweisleiste ----------
+   Dieselbe Stelle und dieselbe Form wie die Fehlerleiste darueber, nur
+   ruhig statt alarmierend: sie bestaetigt, was gerade zurueckgenommen oder
+   wiederholt wurde (zeigeHinweis() in editor.js). Bewusst dieselben Masse
+   wie .fehlermeldung, damit beide nicht wie zwei verschiedene Systeme
+   wirken - und ohne das "!"-Zeichen, das dort die Warnung traegt. Beide
+   koennen nie gleichzeitig sichtbar sein: zeigeHinweis() und zeigeFehler()
+   blenden jeweils die andere aus. */
+.hinweismeldung {
+  position: fixed;
+  top: 14px;
+  pointer-events: none;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(80vw, 560px);
+  background: var(--text);
+  color: var(--auf-farbe);
+  padding: 9px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.35;
+  z-index: 40;
+  box-shadow: var(--schatten-2);
+}
+
+/* ---------- Startseite ---------- */
+/* dvh/safe-area: dieselbe Begruendung wie bei .app weiter oben. */
+/* ---------- Das Geruest jeder Seite ausser dem Editor ----------
+   Start, Anlagen, Bausteine und Wetter benutzen dasselbe: dieselbe Breite,
+   dieselben Raender, dieselbe Scrollflaeche. Vorher hatte jede ihr eigenes
+   (.start 1400px in einem eigenen Ueberlaufbereich, .katalog-haupt 1100px,
+   .lehre-haupt 920px, dazu drei verschiedene Raender). Beim Wechsel sprang
+   der Inhalt dadurch waagerecht hin und her, und weil nur die Startseite eine
+   eigene Scrollflaeche hatte, erschien und verschwand auch noch der
+   Rollbalken. Ein Geruest fuer alle vier - das ist der Unterschied zwischen
+   "Seiten einer Anwendung" und "vier Seiten".
+
+   min-height statt height, und kein eigener overflow-Bereich: Die Seite
+   scrollt als Ganzes, wie es der Browser von Haus aus tut. Die feste Hoehe
+   mit innerem Ueberlauf braucht nur der Editor (siehe .app), weil dort die
+   Leinwand selbst scrollt. */
+.seite {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+           env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+.seite .leiste { flex-shrink: 0; }
+.seite-haupt {
+  flex: 1;
+  width: 100%;
+  max-width: var(--seitenbreite);
+  margin: 0 auto;
+  padding: var(--seitenrand) var(--seitenrand) 64px;
+  box-sizing: border-box;
+}
+/* Nur noch die senkrechte Gliederung: Die Breite setzt das gemeinsame
+   Seitengeruest (.seite-haupt). Vorher stand hier eine eigene Obergrenze von
+   1400px, die die Startseite breiter machte als jede andere Seite. */
+.start-abschnitt { margin: 0 0 var(--abschnittsluft); }
+.abschnitt-titel { font-size: 18px; font-weight: 500; margin: 0 0 14px; }
+
+/* ---------- Seitenkopf ----------
+   Jede Seite ausser dem Editor beginnt gleich: Name der Seite als einzige
+   <h1>, darunter ein Satz, was hier zu holen ist. Vorher trug die Startseite
+   zwei <h1> ("Projekte" und "Wetterdaten") und die Wetterseite gar keine -
+   eine Vorlesehilfe fand damit die Gliederung nicht, und optisch sah jede
+   Seite anders an. Die Abschnitte darunter bleiben <h2>. */
+.seiten-kopf { max-width: 1400px; margin: 0 auto 24px; }
+.seiten-titel { font-size: 26px; font-weight: 600; margin: 0 0 6px; letter-spacing: -.01em; }
+.seiten-einleitung {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0;
+  max-width: var(--lesebreite);
+  line-height: 1.55;
+}
+.abschnitt-hinweis { font-size: 13px; color: var(--text-secondary); margin: -6px 0 16px; max-width: var(--lesebreite); line-height: 1.5; }
+
+/* Ein Satz an der Stelle, an der sonst eine Liste stuende. */
+.leerhinweis { font-size: 13px; color: var(--text-secondary); }
+
+.leerhinweis-gross {
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+  padding: 34px;
+  text-align: center;
+}
+.leerhinweis-gross h2 { margin: 0 0 8px; font-size: 16px; font-weight: 500; }
+/* Eigenstaendige Seite (templates/anlage_nicht_gefunden.html), nicht
+   Teil der Startseiten-Liste - schmaler und mit etwas Abstand nach oben,
+   statt ueber die volle .start-abschnitt-Breite (1400px) zu laufen. */
+.nicht-gefunden { max-width: 480px; margin-top: 72px; }
+.leerhinweis-gross p {
+  margin: 0 0 18px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+  max-width: 52ch;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ---------- Kopfleiste ----------
+   Auf jeder Seite dieselbe Hoehe und dieselbe Kante: 52 Punkte, weisse
+   Flaeche, eine feine Linie darunter. Der Editor legt in editor.css nur
+   nach, was er zusaetzlich braucht (Gruppen, Trennstriche, Umschalter). */
+.leiste {
+  height: var(--leistenhoehe);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-light);
+}
+.titel { font-size: 15px; font-weight: 500; color: var(--text); }
+/* Schiebt alles Folgende ans rechte Ende der Leiste. */
+.leiste-fueller { flex: 1; }
+
+/* Das Aufklapp-Zeichen jeder <details>-Klappe: eine gezeichnete SVG
+   (templates/bedienzeichen/aufklapp.svg), keine aus Rahmenlinien gedrehte
+   Ecke. currentColor macht die Drehung unabhaengig von Farbe und Zustand. */
+.aufklapp-zeichen {
+  width: 9px;
+  height: 9px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform .15s ease;
+}
+
+/* -- Hauptnavigation ------------------------------------------------------
+   Auf jeder Seite dieselbe Leiste (templates/navigation.html). Vorher trug
+   jede Seite ihre eigene: die Startseite einen Link und einen Knopf, die
+   Bausteinseite einen Zurueck-Pfeil - und der Anlagenkatalog war ueberhaupt
+   nur aus einem Dialog heraus erreichbar. Wer wissen wollte, welche Anlagen
+   mitgeliefert werden, fand sie nicht.
+
+   Die Eintraege sind bewusst flach (kein Rahmen, keine Fuellung): Sie sind
+   Wege, keine Handlungen. Genau EINE gefuellte Pille bleibt der Leiste
+   vorbehalten - dem Zweck der Seite. */
+.titel-weg {
+  text-decoration: none;
+  color: inherit;
+}
+
+.titel-weg:hover { text-decoration: underline; }
+
+.hauptweg {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 20px;
+}
+
+.hauptweg-eintrag {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  text-decoration: none;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.hauptweg-eintrag:hover {
+  background: var(--surface-alt);
+  color: var(--text);
+}
+
+.hauptweg-eintrag.ist-hier {
+  color: var(--blue);
+  background: var(--blue-tint);
+  font-weight: 500;
+}
+
+/* Auf schmalen Geraeten treten die Wege zusammen, damit der Titel und die
+   eine Handlung der Seite nicht herausgedraengt werden. */
+@media (max-width: 560px) {
+  .hauptweg { margin-left: 8px; gap: 0; }
+  .hauptweg-eintrag { padding: 6px 8px; font-size: 13px; }
+}

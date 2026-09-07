@@ -131,7 +131,7 @@ def test_luftarten_sind_nicht_nur_an_der_farbe_zu_unterscheiden():
     Schwarzweissdruck bleibt nur das uebrig."""
     css = (
         pathlib.Path(__file__).resolve().parent.parent
-        / "static" / "css" / "style.css"
+        / "static" / "css" / "editor.css"
     ).read_text(encoding="utf-8")
     muster = {}
     for art in ("zuluft", "abluft", "aussenluft", "fortluft", "umluft"):
@@ -198,11 +198,13 @@ def test_der_hauptknopf_bleibt_auch_in_einer_knopfreihe_hervorgehoben():
     (Spezifität 0,1,1 gegen 0,1,0): In jedem Dialog sah „Los" danach aus wie
     „Abbrechen" daneben. Nachgemessen im Browser: Hintergrund weiß statt
     blau. Das :not() in der Regel ist deshalb tragend und kein Beiwerk."""
+    # Die Knopfreihen der Dialoge gehoeren zu den Bedienelementen, nicht zum
+    # Editor - sie kommen in jedem Dialog vor.
     css = (
         pathlib.Path(__file__).resolve().parent.parent
-        / "static" / "css" / "style.css"
+        / "static" / "css" / "bedienelemente.css"
     ).read_text(encoding="utf-8")
-    stelle = css.index(".dialog-knoepfe button")
+    stelle = css.index(".dialog-knoepfe button:not")
     abschnitt = css[stelle:stelle + 400]
     assert ":not(.knopf-haupt)" in abschnitt
     assert ":not(.knopf-haupt-gefahr)" in abschnitt
@@ -226,11 +228,14 @@ def test_jede_editor_datei_wird_geladen_und_zwar_nach_editor_js():
     dateien = sorted(p.name for p in (wurzel / "static" / "js").glob("editor-*.js"))
     assert dateien, "keine Editor-Teildateien gefunden - Muster geändert?"
 
-    stelle_editor = vorlage.find("js/editor.js")
+    # Nach dem Skript-TAG suchen, nicht nach dem blossen Dateinamen: Der
+    # Name kommt im Markup auch in Kommentaren vor (etwa beim Ausweichmenue
+    # der Kopfleiste, das auf editor-leiste.js verweist).
+    stelle_editor = vorlage.find("filename='js/editor.js'")
     assert stelle_editor >= 0, "editor.js wird gar nicht geladen"
 
     for name in dateien:
-        stelle = vorlage.find(f"js/{name}")
+        stelle = vorlage.find(f"filename='js/{name}'")
         assert stelle >= 0, f"{name} wird im Editor-Template nicht geladen"
         assert stelle > stelle_editor, (
             f"{name} steht vor editor.js - dort wird die Editor-Sammlung erst "

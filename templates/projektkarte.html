@@ -1,0 +1,62 @@
+{# Ein Projekt mit seinen Anlagen - als Block mit schlanken Zeilen.
+
+   Von der Startseite zweimal benutzt: fuer die eigenen Projekte und fuer das
+   Lehrmaterial (die Ein-Karten-Beispielanlagen aus /bausteine). Beide sehen
+   gleich aus - eine Beispielanlage ist technisch eine Anlage wie jede andere;
+   sie steht nur in einem eigenen, eingeklappten Abschnitt.
+
+   Vorher stand jede Anlage in einer eigenen Kachel von 230px Breite. Bei
+   mehreren Projekten mit je einer Handvoll Anlagen wurde daraus ein Feld aus
+   Kaesten, in dem sich nichts vergleichen liess: Name, Kartenzahl und Zustand
+   standen in jeder Kachel an einer anderen senkrechten Stelle. Als Zeile
+   stehen sie untereinander in denselben Spalten. #}
+<section class="projekt-block" data-projekt="{{ projekt.id }}"
+         data-name="{{ projekt.name }}">
+  <header class="projekt-block-kopf">
+    <h3 class="projekt-block-name">{{ projekt.name }}</h3>
+    {% if projekt.beschreibung %}
+    <p class="projekt-block-text">{{ projekt.beschreibung }}</p>
+    {% endif %}
+    <div class="eintrag-aktionen">
+      <button type="button" class="knopf-mini"
+              data-projekt-umbenennen="{{ projekt.id }}">Umbenennen</button>
+      <button type="button" class="knopf-mini knopf-mini-gefahr"
+              data-projekt-loeschen="{{ projekt.id }}">Löschen</button>
+    </div>
+  </header>
+
+  {% if not projekt.anlagen %}
+  <p class="projekt-block-leer">Noch keine Anlage in diesem Projekt.</p>
+  {% endif %}
+
+  {% for anlage in projekt.anlagen %}
+  {% set klasse, etikett, angaben = anlage.statuszettel %}
+  <div class="anlage-zeile" data-anlage="{{ anlage.id }}">
+    {# Der Link deckt Name, Kartenzahl, Etikett und Angaben ab; die Knoepfe
+       stehen daneben und nicht darin - ein <button> in einem <a> wuerde beim
+       Klick immer auch navigieren. #}
+    <a class="anlage-zeile-link" href="{{ url_for('pages.editor', anlage_id=anlage.id) }}">
+      <span class="anlage-zeile-name">{{ anlage.name }}</span>
+      <span class="anlage-zeile-karten">{{ anlage.karten }} {{ "Karte" if anlage.karten == 1 else "Karten" }}</span>
+      <span class="etikett etikett-{{ klasse }}">{{ etikett }}</span>
+      <span class="anlage-zeile-angaben">{{ angaben }}</span>
+    </a>
+    <div class="eintrag-aktionen">
+      <button type="button" class="knopf-mini"
+              data-anlage-umbenennen="{{ anlage.id }}"
+              data-name="{{ anlage.name }}">Umbenennen</button>
+      <button type="button" class="knopf-mini knopf-mini-gefahr"
+              data-anlage-loeschen="{{ anlage.id }}"
+              data-name="{{ anlage.name }}">Löschen</button>
+      {% if anlage.mit_bericht %}
+      <a class="knopf-mini"
+         href="{{ url_for('bericht.ansehen', anlage_id=anlage.id, simulation_id=anlage.letzter_lauf.id) }}">Bericht</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+
+  <div class="projekt-block-fuss">
+    <button type="button" class="knopf-mini" data-anlage-anlegen="{{ projekt.id }}">+ Anlage</button>
+  </div>
+</section>

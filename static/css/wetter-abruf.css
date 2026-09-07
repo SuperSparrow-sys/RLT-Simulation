@@ -202,3 +202,74 @@
   /* Auf schmalen Geräten frisst der Pfad die ganze Zeile - dort nur der Name. */
   .wetter-auswahl-pfad { display: none; }
 }
+
+
+/* ================= Die beiden Wege zu einem Datensatz =================
+   Standen bis zur Aufteilung in start.css, das die Startseite mitlud, obwohl
+   dort seit dem Umzug der Wetterdaten auf eine eigene Seite kein einziges
+   dieser Elemente mehr vorkommt. */
+
+/* -- Wetterdaten hinzufuegen ----------------------------------------------
+   Die beiden Wege zu einem Datensatz stehen in einer Klappe. Sie sind eine
+   Voraussetzung, nicht der Zweck der Seite - ihre Formulare nahmen vorher den
+   meisten Platz der Startseite ein, waehrend die Projekte darueber in zwei
+   Zeilen abgehandelt waren. start.js haelt sie offen, solange es keinen
+   Datensatz gibt. */
+.wetter-hinzufuegen { margin-top: 18px; }
+
+.wetter-hinzufuegen-titel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  list-style: none;
+  color: var(--text);
+  background: var(--surface);
+}
+
+.wetter-hinzufuegen-titel::-webkit-details-marker { display: none; }
+.wetter-hinzufuegen-titel:hover { background: var(--surface-alt); }
+.wetter-hinzufuegen[open] .wetter-hinzufuegen-titel { margin-bottom: 16px; }
+
+/* Online abrufen ist der bequemere, empfohlene Weg (Ort waehlen, Jahre
+   ankreuzen, unter einer Sekunde fertig) - deshalb breiter und offen. Die
+   Datei fuer eine eigene TRY-Datei ist der Sonderfall, deshalb als <details>
+   eingeklappt (siehe templates/wetter.html) und schmaler, wenn sie offen
+   ist. */
+.wetter-weg-hauptweg { flex: 2 1 380px; }
+.wetter-weg-nebenweg { flex: 1 1 280px; }
+/* -3px/-16px oben/seitlich gleicht das zusaetzliche Innenmass gegenueber
+   der Nachbarschrift (.wetter-weg-titel: margin 0 0 10px) wieder aus, damit
+   die Kante des Bereichs optisch gleich bleibt - das Antippziel selbst
+   braucht die 6px oben/unten, um auf die geforderten 24px Hoehe zu kommen
+   (gemessene Hoehe vorher: 18px, siehe Task, Befund 5). */
+.wetter-weg-nebenweg summary {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  margin: -6px -16px 4px;
+  padding: 6px 16px;
+  border-radius: var(--radius-sm);
+}
+.wetter-weg-nebenweg summary::-webkit-details-marker { display: none; }
+/* Aufklapp-Pfeilchen als gezeichnete SVG statt Schriftzeichen (▾/▴) - siehe
+   .aufklapp-zeichen in style.css, dieselbe Datei wie bei der Legende im
+   Editor (templates/bedienzeichen/aufklapp.svg). Hier nur Abstand und Farbe
+   fuer diese Stelle, Form und Drehung kommen von dort. */
+.wetter-weg-nebenweg summary .aufklapp-zeichen {
+  margin-left: 6px;
+  vertical-align: -1px;
+  color: var(--text-tertiary);
+}
+.wetter-weg-nebenweg[open] summary .aufklapp-zeichen { transform: rotate(180deg); }
+.wetter-weg-nebenweg summary:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+.wetter-weg-nebenweg .wetter-weg-hinweis { margin-top: 10px; }

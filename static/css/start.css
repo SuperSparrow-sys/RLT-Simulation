@@ -1,8 +1,8 @@
 /* Eingangsseite (/): Gewichtung und Einstieg. Eigenes Stylesheet, weil
    static/css/style.css waehrend dieser Arbeit von einem anderen Agenten
-   bearbeitet wird (siehe wetter-abruf.css/loeschen.css fuer denselben
+   bearbeitet wird (siehe wetter-abruf.css fuer denselben
    Grund). Nutzt nur vorhandene CSS-Variablen aus style.css und ergaenzt
-   vorhandene Klassen (.start-abschnitt, .abschnitt-titel, .wetter-weg,
+   vorhandene Klassen (.start-abschnitt, .abschnitt-titel,
    .anlage-status, .eintrag-aktionen) um zusaetzliche, additive Regeln -
    keine davon wird selbst angefasst.
 
@@ -88,7 +88,7 @@
   color: var(--energie);
   background: var(--energie-tint);
 }
-.einstieg-text h2 {
+.einstieg-text h3 {
   margin: 0 0 3px;
   font-size: 13px;
   font-weight: 500;
@@ -99,86 +99,11 @@
   color: var(--text-secondary);
   line-height: 1.45;
 }
-.einstieg-schritt-erledigt .einstieg-text h2 { color: var(--text-secondary); }
+.einstieg-schritt-erledigt .einstieg-text h3 { color: var(--text-secondary); }
 .einstieg-schritt:not(.einstieg-schritt-erledigt) .einstieg-nummer {
   border-color: var(--blue);
   color: var(--blue);
 }
-
-/* ---------- Wetterdaten: Voraussetzung statt Zweck ----------
-   Der eigene, umschliessende Rahmen und die kleinere, stumme Ueberschrift
-   (13px statt der 18px von .abschnitt-titel, gleiche Optik wie
-   .wetter-weg-titel) machen sichtbar, dass dieser Abschnitt anders gewichtet
-   ist als "Projekte" - ohne die gemeinsame Klasse .abschnitt-titel selbst
-   umzudefinieren, die auch anderswo unveraendert 18px bleiben soll. */
-.start-abschnitt-wetter {
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
-  padding: 20px 24px 24px;
-  background: var(--surface);
-}
-.start-abschnitt-wetter > .abschnitt-titel {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: .03em;
-  margin: 0 0 10px;
-}
-.start-abschnitt-wetter > .abschnitt-hinweis { margin-top: 0; }
-
-/* Online abrufen ist der bequemere, empfohlene Weg (Ort waehlen, Jahre
-   ankreuzen, unter einer Sekunde fertig) - deshalb breiter und offen. Die
-   Datei fuer eine eigene TRY-Datei ist der Sonderfall, deshalb als <details>
-   eingeklappt (siehe templates/index.html) und schmaler, wenn sie offen
-   ist. */
-.wetter-weg-hauptweg { flex: 2 1 380px; }
-.wetter-weg-nebenweg { flex: 1 1 280px; }
-/* -3px/-16px oben/seitlich gleicht das zusaetzliche Innenmass gegenueber
-   der Nachbarschrift (.wetter-weg-titel: margin 0 0 10px) wieder aus, damit
-   die Kante des Bereichs optisch gleich bleibt - das Antippziel selbst
-   braucht die 6px oben/unten, um auf die geforderten 24px Hoehe zu kommen
-   (gemessene Hoehe vorher: 18px, siehe Task, Befund 5). */
-.wetter-weg-nebenweg summary {
-  cursor: pointer;
-  list-style: none;
-  user-select: none;
-  margin: -6px -16px 4px;
-  padding: 6px 16px;
-  border-radius: var(--radius-sm);
-}
-.wetter-weg-nebenweg summary::-webkit-details-marker { display: none; }
-/* Aufklapp-Pfeilchen als gezeichnete SVG statt Schriftzeichen (▾/▴) - siehe
-   .aufklapp-zeichen in style.css, dieselbe Datei wie bei der Legende im
-   Editor (templates/bedienzeichen/aufklapp.svg). Hier nur Abstand und Farbe
-   fuer diese Stelle, Form und Drehung kommen von dort. */
-.wetter-weg-nebenweg summary .aufklapp-zeichen {
-  margin-left: 6px;
-  vertical-align: -1px;
-  color: var(--text-tertiary);
-}
-.wetter-weg-nebenweg[open] summary .aufklapp-zeichen { transform: rotate(180deg); }
-.wetter-weg-nebenweg summary:focus-visible {
-  outline: 2px solid var(--blue);
-  outline-offset: 2px;
-  border-radius: var(--radius-sm);
-}
-.wetter-weg-nebenweg .wetter-weg-hinweis { margin-top: 10px; }
-
-/* ---------- Anlage-Karte: Auskunft statt Leerstelle ----------
-   Zusaetzlich zur bisherigen einzeiligen .anlage-status (Kosten oder
-   Zustand) eine zweite, stumme Zeile mit Datum und Wetterjahr des letzten
-   Laufs - siehe Start._fuelleStatus() in start.js. */
-.anlage-status-neben {
-  color: var(--text-tertiary);
-  font-size: 10.5px;
-  font-variant-numeric: tabular-nums;
-  margin-top: 1px;
-}
-/* Bericht-Verweis in der Aktionszeile (nur bei einem fertigen Lauf) - sitzt
-   neben Umbenennen/Loeschen (.eintrag-aktionen, siehe loeschen.css) und
-   nutzt .knopf-mini unveraendert; a.knopf-mini selbst (Entfernen der
-   Unterstreichung) steht schon in style.css. */
 
 /* ---------- Beispielanlagen: eigener, eingeklappter Bereich ----------
    Lehrmaterial, kein Arbeitsergebnis (Task-Rueckmeldung) - deshalb weder
@@ -186,37 +111,85 @@
    statt durchgezogener Rahmen (wie .leerhinweis-gross, style.css) haelt ihn
    sichtbar zurueckhaltender als die Projektkarten, die er enthaelt (siehe
    projektKarteElement() in start.js, unveraendert wiederverwendet). */
-.start-lehrmaterial {
-  border: 1px dashed var(--border);
+.nebenbereich {
+  border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
-  padding: 4px 20px 4px;
+  background: var(--surface);
+  margin-bottom: var(--abschnittsluft);
+  overflow: hidden;
 }
-.start-lehrmaterial[open] { padding-bottom: 20px; }
-.start-lehrmaterial-titel {
+.nebenbereich-titel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
   cursor: pointer;
   list-style: none;
   user-select: none;
   font-size: 13px;
   font-weight: 500;
+  color: var(--text);
+}
+.nebenbereich-titel::-webkit-details-marker { display: none; }
+.nebenbereich-titel:hover { background: var(--surface-alt); }
+.nebenbereich-titel:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.nebenbereich[open] .nebenbereich-titel { border-bottom: 1px solid var(--border-light); }
+/* Dieselbe gezeichnete SVG wie ueberall, hier vor statt nach dem Wort. */
+.nebenbereich-titel .aufklapp-zeichen { color: var(--text-tertiary); }
+.nebenbereich[open] .nebenbereich-titel .aufklapp-zeichen { transform: rotate(180deg); }
+/* Schon zugeklappt sagen, wieviel drinsteckt - sonst ist die Klappe eine
+   Frage ohne Antwort. */
+.nebenbereich-zaehler {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 400;
   color: var(--text-secondary);
-  padding: 12px 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0 7px;
+  font-variant-numeric: tabular-nums;
 }
-.start-lehrmaterial-titel::-webkit-details-marker { display: none; }
-/* Dieselbe gezeichnete SVG wie beim Nebenweg oben, hier vor statt nach dem
-   Wort (siehe templates/index.html). */
-.start-lehrmaterial-titel .aufklapp-zeichen {
-  margin-right: 6px;
-  vertical-align: -1px;
-  color: var(--text-tertiary);
+.nebenbereich-satz {
+  margin: 0;
+  padding: 12px 16px 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  max-width: var(--lesebreite);
+  line-height: 1.5;
 }
-.start-lehrmaterial[open] .start-lehrmaterial-titel .aufklapp-zeichen { transform: rotate(180deg); }
-.start-lehrmaterial-titel:focus-visible {
-  outline: 2px solid var(--blue);
-  outline-offset: 2px;
-  border-radius: var(--radius-sm);
+/* Die Projektbloecke darin brauchen keinen zweiten Rahmen im Rahmen. */
+.nebenbereich .projekt-block {
+  border: none;
+  border-radius: 0;
+  margin-bottom: 0;
 }
-.start-lehrmaterial .abschnitt-hinweis { margin-top: 4px; }
+.nebenbereich .projekt-block + .projekt-block { border-top: 1px solid var(--border-light); }
 
 @media (max-width: 700px) {
   .einstieg-schritte { flex-direction: column; }
 }
+
+/* -- Vorlagenwahl im Dialog ------------------------------------------------
+   Name zuerst, Beschreibung darunter. Vorher stand nur der lange
+   Beschreibungstext da, und zwoelf Absaetze untereinander waren nicht zu
+   ueberblicken. Die vollstaendige Auslegung steht im Anlagenkatalog. */
+.vorlage-wahl-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vorlage-wahl-name { font-weight: 500; }
+
+.vorlage-wahl-hinweis {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.vorlage-wahl-weg {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+

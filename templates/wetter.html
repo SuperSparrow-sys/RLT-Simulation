@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Wetterdaten – RLT-Simulation</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/grundlage.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/bedienelemente.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/listen.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/wetter-abruf.css') }}">
+</head>
+<body>
+  <div id="fehlermeldung" class="fehlermeldung" role="alert" aria-live="assertive" hidden></div>
+  <div id="hinweismeldung" class="hinweismeldung" role="status" aria-live="polite" hidden></div>
+
+  <div class="seite">
+    {% with aktiv = "wetter" %}{% include "navigation.html" %}{% endwith %}
+
+    <main class="seite-haupt">
+      <div class="seiten-kopf">
+        <h1 class="seiten-titel">Wetterdaten</h1>
+        <p class="seiten-einleitung">
+          Für einen Simulationslauf wird ein Wetterdatensatz gebraucht – ein
+          volles Kalenderjahr für einen Ort. Vorhandene Datensätze stehen
+          jedem Projekt zur Verfügung; beim Start eines Laufs wird einer davon
+          ausgewählt.
+        </p>
+      </div>
+
+      <section class="start-abschnitt" id="wetter-abschnitt">
+        {# Serverseitig gefuellt (routes/pages.py: wetter()). Die Liste IST der
+           Inhalt dieser Seite - sie erst im Browser nachzuholen hiesse, die
+           Seite bis zur Antwort leer zu zeigen. static/js/start.js haengt nur
+           noch die Knoepfe an die fertigen Zeilen. #}
+        <div id="start-wetter-liste">
+          {% if anzahl %}
+          <table class="bilanz wetter-tabelle">
+            <thead>
+              <tr>
+                <th>Name</th><th>Quelle</th><th>Jahr</th>
+                <th class="zahl">Stunden</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for ort, eintraege in standorte.items() %}
+              <tr class="wetter-standort-zeile">
+                <th colspan="5" scope="rowgroup">{{ ort }}</th>
+              </tr>
+              {% for w in eintraege %}
+              <tr data-id="{{ w.id }}" data-name="{{ w.name }}" data-stunden="{{ w.stunden }}">
+                <td>{{ w.name }}</td>
+                <td><span class="wetter-quelle-etikett">{{ quelle_text.get(w.quelle, w.quelle) }}</span></td>
+                <td>{{ w.jahr if w.jahr is not none }}</td>
+                <td class="zahl">{{ w.stunden }}</td>
+                <td class="wetter-tabelle-aktionen">
+                  <button type="button" class="knopf-mini wetter-umbenennen">Umbenennen</button>
+                  <button type="button" class="knopf-mini knopf-mini-gefahr wetter-loeschen"
+                          {% if w.simulationen %}disabled
+                          title="Wird von {{ w.simulationen }} {{ "Simulationslauf" if w.simulationen == 1 else "Simulationsläufen" }} verwendet"{% endif %}>Löschen</button>
+                </td>
+              </tr>
+              {% endfor %}
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <p class="leerhinweis">
+            Noch keine Wetterdaten vorhanden. Ohne einen Datensatz kann kein
+            Simulationslauf starten – unten steht, woher einer kommt.
+          </p>
+          {% endif %}
+        </div>
+
+        {# Offen, solange nichts da ist: dann sind die Formulare das, was als
+           Naechstes zu tun ist. Danach zaehlt die Liste, und sie treten
+           zurueck (static/js/start.js: zeichneWetterKlappe haelt eine vom
+           Anwender getroffene Entscheidung fest). #}
+        <details class="wetter-hinzufuegen" id="wetter-hinzufuegen" {% if not anzahl %}open{% endif %}>
+          <summary class="wetter-hinzufuegen-titel">
+            Wetterdaten hinzufügen{% include "bedienzeichen/aufklapp.svg" %}
+          </summary>
+
+          <div class="wetter-wege">
+            <div class="wetter-weg wetter-weg-hauptweg">
+              <h2 class="wetter-weg-titel">Online abrufen</h2>
+              <p class="wetter-weg-hinweis">
+                Ort wählen, Jahr(e) ankreuzen, fertig – von der kostenlosen
+                Open-Meteo-Archive-API, ohne Anmeldung, meist in unter einer
+                Sekunde je Jahr.
+              </p>
+              <form id="form-wetter-abruf" class="wetter-abruf-formular">
+                <label class="panel-zeile">
+                  <span class="panel-label">Ort</span>
+                  <select id="feld-wetter-abruf-ort">
+                    <option value="Berlin" data-breite="52.5200" data-laenge="13.4050">Berlin</option>
+                    <option value="Hamburg" data-breite="53.5511" data-laenge="9.9937">Hamburg</option>
+                    <option value="München" data-breite="48.1351" data-laenge="11.5820">München</option>
+                    <option value="Köln" data-breite="50.9375" data-laenge="6.9603">Köln</option>
+                    <option value="Frankfurt am Main" data-breite="50.1109" data-laenge="8.6821">Frankfurt am Main</option>
+                    <option value="Stuttgart" data-breite="48.7758" data-laenge="9.1829">Stuttgart</option>
+                    <option value="Leipzig" data-breite="51.3397" data-laenge="12.3731">Leipzig</option>
+                    <option value="Dresden" data-breite="51.0504" data-laenge="13.7373">Dresden</option>
+                    <option value="eigene">Eigene Koordinaten …</option>
+                  </select>
+                </label>
+
+                <div class="panel-zeile panel-zeile-nebeneinander wetter-abruf-koordinaten" id="wetter-abruf-koordinaten" hidden>
+                  <label class="panel-zeile">
+                    <span class="panel-label">Breite</span>
+                    <input type="number" id="feld-wetter-abruf-breite" step="0.0001" min="-90" max="90" placeholder="z. B. 52.52">
+                  </label>
+                  <label class="panel-zeile">
+                    <span class="panel-label">Länge</span>
+                    <input type="number" id="feld-wetter-abruf-laenge" step="0.0001" min="-180" max="180" placeholder="z. B. 13.40">
+                  </label>
+                  <label class="panel-zeile">
+                    <span class="panel-label">Ortsname (optional)</span>
+                    <input type="text" id="feld-wetter-abruf-ortsname" placeholder="z. B. Rostock">
+                  </label>
+                </div>
+
+                <label class="panel-zeile">
+                  <span class="panel-label">Jahr(e) – Strg/Cmd-Klick für mehrere</span>
+                  <select id="feld-wetter-abruf-jahre" multiple size="6"></select>
+                </label>
+
+                <label class="panel-zeile">
+                  <span class="panel-label">Bezeichnung (optional)</span>
+                  <input type="text" id="feld-wetter-abruf-name" placeholder="Bezeichnung (optional)">
+                </label>
+
+                <button type="submit" class="knopf-haupt" id="btn-wetter-abrufen">Abrufen</button>
+              </form>
+            </div>
+
+            <details class="wetter-weg wetter-weg-nebenweg" id="wetter-upload-details">
+              <summary class="wetter-weg-titel">Eigene Dateien hochladen (TRY) …{% include "bedienzeichen/aufklapp.svg" %}</summary>
+              <p class="wetter-weg-hinweis">
+                Für Wetterdaten, die schon vorliegen – etwa ein Testreferenzjahr
+                vom DWD. Wähle den Ordner so aus, wie du ihn bekommen hast: gesucht
+                werden die .dat-Dateien darin, auch in Unterordnern. Ein beigelegtes
+                Handbuch und alles andere bleibt liegen und wird nicht hochgeladen.
+                Genauso gelesen werden .xls, .xlsx und .csv im Format des Blattes
+                „Wetterdaten“.
+              </p>
+              <form id="form-wetter-upload" class="wetter-formular">
+                <span class="datei-eingabe">
+                  <input type="file" id="feld-wetter-ordner" class="datei-eingabe-eingabe"
+                         webkitdirectory directory multiple>
+                  <label for="feld-wetter-ordner" class="datei-eingabe-knopf">Ordner auswählen</label>
+                  <span class="datei-eingabe-name" id="feld-wetter-ordnername">Kein Ordner ausgewählt</span>
+                </span>
+                <span class="datei-eingabe">
+                  <input type="file" id="feld-wetter-datei" class="datei-eingabe-eingabe"
+                         accept=".dat,.xls,.xlsx,.xlsm,.csv" multiple>
+                  <label for="feld-wetter-datei" class="datei-eingabe-knopf">Einzelne Dateien …</label>
+                  <span class="datei-eingabe-name" id="feld-wetter-dateiname">Keine Datei ausgewählt</span>
+                </span>
+                <label class="panel-zeile">
+                  <span class="panel-label">Standort</span>
+                  <input type="text" id="feld-wetter-ort"
+                         placeholder="z. B. Dresden_Industriegelände">
+                </label>
+                <div id="wetter-auswahl-liste" class="wetter-auswahl" hidden></div>
+                <input type="text" id="feld-wetter-name"
+                       placeholder="Bezeichnung (nur bei einer einzelnen Datei)">
+                <button type="submit" class="knopf-haupt" id="btn-wetter-hochladen">Hochladen</button>
+              </form>
+            </details>
+          </div>
+        </details>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/dialoge.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/wetter.js') }}"></script>
+</body>
+</html>

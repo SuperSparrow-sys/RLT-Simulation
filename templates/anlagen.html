@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Anlagen – RLT-Simulation</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/grundlage.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/bedienelemente.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/listen.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/anlagen.css') }}">
+</head>
+<body>
+  <div id="fehlermeldung" class="fehlermeldung" role="alert" aria-live="assertive" hidden></div>
+  <div id="hinweismeldung" class="hinweismeldung" role="status" aria-live="polite" hidden></div>
+
+  <div class="seite">
+    {% with aktiv = "anlagen" %}{% include "navigation.html" %}{% endwith %}
+
+    <main class="seite-haupt">
+      <div class="seiten-kopf">
+        <h1 class="seiten-titel">Anlagen</h1>
+        <p class="seiten-einleitung">
+          {{ anzahl }} fertig verdrahtete Anlagen, jede mit vorgerechneter
+          Auslegung und geprüften Erwartungsbändern. Eine davon lässt sich in
+          ein Projekt übernehmen und dort weiterbauen – die Vorlage bleibt
+          unverändert.
+        </p>
+      </div>
+
+      <div class="katalog-suche">
+        <label class="katalog-suche-feld">
+          {% include "bedienzeichen/lupe.svg" %}
+          <input type="search" id="feld-suche"
+                 placeholder="Suchen – Name, Bauart, Stichwort aus der Auslegung"
+                 autocomplete="off" aria-label="Anlagen durchsuchen">
+        </label>
+        <span class="katalog-treffer" id="katalog-treffer" aria-live="polite"></span>
+      </div>
+
+      {# Serverseitig gefuellt (siehe routes/katalog.py): Der Inhalt steht
+         fest, sobald das Programm laeuft. Die Suche darunter blendet nur aus,
+         was nicht passt - die Seite ist auch ohne sie vollstaendig. #}
+      {% for name, hinweis, anlagen in gruppen %}
+        {% if anlagen %}
+        <section class="katalog-gruppe" data-gruppe="{{ name }}">
+          <h2 class="katalog-gruppe-titel">{{ name }}</h2>
+          {% if hinweis %}<p class="katalog-gruppe-hinweis">{{ hinweis }}</p>{% endif %}
+          <div class="katalog-karten">
+            {% for kennung, v in anlagen %}
+            <article class="katalog-karte" data-kennung="{{ kennung }}"
+                     data-suchtext="{{ (v.name ~ ' ' ~ v.gruppe ~ ' ' ~ v.beschreibung ~ ' ' ~ v.einleitung ~ ' ' ~ (v.auslegung | map(attribute='stichwort') | join(' ')) ~ ' ' ~ (v.auslegung | map(attribute='zeilen') | map('join', ' ') | join(' '))) | lower }}">
+              <div class="katalog-karte-kopf">
+                <h3 class="katalog-karte-titel">{{ v.name }}</h3>
+                <p class="katalog-karte-text">{{ v.beschreibung }}</p>
+              </div>
+
+              {% if v.flaeche_m2 %}
+              <div class="katalog-eckdaten">
+                <div class="katalog-eckwert">
+                  <span class="katalog-eckwert-zahl">{{ "%.0f"|format(v.flaeche_m2) }} m²</span>
+                  <span class="katalog-eckwert-name">Fläche</span>
+                </div>
+                <div class="katalog-eckwert">
+                  <span class="katalog-eckwert-zahl">{{ "%.0f"|format(v.luftmenge_m3h) }} m³/h</span>
+                  <span class="katalog-eckwert-name">Luftmenge</span>
+                </div>
+                <div class="katalog-eckwert">
+                  <span class="katalog-eckwert-zahl">{{ ("%.1f"|format(v.luftwechsel_1h)).replace(".", ",") }} 1/h</span>
+                  <span class="katalog-eckwert-name">Luftwechsel</span>
+                </div>
+              </div>
+              {% endif %}
+
+              {% if v.auslegung or v.erwartung %}
+              <details class="katalog-auslegung">
+                <summary>
+                  <svg class="aufklapp-zeichen" viewBox="0 0 12 12" aria-hidden="true">
+                    <path d="M4 2 L8 6 L4 10"/>
+                  </svg>
+                  Auslegung und geprüfte Bänder
+                </summary>
+                <div class="katalog-auslegung-inhalt">
+                  {% for angabe in v.auslegung %}
+                  <div class="katalog-angabe">
+                    <span class="katalog-angabe-stichwort">{{ angabe.stichwort }}</span>
+                    <p class="katalog-angabe-zeilen">{{ angabe.zeilen | join("\n") }}</p>
+                  </div>
+                  {% endfor %}
+                  {% if v.erwartung %}
+                  <div class="katalog-baender">
+                    <p class="katalog-baender-titel">Erwartungsbänder</p>
+                    {% for schluessel, band in v.erwartung.items() %}
+                    <div class="katalog-band">
+                      <span>{{ band_label.get(schluessel, (schluessel, ""))[0] }}</span>
+                      <span class="katalog-band-wert">
+                        {{ ("%.1f"|format(band[0])).replace(".", ",") }} bis
+                        {{ ("%.1f"|format(band[1])).replace(".", ",") }}
+                        {{ band_label.get(schluessel, (schluessel, ""))[1] }}
+                      </span>
+                    </div>
+                    {% endfor %}
+                  </div>
+                  {% endif %}
+                </div>
+              </details>
+              {% endif %}
+
+              <div class="katalog-karte-fuss">
+                <button class="knopf-haupt" data-uebernehmen="{{ kennung }}"
+                        data-name="{{ v.name }}">In Projekt übernehmen</button>
+              </div>
+            </article>
+            {% endfor %}
+          </div>
+        </section>
+        {% endif %}
+      {% endfor %}
+
+      <p class="katalog-leer" id="katalog-leer" hidden>
+        Keine Anlage passt zu dieser Suche.
+      </p>
+    </main>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/dialoge.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/anlagen.js') }}"></script>
+</body>
+</html>

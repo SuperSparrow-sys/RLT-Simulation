@@ -169,3 +169,69 @@ def test_erklaerbereich_zeigt_lesbare_anschluesse_und_die_hinweise_der_karten(ap
     )
     assert lastgang["einheit"] == "Anteil 0–1"
     assert "Nennlast" in lastgang["hinweis"]
+
+
+# ---------- Die Seite liefert ihren Inhalt selbst aus -----------------------
+#
+# Sie holte ihre Kacheln bis zum Umbau der Oberflaeche erst nach dem Laden
+# ueber /api/lehre/bausteine und baute sie im Browser. Bis die Antwort da war,
+# stand dort "Bausteine werden geladen ..." - und auf keinem Abzug der Seite
+# war ihr eigentlicher Inhalt zu sehen. Die Tests hier beschreiben, was ohne
+# ein einziges Stueck JavaScript dastehen muss.
+
+
+def test_bausteinseite_zeigt_jeden_kartentyp_ohne_javascript(app):
+    html = app.test_client().get("/bausteine").get_data(as_text=True)
+    for klasse in basis.alle():
+        if klasse.KENNUNG not in ERKLAERUNGEN:
+            continue
+        assert f'id="baustein-{klasse.KENNUNG}"' in html, klasse.KENNUNG
+        assert klasse.NAME in html, klasse.KENNUNG
+
+
+def test_bausteinseite_zeigt_anschluesse_und_parameter_im_klartext(app):
+    """Dieselben Beschriftungen wie im Parameterfenster - sie standen bis zum
+    Umbau nur in der JSON-Antwort und wurden im Browser zusammengesetzt."""
+    html = app.test_client().get("/bausteine").get_data(as_text=True)
+    assert "Sonneneinstrahlung Süd (W/m²) – Signal, Eingang" in html
+    assert "Raumtemperatur (°C) – Signal, Ausgang" in html
+    # Der Erklaersatz eines Parameters (Param.hinweis).
+    assert "Nennlast" in html
+
+
+def test_bausteinseite_hat_ein_gefuelltes_inhaltsverzeichnis(app):
+    """Die Sprungmarken im Verzeichnis muessen zu den Abschnitten passen -
+    beide entstehen jetzt an derselben Stelle (routes/lehre.py: _anker)."""
+    import re
+
+    html = app.test_client().get("/bausteine").get_data(as_text=True)
+    verweise = set(re.findall(r'href="#(gruppe-[^"]+)"', html))
+    abschnitte = set(re.findall(r'id="(gruppe-[^"]+)"', html))
+    assert verweise
+    assert verweise == abschnitte
+
+
+def test_bausteinseite_deaktiviert_den_knopf_ohne_beispielanlage(app):
+    """Ein Knopf, der nur absagen kann, wird gar nicht erst angeboten. Ob es
+    eine Beispielanlage gibt, weiss der Server - der Browser musste es
+    vorher erst aus der JSON-Antwort erfahren."""
+    import re
+
+    html = app.test_client().get("/bausteine").get_data(as_text=True)
+    for treffer in re.finditer(
+        r'<button class="baustein-beispiel-knopf" data-kennung="([^"]+)"([^>]*)>', html
+    ):
+        kennung, rest = treffer.group(1), treffer.group(2)
+        hat_beispiel = kennung in beispielanlagen.BAUPLAENE
+        assert ("disabled" in rest) != hat_beispiel, kennung
+
+
+def test_bausteine_js_baut_die_kacheln_nicht_mehr_selbst():
+    """Zwei Wege zu derselben Darstellung waeren zwei Wege, die
+    auseinanderlaufen."""
+    from pathlib import Path
+
+    quelle = (Path(__file__).parent.parent / "static" / "js" / "bausteine.js").read_text()
+    assert "/api/lehre/bausteine`" not in quelle  # das Anlegen bleibt, das Holen nicht
+    assert 'fetch("/api/lehre/bausteine")' not in quelle
+    assert "createElement" not in quelle

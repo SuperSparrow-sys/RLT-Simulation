@@ -1,0 +1,460 @@
+/* RLT-Simulation - Bedienelemente: Knoepfe, Etiketten, Dialoge.
+
+   Alles, was auf mehr als einer Seite angefasst wird. Wird nach
+   grundlage.css und vor listen.css eingebunden.
+
+   Die kleinen Aktionsknoepfe standen bis zur Aufteilung in einer eigenen
+   Datei (loeschen.css), die nur zwei von vier Seiten einbanden - auf der
+   Wetterseite war "Loeschen" darum weder rot noch stand es rechts in seiner
+   Spalte. Ein solcher Fall soll strukturell nicht mehr moeglich sein. */
+
+
+/* ---------- Kopfleiste des Editors: eine Formensprache ----------
+   Die Leiste war ueber viele Schritte gewachsen - ein Textlink, drei
+   Knopfarten, ein <details>, ein gefuellter Hauptknopf, zuletzt zwei runde
+   Zeichenknoepfe: verschiedene Formen, verschiedene Gewichte, keine
+   erkennbare Ordnung. Sie folgt jetzt drei Regeln:
+
+   1. ALLE Bedienelemente der Leiste haben DIESELBE Grundform: gleiche
+      Hoehe, gleicher Radius, gleicher Rahmen, gleiche Schrift
+      (.leiste-knopf - dazu .zurueck-knopf und die Zusammenfassung der
+      Legende, die aus aelteren Gruenden keine eigene Klasse tragen).
+      .zurueck-knopf gilt auf ALLEN Seiten, die einen Weg zurueck haben
+      (Editor, Bausteine, Bericht): der Rueckweg sah frueher auf jeder der
+      drei anders aus - Pille, flacher Textlink, flacher Textlink -, obwohl
+      er ueberall dasselbe tut.
+   2. Sie unterscheiden sich in DREI Stufen: rund mit genau einem Zeichen
+      (ein Handgriff - zurueck, umbenennen, rueckgaengig, wiederholen,
+      einpassen), Pille mit einem Wort (ein benannter Weg - Verbindungen,
+      Palette, Parameter, Bericht, Vergleich), und genau EINE gefuellte
+      Pille fuer den Zweck der Seite (Simulieren).
+   3. Sie stehen in Gruppen, durch einen schmalen Strich getrennt: ORT,
+      BEARBEITUNG, ANSICHT - und ganz rechts das ERGEBNIS.
+
+   Alles ist mindestens 36 Punkte hoch, mit Finger 44 (siehe @media
+   (pointer: coarse) weiter unten) - Apples Richtwert, denselben, den die
+   uebrigen Knoepfe des Programms schon einhalten. */
+.leiste-knopf,
+.zurueck-knopf,
+.legende summary {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  user-select: none;
+}
+.leiste-knopf:hover,
+.zurueck-knopf:hover,
+.legende summary:hover {
+  background: var(--surface-alt);
+  border-color: var(--border-strong);
+}
+.leiste-knopf:disabled,
+.leiste-knopf[aria-disabled="true"] {
+  opacity: .45;
+  cursor: default;
+  pointer-events: none;
+}
+/* Schiebt alles Folgende ans rechte Ende der Leiste (Startseite: Titel links,
+/* Rund: Breite = Hoehe, genau ein Zeichen. */
+.leiste-knopf-rund { width: 36px; padding: 0; }
+/* Jedes Zeichen der Leiste ist eine gezeichnete SVG, kein Schriftzeichen -
+   Stift, Pfeile & Co. sehen dadurch auf jedem Geraet gleich aus, statt von
+   der Emoji-Schrift des Browsers abzuhaengen (der Stift als U+270E etwa
+   gewinnt in den meisten Browsern bunt aus der Emoji-Schrift, auch mit
+   angehaengtem Textwaehler U+FE0E - nachgestellt und nachgesehen).
+   currentColor macht jede SVG in Farbe und Abblendung vom eigenen Knopf
+   abhaengig, dieselbe Strichstaerke fuer alle. */
+.knopf-symbol {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+/* Ohne eigenen Rahmen - fuer den Stift neben dem Anlagennamen, der zum
+   Namen gehoert und nicht als eigener Knopf daneben stehen soll. */
+.leiste-knopf-still { border-color: transparent; background: none; }
+.leiste-knopf-still:hover { border-color: var(--border); }
+/* Die eine gefuellte Pille: der Zweck der Seite. */
+.leiste-knopf-haupt {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: var(--auf-farbe);
+  font-weight: 500;
+  padding: 0 18px;
+}
+.leiste-knopf-haupt:hover { background: var(--blue-hover); border-color: var(--blue-hover); }
+.leiste-knopf-haupt:disabled {
+  background: var(--border);
+  border-color: var(--border);
+  color: var(--text-tertiary);
+  opacity: 1;
+}
+
+/* Der Bericht-Weg in der Kopfleiste (templates/editor.html, #link-bericht):
+   ein <a>, kein <button> - kennt darum kein :disabled. Solange noch kein
+   Lauf mit Ergebnis vorliegt, setzt editor.js aria-disabled="true" statt
+   eines href (siehe dort); dieselbe Abblendung wie .knopf-mini:disabled
+   (Abschnitt "Kleine Aktionsknoepfe"), zusaetzlich pointer-events:none,
+   weil ein <a> ohne href
+   sonst zwar keine Fahrt antritt, mit der Maus aber trotzdem als klickbar
+   wirkt (Cursor, Fokus). */
+.knopf-mini[aria-disabled="true"] { opacity: .5; cursor: default; pointer-events: none; }
+
+.knopf-haupt {
+  border: 1px solid var(--blue);
+  background: var(--blue);
+  color: var(--auf-farbe);
+  border-radius: var(--radius-sm);
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+}
+.knopf-haupt:hover { background: var(--blue-hover); border-color: var(--blue-hover); }
+.knopf-haupt:disabled { background: var(--border); border-color: var(--border); color: var(--text-tertiary); cursor: default; }
+/* .knopf-haupt sitzt sonst immer auf einem <button> - auf einem <a> (z.B.
+   templates/anlage_nicht_gefunden.html) braucht es zusaetzlich inline-block
+   und die Unterstreichung muss weg, sonst wirkt es nicht wie ein Knopf. */
+a.knopf-haupt { display: inline-block; text-decoration: none; }
+
+/* Dasselbe fuer .knopf-mini auf einem <a> - der "Bericht ansehen"-Verweis im
+   Bilanzdialog (static/js/simulation.js, zeigeBilanz()) sitzt neben echten
+   <button>-Knoepfen und soll genauso aussehen, nicht wie ein blauer,
+   unterstrichener Link. */
+a.knopf-mini { display: inline-block; text-decoration: none; }
+
+/* Zurueckhaltender als .knopf-haupt - fuer "Einpassen" neben dem Hauptknopf
+   der Kopfleiste, nicht fuer die eine zentrale Handlung der Seite. */
+.knopf-sekundaer {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 7px 14px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.knopf-sekundaer:hover { background: var(--surface-alt); border-color: var(--border-strong); }
+
+/* (Der frueher hier stehende "margin-left: auto" auf .knopf-sekundaer ist
+   entfallen: die Kopfleiste schiebt jetzt die ganze Ergebnisgruppe nach
+   rechts - siehe .leiste-ergebnis weiter oben. Ausserhalb der Kopfleiste
+   hatte die Regel ohnehin nie etwas zu suchen, genau das war ihr
+   urspruenglicher Anlass.) */
+
+/* ---------- Dialoge (Simulation, Projekt/Anlage anlegen) ---------- */
+.dialog-huelle {
+  position: fixed;
+  inset: 0;
+  background: var(--schleier);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  padding: 24px;
+}
+/* Befunde der Anlagenpruefung im Simulationsdialog (core/pruefung.py).
+   Bewusst in der Hinweisfarbe und nicht in der Warnfarbe: es sind Hinweise
+   auf etwas, das man vielleicht vergessen hat, kein Fehler und kein Riegel -
+   der Lauf laesst sich damit ganz normal starten. */
+.pruefung-hinweis {
+  margin: 4px 0 12px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--warning);
+  background: var(--warning-tint);
+  border-radius: var(--radius-sm);
+}
+.pruefung-titel {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--warning);
+}
+.pruefung-liste {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.pruefung-liste li { margin-bottom: 3px; }
+
+.dialog {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 22px 24px 24px;
+  min-width: 340px;
+  max-width: 90vw;
+  max-height: 85vh;
+  overflow-y: auto;
+  /* Fehlte hier (siehe Kommentar bei .palette weiter oben, dieselbe
+     Begruendung): ein bis zum Ende gescrollter Dialog (z.B. ein langer
+     Loeschtext) reichte einen weiteren Wisch sonst an den naechsten
+     Vorfahren weiter. */
+  overscroll-behavior: contain;
+  box-shadow: var(--schatten-2);
+}
+.dialog-breit { min-width: 560px; }
+.dialog h2 {
+  font-size: 16px;
+  font-weight: 500;
+  margin: 0 0 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-light);
+}
+.dialog-knoepfe { display: flex; gap: 8px; justify-content: flex-end; margin-top: 22px; }
+/* Die NEBENknoepfe einer Knopfreihe. Das :not() ist der Kern der Regel: ohne
+   es traf sie auch .knopf-haupt und gewann gegen dessen Regel weiter oben
+   (0,1,1 gegen 0,1,0) - in jedem Dialog sah der Hauptknopf danach aus wie
+   "Abbrechen" daneben, und die Reihe hatte keinen erkennbaren Schwerpunkt
+   mehr. Dasselbe gilt fuer den roten Loeschknopf. */
+.dialog-knoepfe button:not(.knopf-haupt):not(.knopf-haupt-gefahr),
+.fortschritt button:not(.knopf-haupt):not(.knopf-haupt-gefahr) {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 7px 16px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+}
+.dialog-knoepfe button:not(.knopf-haupt):not(.knopf-haupt-gefahr):hover,
+.fortschritt button:not(.knopf-haupt):not(.knopf-haupt-gefahr):hover {
+  background: var(--surface-alt);
+  border-color: var(--border-strong);
+}
+.dialog-knoepfe button:disabled,
+.fortschritt button:disabled { opacity: .6; cursor: default; }
+/* -- Beschriftetes Eingabefeld ------------------------------------------
+   Das Parameterfenster des Editors hat es gebaut, besitzt es aber nicht: Die
+   beiden Wetterformulare (templates/wetter.html) benutzen dieselben Felder,
+   und ein zweites, fast gleiches Formularmuster daneben waere genau die
+   Doppelung, die dieser Umbau abstellt. */
+.panel-zeile { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.panel-label { font-size: 11px; color: var(--text-secondary); }
+.panel-zeile input,
+.panel-zeile select,
+.panel-zeile textarea {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface);
+  width: 100%;
+}
+.panel-zeile input[type="number"] { font-variant-numeric: tabular-nums; }
+.panel-zeile-nebeneinander { flex-direction: row; gap: 12px; }
+.panel-zeile-nebeneinander .panel-zeile { flex: 1; }
+
+.fruehere-laeufe {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  max-height: 150px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+}
+.frueherer-lauf {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-light);
+}
+.frueherer-lauf:last-child { border-bottom: none; }
+.frueherer-lauf:hover, .frueherer-lauf:focus-visible { background: var(--surface-alt); }
+.frueherer-lauf-laeuft { color: var(--blue); font-style: italic; }
+
+/* ---------- Fortschritt (Simulation laeuft bis zu acht Minuten) ---------- */
+.fortschritt-huelle {
+  position: fixed;
+  inset: 0;
+  background: var(--schleier);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+}
+.fortschritt {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 26px 28px;
+  min-width: 380px;
+  text-align: center;
+  box-shadow: var(--schatten-2);
+}
+.fortschritt-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.fortschritt-schiene {
+  height: 6px;
+  background: var(--border-light);
+  border-radius: 3px;
+  margin: 16px 0;
+  overflow: hidden;
+}
+.fortschritt-schiene div {
+  height: 100%;
+  width: 0;
+  background: var(--blue);
+  transition: width .3s ease;
+}
+
+/* ---------- Etikett fuer einen Zustand ----------
+   Der Zustand steht fuer sich in einem kleinen farbigen Feld; was dazu zu
+   sagen ist (Kosten, Warnungen, Tag, Wetterjahr) folgt daneben in normaler
+   Schrift. Vorher war der ganze Satz eingefaerbt - bei mehreren Anlagen
+   untereinander wurde die Liste davon unruhig. */
+.etikett {
+  flex: 0 0 auto;
+  display: inline-block;
+  min-width: 84px;
+  text-align: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+.etikett-fertig  { background: var(--erfolg-tint);  color: var(--erfolg); }
+.etikett-warnung { background: var(--warning-tint); color: var(--warning); }
+.etikett-fehler  { background: var(--danger-tint);  color: var(--danger); }
+.etikett-offen   { background: var(--surface-alt); color: var(--text-secondary); }
+.etikett-laeuft  { background: var(--blue-tint); color: var(--blue); }
+
+.vorlage-wahl {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  margin: 7px 0;
+  cursor: pointer;
+}
+.vorlage-wahl input { margin-top: 3px; }
+
+.wetter-formular { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 18px; }
+.wetter-formular input[type="text"] {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface);
+}
+
+/* ================= Kleine Aktionsknoepfe und Loeschdialog =================
+   Stand bis zur Vereinheitlichung der Seiten in einer eigenen Datei
+   (loeschen.css), weil style.css damals parallel bearbeitet wurde. Der Grund
+   ist entfallen - und die Trennung hatte einen sichtbaren Preis: Die
+   Wetterseite band die Datei nie ein, dort war "Löschen" darum weder rot noch
+   standen die Knoepfe rechts in ihrer Spalte. */
+
+/* -- kleine Aktionsknoepfe (Umbenennen/Loeschen), ueberall wiederverwendet --
+   Gemessene Hoehe war 20px - unter dem, was sich noch bequem trifft. 7px/9px
+   Innenabstand ergibt rund 30px (plus Rahmen), ohne neben den Karten, denen
+   die Knoepfe zugeordnet sind, zu dominieren. */
+.knopf-mini {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  padding: 7px 9px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11.5px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.knopf-mini:hover { background: var(--surface-alt); border-color: var(--border-strong); color: var(--text); }
+.knopf-mini:disabled { opacity: .5; cursor: default; }
+.knopf-mini-gefahr { color: var(--danger); }
+.knopf-mini-gefahr:hover:not(:disabled) { background: var(--danger-tint); border-color: var(--danger); }
+
+/* Hauptknopf in Warnfarbe - fuer den "Löschen"-Knopf in
+   bestaetigenDialog(), derselbe Aufbau wie .knopf-haupt (style.css) nur mit
+   --danger statt --blue, weil ein blauer Knopf bei einer unumkehrbaren
+   Loeschung die falsche Handlung als die einladende zeigen wuerde. */
+.knopf-haupt-gefahr {
+  border: 1px solid var(--danger);
+  background: var(--danger);
+  color: var(--auf-farbe);
+  border-radius: var(--radius-sm);
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+}
+.knopf-haupt-gefahr:hover { background: var(--danger-hover); border-color: var(--danger-hover); }
+
+.eintrag-aktionen { display: flex; flex-wrap: wrap; gap: 6px; flex-shrink: 0; }
+
+/* Die Regeln fuer die alte Anlagen-Kachel (.anlage-eintrag/.anlage-karte,
+   230px breit, mit Fusszeile) sind mit der Umstellung auf Zeilen entfallen -
+   was von ihnen bleibt, steht als .anlage-zeile in style.css. */
+
+/* -- Loeschbestaetigung: die Auskunft, was verloren geht -- */
+.dialog-text { font-size: 13px; line-height: 1.5; margin: 0 0 6px; }
+.dialog-text-verlust { color: var(--text-secondary); }
+
+/* -- Frueherer Lauf: eigener Loeschknopf rechts neben Kosten/Status -- */
+.frueherer-lauf-rechts { display: flex; align-items: center; gap: 8px; }
+
+/* -- Beruehrungsziele (Finger statt Maus) --------------------------------
+   Apples Richtwert ist 44 Punkte Kantenlaenge. Am Schreibtisch bleiben die
+   Knoepfe kompakt: "pointer: coarse" trifft nur Geraete ohne praezisen
+   Zeiger, nicht ein schmales Mausfenster. Nur das Innenmass waechst, nicht
+   Schrift oder Rahmenfarbe - dieselbe Optik, groessere Trefferflaeche.
+
+   Muss ans ENDE dieser Datei, nach den unbedingten Knopfregeln oben: bei
+   gleicher Spezifitaet gewinnt die spaetere Regel, und eine Vergroesserung
+   weiter vorn bliebe wirkungslos. Die Bedienelemente des Editors
+   (Palette, Parameterfelder, Kopfleiste) stehen in editor.css. -- */
+@media (pointer: coarse) {
+  .knopf-haupt,
+  .knopf-sekundaer,
+  .dialog-knoepfe button,
+  .fortschritt button {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+  .knopf-mini {
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+  .knopf-haupt-gefahr {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+}

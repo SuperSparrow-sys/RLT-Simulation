@@ -41,6 +41,11 @@ from core.vorlagen.bauhilfe import (
 )
 
 NAME = "Museum und Archiv"
+#: Wohin die Anlage im Katalog gehoert (siehe core/vorlagen/__init__.py,
+#: alle()). Drei Gruppen statt zehn Einzelbezeichnungen: Zwoelf Karten in
+#: einer Reihe sind kein Katalog, und eine Gruppe je Anlage waere keine
+#: Gliederung, sondern dieselbe Reihe mit Ueberschriften.
+GRUPPE = "Komfortlüftung"
 BESCHREIBUNG = (
     "800 m² Ausstellung und Depot, enges Feuchteband in beide Richtungen: "
     "Dampfbefeuchter im Winter, Entfeuchtung über den Kühler im Sommer, 24/7"

@@ -5,36 +5,44 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Bausteine – RLT-Simulation</title>
   <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/grundlage.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/bedienelemente.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/listen.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/bausteine.css') }}">
 </head>
 <body>
   <div id="fehlermeldung" class="fehlermeldung" role="alert" aria-live="assertive" hidden></div>
 
-  <div class="lehre">
-    <header class="leiste">
-      <a class="zurueck-knopf" href="{{ url_for('pages.index') }}" title="Zur Startseite">{% include "bedienzeichen/pfeil-links.svg" %}Start</a>
-      <span class="titel">Bausteine</span>
-    </header>
+  <div class="seite">
+    {% with aktiv = "bausteine" %}{% include "navigation.html" %}{% endwith %}
 
-    <main class="lehre-haupt">
-      <p class="lehre-einleitung">
-        Eine Lüftungsanlage wird hier aus Karten zusammengesteckt. Jede Karte
-        steht für ein Bauteil oder eine Regelfunktion; ein Pfeil zwischen zwei
-        Karten verbindet ihre Anschlüsse. Diese Seite erklärt jeden der 34
-        Kartentypen und lässt sich zu jedem eine kleine, fertig verdrahtete
-        Beispielanlage anlegen, die genau diese eine Karte in ihrem
-        natürlichen Zusammenhang zeigt.
-      </p>
+    <main class="seite-haupt">
+      <div class="seiten-kopf">
+        <h1 class="seiten-titel">Bausteine</h1>
+        <p class="seiten-einleitung">
+          Eine Lüftungsanlage wird hier aus Karten zusammengesteckt. Jede Karte
+          steht für ein Bauteil oder eine Regelfunktion; ein Pfeil zwischen zwei
+          Karten verbindet ihre Anschlüsse. Diese Seite erklärt alle
+          {{ anzahl }} Kartentypen und legt zu jedem eine kleine, fertig
+          verdrahtete Beispielanlage an, die genau diese eine Karte in ihrem
+          natürlichen Zusammenhang zeigt.
+        </p>
+      </div>
 
-      <nav class="lehre-inhalt" id="lehre-inhalt" aria-label="Inhalt"></nav>
+      {# Serverseitig gefuellt (routes/lehre.py: seite()) - wie das
+         Inhaltsverzeichnis darunter. #}
+      <nav class="lehre-inhalt" id="lehre-inhalt" aria-label="Inhalt">
+        {% for gruppe, anker, liste in gruppen %}
+        <a href="#{{ anker }}">{{ gruppe }} ({{ liste | length }})</a>
+        {% endfor %}
+      </nav>
 
       <section class="lehre-abschnitt" id="abschnitt-handgriffe">
-        <h1 class="abschnitt-titel">Handgriffe</h1>
+        <h2 class="abschnitt-titel">Handgriffe</h2>
         <div class="lehre-handgriffe">
 
           <article class="handgriff">
-            <h2>Karten verbinden</h2>
+            <h3>Karten verbinden</h3>
             <p id="handgriff-verbinden">
               Karte überfahren, den Punkt an ihrem Rand auf die Zielkarte
               ziehen – oder mit Umschalt+Ziehen von einer Karte direkt zur
@@ -48,7 +56,7 @@
           </article>
 
           <article class="handgriff">
-            <h2>Einen Regler auf seinen Sollwert stellen</h2>
+            <h3>Einen Regler auf seinen Sollwert stellen</h3>
             <p>
               Ein Regler vergleicht immer einen Istwert mit einem Sollwert.
               Beide lassen sich auf zwei Wegen setzen: als fester Wert im
@@ -67,7 +75,7 @@
           </article>
 
           <article class="handgriff">
-            <h2>Den Datenlogger einbauen</h2>
+            <h3>Den Datenlogger einbauen</h3>
             <p>
               Der Datenlogger hat zehn gleichartige Anschlüsse, aber jeder
               davon ist erst benutzbar, sobald er im Parameterfenster einen
@@ -81,10 +89,11 @@
           </article>
 
           <article class="handgriff">
-            <h2>An Wetterdaten kommen</h2>
+            <h3>An Wetterdaten kommen</h3>
             <p>
-              Ein Simulationslauf braucht immer einen Wetterdatensatz. Auf der
-              Startseite lässt sich der Ordner eines Testreferenzjahres
+              Ein Simulationslauf braucht immer einen Wetterdatensatz. Unter
+              <a href="{{ url_for('pages.wetter') }}">Wetterdaten</a> lässt sich
+              der Ordner eines Testreferenzjahres
               hochladen, so wie ihn der DWD ausliefert: die .dat-Dateien darin
               werden gefunden, auch in Unterordnern, und einzeln zum Import
               angeboten. Ebenso gelesen werden .xls, .xlsx und .csv im Format
@@ -96,7 +105,7 @@
           </article>
 
           <article class="handgriff">
-            <h2>Das Ergebnis eines Laufs lesen</h2>
+            <h3>Das Ergebnis eines Laufs lesen</h3>
             <p>
               Nach einem Lauf zeigt der Editor die Jahresbilanz – Wärme,
               Kälte, Strom, Wasser und die daraus errechneten Kosten – sowie
@@ -111,9 +120,62 @@
       </section>
 
       <section class="lehre-abschnitt" id="abschnitt-bausteine">
-        <h1 class="abschnitt-titel">Bausteine</h1>
+        <h2 class="abschnitt-titel">Kartentypen</h2>
+        {# Serverseitig gefuellt (routes/lehre.py: seite()). Vorher baute
+           static/js/bausteine.js diese Kacheln nach dem Laden aus
+           /api/lehre/bausteine - bis die Antwort da war, stand hier
+           "Bausteine werden geladen ...". Das Skript haengt jetzt nur noch den
+           Knopf "Beispielanlage oeffnen" an die fertigen Kacheln. #}
         <div id="lehre-gruppen">
-          <p class="leerhinweis">Bausteine werden geladen …</p>
+          {% for gruppe, anker, liste in gruppen %}
+          <div class="lehre-gruppe" id="{{ anker }}">
+            <h3 class="lehre-gruppe-titel">{{ gruppe }}</h3>
+
+            {% for b in liste %}
+            <div class="baustein-karte" id="baustein-{{ b.kennung }}">
+              <div class="baustein-kopf">
+                <span class="baustein-name">{{ b.name }}</span>
+                <span class="baustein-kennung">{{ b.kennung }}</span>
+              </div>
+              <p class="baustein-beschreibung">{{ b.beschreibung }}</p>
+              {% if b.hinweis %}<p class="baustein-hinweis">{{ b.hinweis }}</p>{% endif %}
+
+              <div class="baustein-details">
+                <div class="baustein-details-block">
+                  <p class="baustein-details-titel">Anschlüsse</p>
+                  <ul>
+                    {% for port in b.ports %}
+                    {# Eine Zeile, ohne Umbruch im Text: "Signal," und
+                       "Eingang" gehoeren zusammen, und ein Zeilenumbruch
+                       dazwischen landet als Leerraum im ausgelieferten HTML. #}
+                    <li><span class="baustein-anschluss-art {{ port.art }}"></span>{{ port.label or port.schluessel }} – {{ art_label.get(port.art, port.art) }}, {{ richtung_label.get(port.richtung, port.richtung) }}</li>
+                    {% else %}
+                    <li>– keine –</li>
+                    {% endfor %}
+                  </ul>
+                </div>
+                <div class="baustein-details-block">
+                  <p class="baustein-details-titel">Parameter</p>
+                  <ul>
+                    {% for feld in b.parameter %}
+                    <li>{{ feld.label }}{% if feld.einheit and feld.einheit != "-" %} ({{ feld.einheit }}){% endif %}{%
+                      if feld.hinweis %}<span class="baustein-parameter-hinweis">{{ feld.hinweis }}</span>{% endif %}</li>
+                    {% else %}
+                    <li>– keine –</li>
+                    {% endfor %}
+                  </ul>
+                </div>
+              </div>
+
+              <div class="baustein-fuss">
+                <button class="baustein-beispiel-knopf" data-kennung="{{ b.kennung }}"
+                        {% if not b.beispiel_verfuegbar %}disabled{% endif %}>Beispielanlage öffnen</button>
+                <span class="baustein-beispiel-status">{% if not b.beispiel_verfuegbar %}Noch keine Beispielanlage{% endif %}</span>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% endfor %}
         </div>
       </section>
     </main>

@@ -1,7 +1,11 @@
-/* Erklärbereich (/bausteine): lädt die Kartentypen samt Erklärtext von
-   /api/lehre/bausteine und zeigt sie gruppiert an. Ein Klick auf "Beispiel-
-   anlage öffnen" legt über /api/lehre/bausteine/<kennung>/anlage eine neue
-   Anlage an und wechselt in den Editor.
+/* Erklärbereich (/bausteine): verdrahtet den Knopf "Beispielanlage öffnen".
+
+   Die Kacheln selbst stehen schon in der Seite (templates/bausteine.html,
+   gefüllt in routes/lehre.py: seite()). Dieses Skript baute sie bis zum Umbau
+   der Oberfläche im Browser und holte sich die Kartentypen dafür erst nach dem
+   Laden über /api/lehre/bausteine - bis die Antwort da war, stand auf der
+   Seite "Bausteine werden geladen …", und in keinem Abzug der Seite war ihr
+   eigentlicher Inhalt zu sehen.
 
    Eigenständiges Modul, wie schon start.js: diese Seite lädt weder editor.js
    noch panel.js noch pfeile.js, ein stiller Aufruf einer nur dort
@@ -16,60 +20,9 @@ function zeigeFehler(nachricht) {
   zeigeFehler.timer = window.setTimeout(() => { leiste.hidden = true; }, 5000);
 }
 
-const ART_LABEL = { luft: "Luft", signal: "Signal" };
-const RICHTUNG_LABEL = { ein: "Eingang", aus: "Ausgang" };
-
-/* port.label kommt von der Karte selbst (core.bausteine.basis.port_label) -
-   dieselbe Beschriftung wie im Parameterfenster des Editors. Vorher stand hier
-   der rohe Schluessel ("QH_S – Signal, Eingang"), den nur versteht, wer die
-   Excel-Vorlage kennt. */
-function anschlussZeile(port) {
-  const li = document.createElement("li");
-  const punkt = document.createElement("span");
-  punkt.className = `baustein-anschluss-art ${port.art}`;
-  li.appendChild(punkt);
-  const art = ART_LABEL[port.art] || port.art;
-  const richtung = RICHTUNG_LABEL[port.richtung] || port.richtung;
-  li.appendChild(
-    document.createTextNode(`${port.label || port.schluessel} – ${art}, ${richtung}`)
-  );
-  return li;
-}
-
-function parameterZeile(feld) {
-  const li = document.createElement("li");
-  const einheit = feld.einheit && feld.einheit !== "-" ? ` (${feld.einheit})` : "";
-  li.appendChild(document.createTextNode(`${feld.label}${einheit}`));
-  /* Der Erklaersatz der Karte (Param.hinweis) - dieselbe Quelle wie im
-     Parameterfenster, damit beide Orte nicht auseinanderlaufen. */
-  if (feld.hinweis) {
-    const hinweis = document.createElement("span");
-    hinweis.className = "baustein-parameter-hinweis";
-    hinweis.textContent = feld.hinweis;
-    li.appendChild(hinweis);
-  }
-  return li;
-}
-
-function detailsBlock(titel, elemente) {
-  const block = document.createElement("div");
-  block.className = "baustein-details-block";
-  const kopf = document.createElement("p");
-  kopf.className = "baustein-details-titel";
-  kopf.textContent = titel;
-  block.appendChild(kopf);
-  const liste = document.createElement("ul");
-  if (!elemente.length) {
-    const li = document.createElement("li");
-    li.textContent = "– keine –";
-    liste.appendChild(li);
-  } else {
-    elemente.forEach((el) => liste.appendChild(el));
-  }
-  block.appendChild(liste);
-  return block;
-}
-
+/* Legt die Beispielanlage zu einer Karte an und wechselt in den Editor. Sie
+   entsteht erst beim Klick, nicht im Voraus: eine Anlage, die niemand sehen
+   wollte, hätte in der Projektliste nichts zu suchen. */
 async function beispielanlageAnlegen(kennung, knopf, statusfeld) {
   knopf.disabled = true;
   statusfeld.textContent = "Wird angelegt …";
@@ -85,109 +38,14 @@ async function beispielanlageAnlegen(kennung, knopf, statusfeld) {
   }
 }
 
-function bausteinKarteElement(baustein) {
-  const div = document.createElement("div");
-  div.className = "baustein-karte";
-  div.id = `baustein-${baustein.kennung}`;
-
-  const kopf = document.createElement("div");
-  kopf.className = "baustein-kopf";
-  const name = document.createElement("span");
-  name.className = "baustein-name";
-  name.textContent = baustein.name;
-  kopf.appendChild(name);
-  const kennung = document.createElement("span");
-  kennung.className = "baustein-kennung";
-  kennung.textContent = baustein.kennung;
-  kopf.appendChild(kennung);
-  div.appendChild(kopf);
-
-  const beschreibung = document.createElement("p");
-  beschreibung.className = "baustein-beschreibung";
-  beschreibung.textContent = baustein.beschreibung;
-  div.appendChild(beschreibung);
-
-  if (baustein.hinweis) {
-    const hinweis = document.createElement("p");
-    hinweis.className = "baustein-hinweis";
-    hinweis.textContent = baustein.hinweis;
-    div.appendChild(hinweis);
-  }
-
-  const details = document.createElement("div");
-  details.className = "baustein-details";
-  details.appendChild(
-    detailsBlock("Anschlüsse", baustein.ports.map(anschlussZeile))
-  );
-  details.appendChild(
-    detailsBlock("Parameter", baustein.parameter.map(parameterZeile))
-  );
-  div.appendChild(details);
-
-  const fuss = document.createElement("div");
-  fuss.className = "baustein-fuss";
-  const knopf = document.createElement("button");
-  knopf.className = "baustein-beispiel-knopf";
-  knopf.textContent = "Beispielanlage öffnen";
-  const statusfeld = document.createElement("span");
-  statusfeld.className = "baustein-beispiel-status";
-  if (baustein.beispiel_verfuegbar) {
+/* Ein Knopf ohne Beispielanlage ist schon in der Vorlage deaktiviert - er
+   bekommt hier gar keine Handlung, statt eine, die nur absagt. */
+window.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll(".baustein-beispiel-knopf[data-kennung]").forEach((knopf) => {
+    if (knopf.disabled) return;
+    const statusfeld = knopf.parentElement.querySelector(".baustein-beispiel-status");
     knopf.addEventListener("click", () =>
-      beispielanlageAnlegen(baustein.kennung, knopf, statusfeld)
+      beispielanlageAnlegen(knopf.dataset.kennung, knopf, statusfeld)
     );
-  } else {
-    knopf.disabled = true;
-    statusfeld.textContent = "Noch keine Beispielanlage";
-  }
-  fuss.append(knopf, statusfeld);
-  div.appendChild(fuss);
-
-  return div;
-}
-
-function gruppenAnker(gruppe) {
-  return `gruppe-${gruppe.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-}
-
-async function laden() {
-  const bereich = document.getElementById("lehre-gruppen");
-  const inhalt = document.getElementById("lehre-inhalt");
-  let bausteine;
-  try {
-    const antwort = await fetch("/api/lehre/bausteine");
-    if (!antwort.ok) throw new Error();
-    bausteine = await antwort.json();
-  } catch {
-    bereich.textContent = "";
-    zeigeFehler("Bausteine konnten nicht geladen werden.");
-    return;
-  }
-
-  const gruppen = new Map();
-  for (const b of bausteine) {
-    if (!gruppen.has(b.gruppe)) gruppen.set(b.gruppe, []);
-    gruppen.get(b.gruppe).push(b);
-  }
-
-  bereich.textContent = "";
-  inhalt.textContent = "";
-
-  for (const [gruppe, liste] of gruppen) {
-    const link = document.createElement("a");
-    link.href = `#${gruppenAnker(gruppe)}`;
-    link.textContent = `${gruppe} (${liste.length})`;
-    inhalt.appendChild(link);
-
-    const abschnitt = document.createElement("div");
-    abschnitt.className = "lehre-gruppe";
-    abschnitt.id = gruppenAnker(gruppe);
-    const titel = document.createElement("h2");
-    titel.className = "lehre-gruppe-titel";
-    titel.textContent = gruppe;
-    abschnitt.appendChild(titel);
-    liste.forEach((b) => abschnitt.appendChild(bausteinKarteElement(b)));
-    bereich.appendChild(abschnitt);
-  }
-}
-
-laden();
+  });
+});

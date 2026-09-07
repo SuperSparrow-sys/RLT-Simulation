@@ -50,6 +50,11 @@ WOCHENTAGE = ("montag", "dienstag", "mittwoch", "donnerstag", "freitag",
 WERKTAGE = WOCHENTAGE[:5]
 
 NAME = "Krankenhaus, OP-Bereich"
+#: Wohin die Anlage im Katalog gehoert (siehe core/vorlagen/__init__.py,
+#: alle()). Drei Gruppen statt zehn Einzelbezeichnungen: Zwoelf Karten in
+#: einer Reihe sind kein Katalog, und eine Gruppe je Anlage waere keine
+#: Gliederung, sondern dieselbe Reihe mit Ueberschriften.
+GRUPPE = "Sonderbau"
 BESCHREIBUNG = (
     "300 m² OP und Nebenräume, 100 % Außenluft ohne Umluft, "
     "6,7-facher Luftwechsel, Befeuchtung, Dauerbetrieb"

@@ -1,191 +1,12 @@
-/* RLT-Simulation - Oberflaeche eines Fachwerkzeugs, kein Verbraucherprodukt.
-   Ruhig, dicht, klare Hierarchie. Alle Farben stehen hier als Variablen -
-   keine Regel darunter schreibt eine Farbe fest. Stilfamilie an
-   ~/projekte/kapa-planung angelehnt, aber zurueckhaltender: keine Pillenknoepfe,
-   keine Farbverlaeufe, keine Animation ohne Zweck. */
+/* RLT-Simulation - Der Schreibtisch (nur /anlage/<id>).
 
-:root {
-  --bg: #f8f9fa;
-  --surface: #ffffff;
-  --surface-alt: #f1f3f4;
-  --border: #dadce0;
-  --border-light: #e8eaed;
-  --border-strong: #b0b6bd;
+   Palette, Leinwand, Karten, Anschluesse, Pfeile, Parameterfenster,
+   Minikarte und die Kopfleiste des Editors. Die einzige Seite, die wirklich
+   ein Programm im Browser ist - und die einzige, die diese Datei laedt.
 
-  --text: #3c4043;
-  --text-secondary: #5f6368;
-  --text-tertiary: #80868b;
+   Wird als letzte eingebunden, nach grundlage.css, bedienelemente.css und
+   listen.css. */
 
-  --blue: #1a73e8;
-  --blue-hover: #1765cc;
-  --blue-tint: #e8f0fe;
-
-  --danger: #d93025;
-  --danger-tint: #fce8e6;
-
-  --warning: #b06000;
-  --warning-tint: #fef7e0;
-
-  --auf-farbe: #ffffff;
-  --schleier: rgba(32, 33, 36, .5);
-  --schleier-hell: rgba(255, 255, 255, .3);
-
-  /* Verbindungsarten auf der Leinwand: Luft, Signal und Energie sind drei
-     verschiedene Bedeutungen und muessen sich auch ohne Farbsinn allein an
-     Strichstaerke und Strichmuster unterscheiden lassen (siehe .pfeil-*
-     weiter unten) - die Farbe hier ist Verstaerkung, nicht der einzige
-     Traeger. */
-  --luft: #1a73e8;
-  /* Die fuenf Luftarten (core/bausteine/basis.py: AUSSENLUFT, ZULUFT,
-     ABLUFT, FORTLUFT, UMLUFT). Farbe UND Strichmuster unterscheiden sie
-     (siehe .pfeil-luft-* weiter unten) - im Schwarzweissdruck und ohne
-     Farbsinn traegt das Muster allein. Die Toene folgen der ueblichen
-     Lesart im Lueftungsbau: Aussenluft kuehl/gruenblau, Zuluft blau,
-     Abluft warm/orange, Fortluft braun (verbraucht), Umluft violett
-     (kreist im Haus). */
-  --luft-aussen: #00838f;
-  --luft-zu: #1a73e8;
-  --luft-ab: #e37400;
-  --luft-fort: #8d5a1b;
-  --luft-um: #8430ce;
-  --signal: #5f6368;
-  --energie: #146c2e;
-  --energie-tint: #e6f4ea;
-
-  /* Eine Farbe je Palettengruppe (siehe palette.js "reihenfolge" und
-     editor.js GRUPPEN_KLASSE) - immer zusammen mit dem Gruppennamen als
-     Text verwendet, nie als einzige Auskunft (siehe .karte-gruppenstreifen
-     weiter unten). */
-  --gruppe-luftbehandlung: #1a73e8;
-  --gruppe-verteilung: #8430ce;
-  --gruppe-raeume: #e37400;
-  --gruppe-regelung: #146c2e;
-  --gruppe-zeit: #5f6368;
-  --gruppe-quellen: #00838f;
-  --gruppe-verbraucher: #b06000;
-  --gruppe-sonstige: #9aa0a6;
-
-  --radius-sm: 5px;
-  --radius: 8px;
-  --radius-lg: 10px;
-
-  --schatten-1: 0 1px 2px rgba(60, 64, 67, .18), 0 1px 3px 1px rgba(60, 64, 67, .10);
-  --schatten-2: 0 4px 16px rgba(60, 64, 67, .22), 0 1px 3px rgba(60, 64, 67, .15);
-
-  --font-body: Roboto, Arial, sans-serif;
-  --font-mono: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace;
-
-  /* Lesebreite fuer Fliesstext-Einleitungen (Startseite, /bausteine) - ein
-     einziger Wert statt je Seite ihr eigenes ch-Mass, damit beide gleich
-     breit umbrechen. 80ch ist die uebliche obere Grenze fuer eine gut lesbare
-     Zeile; die engeren Werte davor (62ch/68ch) wirkten neben den deutlich
-     breiteren Kaesten darunter zufaellig schmal. */
-  --lesebreite: 80ch;
-}
-
-* { box-sizing: border-box; }
-
-/* Das hidden-Attribut muss immer gewinnen, egal welche Klasse hinterher
-   noch ein display setzt (z.B. .fehlermeldung/.panel-zeile mit display:flex)
-   - sonst bleibt ein per hidden ausgeblendetes Element trotzdem sichtbar,
-   weil eine gleich spezifische Klassenregel spaeter im Stylesheet steht und
-   das UA-Standardverhalten [hidden]{display:none} verdraengt. Diese Regel
-   gilt bewusst fuer die ganze Seite, nicht nur an einer Fundstelle. */
-[hidden] { display: none !important; }
-
-html, body {
-  margin: 0;
-  height: 100%;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-body);
-  font-size: 14px;
-  line-height: 1.4;
-  /* Verhindert das Gummiband-Ueberschwingen am Rand eines Bereichs, der
-     tatsaechlich scrollt (Startseite, /bausteine, Palette, Parameterfenster)
-     - schaltet aber NICHT das Scrollen selbst ab (dafuer siehe
-     .seite-editor weiter unten). overscroll-behavior regelt nur, ob ein
-     ausgeschoepfter innerer Scrollbereich seinen Überschuss an den
-     naechsten Vorfahren weiterreicht, nicht, ob html/body selbst ein
-     natives Wischziel sind - genau das war der eigentliche Fehler auf der
-     Editorseite: html/body blieben ohne eigenes overflow ganz normal
-     scrollbar, jeder Wisch, der nirgendwo lokal "verbraucht" wurde (leere
-     Kopfleiste, ein Parameterfenster ohne eigenen Ueberlauf, ...) bewegte
-     also die Seite selbst - unabhaengig von overscroll-behavior. */
-  overscroll-behavior: none;
-}
-
-/* ---------- Editorseite: keine Seite zum Scrollen ----------
-   Siehe Task ("Es scrollt weiterhin, nach rechts und nach unten") und
-   Kommentar oben: overscroll-behavior allein schaltet nur das
-   Ueberschwingen ab, nicht die Scrollbarkeit von html/body selbst. Der
-   direkte, von der Fenstergroesse/Zoomstufe/Werkzeugleiste unabhaengige Weg
-   ist, html/body auf der Editorseite gar keine Scrollflaeche mehr sein zu
-   lassen: position:fixed + inset 0 + overflow:hidden. position:fixed statt
-   nur overflow:hidden, weil overflow:hidden allein auf iOS Safari bekannt
-   unzuverlaessig ist, sobald die Seite mit zwei Fingern aufgezogen wurde
-   (die Seite bleibt dann trotzdem wischbar) - die Kombination aus beidem
-   ist der in der Praxis verlaessliche Weg ("iOS body scroll lock").
-   .seite-editor steht auf <html> UND <body> (siehe templates/editor.html) -
-   beide muessen feststehen, sonst bleibt der jeweils andere die
-   Scroll-Wurzel. NUR die Editorseite traegt diese Klasse: Startseite,
-   /bausteine und die Fehlerseite sollen weiterhin ganz normal scrollen
-   (siehe .start/.lehre - unveraendert scrollbar). */
-html.seite-editor,
-body.seite-editor {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-}
-/* Ueberlagerungen, die auf allen vier Seiten vorkommen (Dialoge,
-   Fehlerleiste), aber nur hier - auf der festgesetzten Editorseite -
-   keine eigene Kneifgeste anbieten sollen (siehe Task, "der zweite Weg"
-   und Kommentar bei .fehlermeldung). Auf Startseite/Bausteine bleibt die
-   Voreinstellung "auto" bestehen - dort ist Aufziehen ausdruecklich
-   erlaubt. */
-body.seite-editor .dialog-huelle,
-body.seite-editor .fehlermeldung,
-body.seite-editor .hinweismeldung {
-  touch-action: none;
-}
-/* Auf der Editorseite unterhalb der Kopfleiste (52 Punkte hoch, siehe
-   .leiste) statt darueber: sonst verdeckt eine Meldung den Anlagennamen
-   und die Knoepfe, ueber die sie gerade spricht. */
-body.seite-editor .fehlermeldung,
-body.seite-editor .hinweismeldung { top: 64px; }
-
-h1, h2, h3, p { margin: 0; }
-
-/* ---------- Tastaturfokus ----------
-   Sichtbar bei Tastaturbedienung, nicht bei einem Mausklick - so bleibt die
-   Oberflaeche ruhig, ohne den Fokus zu verstecken. Ein einziges, kraeftiges
-   Muster fuer alle interaktiven Elemente statt verstreuter Einzelregeln. */
-a, button, input, select, textarea, summary, [tabindex] {
-  outline: none;
-}
-a:focus-visible,
-button:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible,
-summary:focus-visible,
-[tabindex]:focus-visible,
-.palette-eintrag:focus-visible {
-  outline: 2px solid var(--blue);
-  outline-offset: 2px;
-  border-radius: var(--radius-sm);
-}
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
-  outline-offset: -1px;
-  border-color: var(--blue);
-}
 
 /* 100dvh statt 100vh: auf iOS zaehlt 100vh die Hoehe MIT eingefahrener
    Werkzeugleiste, also mehr, als gerade wirklich zu sehen ist - der
@@ -216,6 +37,13 @@ textarea:focus-visible {
   padding: env(safe-area-inset-top) env(safe-area-inset-right)
            env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
+
+.buehne { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
+
+/* Nur die Kopfleiste DES EDITORS: keine native Kneifgeste (Seiten-Zoom) -
+   siehe Kommentar bei .palette, derselbe zweite Weg, hier ohne eigenen
+   Scrollinhalt, deshalb reicht touch-action allein. */
+.app .leiste { touch-action: none; }
 
 /* ---------- Palette ---------- */
 .palette {
@@ -288,133 +116,7 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
-/* ---------- Buehne / Kopfleiste ---------- */
-.buehne { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
-.leiste {
-  height: 52px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 0 16px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border-light);
-}
-/* Nur die Kopfleiste DES EDITORS (.app .leiste, nicht das gleichnamige
-   .leiste auf Startseite/Bausteine/Fehlerseite - dort bleibt die native
-   Kneifgeste des Browsers erlaubt, diese Seiten sind nicht festgesetzt):
-   keine native Kneifgeste (Seiten-Zoom) - siehe Kommentar bei .palette
-   weiter oben, derselbe zweite Weg, hier ohne eigenen Scrollinhalt, deshalb
-   "none" statt "pan-y". */
-.app .leiste { touch-action: none; }
-.titel {
-  font-size: 15px;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
-/* ---------- Kopfleiste des Editors: eine Formensprache ----------
-   Die Leiste war ueber viele Schritte gewachsen - ein Textlink, drei
-   Knopfarten, ein <details>, ein gefuellter Hauptknopf, zuletzt zwei runde
-   Zeichenknoepfe: verschiedene Formen, verschiedene Gewichte, keine
-   erkennbare Ordnung. Sie folgt jetzt drei Regeln:
-
-   1. ALLE Bedienelemente der Leiste haben DIESELBE Grundform: gleiche
-      Hoehe, gleicher Radius, gleicher Rahmen, gleiche Schrift
-      (.leiste-knopf - dazu .zurueck-knopf und die Zusammenfassung der
-      Legende, die aus aelteren Gruenden keine eigene Klasse tragen).
-      .zurueck-knopf gilt auf ALLEN Seiten, die einen Weg zurueck haben
-      (Editor, Bausteine, Bericht): der Rueckweg sah frueher auf jeder der
-      drei anders aus - Pille, flacher Textlink, flacher Textlink -, obwohl
-      er ueberall dasselbe tut.
-   2. Sie unterscheiden sich in DREI Stufen: rund mit genau einem Zeichen
-      (ein Handgriff - zurueck, umbenennen, rueckgaengig, wiederholen,
-      einpassen), Pille mit einem Wort (ein benannter Weg - Verbindungen,
-      Palette, Parameter, Bericht, Vergleich), und genau EINE gefuellte
-      Pille fuer den Zweck der Seite (Simulieren).
-   3. Sie stehen in Gruppen, durch einen schmalen Strich getrennt: ORT,
-      BEARBEITUNG, ANSICHT - und ganz rechts das ERGEBNIS.
-
-   Alles ist mindestens 36 Punkte hoch, mit Finger 44 (siehe @media
-   (pointer: coarse) weiter unten) - Apples Richtwert, denselben, den die
-   uebrigen Knoepfe des Programms schon einhalten. */
-.leiste-knopf,
-.zurueck-knopf,
-.legende summary {
-  box-sizing: border-box;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 14px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--text);
-  font-family: inherit;
-  font-size: 13px;
-  line-height: 1;
-  white-space: nowrap;
-  text-decoration: none;
-  cursor: pointer;
-  flex-shrink: 0;
-  user-select: none;
-}
-.leiste-knopf:hover,
-.zurueck-knopf:hover,
-.legende summary:hover {
-  background: var(--surface-alt);
-  border-color: var(--border-strong);
-}
-.leiste-knopf:disabled,
-.leiste-knopf[aria-disabled="true"] {
-  opacity: .45;
-  cursor: default;
-  pointer-events: none;
-}
-/* Schiebt alles Folgende ans rechte Ende der Leiste (Startseite: Titel links,
-   Wege hinaus rechts - wie im Editor der Ort links und das Ergebnis rechts). */
-.leiste-fueller { flex: 1; }
-/* Rund: Breite = Hoehe, genau ein Zeichen. */
-.leiste-knopf-rund { width: 36px; padding: 0; }
-/* Jedes Zeichen der Leiste ist eine gezeichnete SVG, kein Schriftzeichen -
-   Stift, Pfeile & Co. sehen dadurch auf jedem Geraet gleich aus, statt von
-   der Emoji-Schrift des Browsers abzuhaengen (der Stift als U+270E etwa
-   gewinnt in den meisten Browsern bunt aus der Emoji-Schrift, auch mit
-   angehaengtem Textwaehler U+FE0E - nachgestellt und nachgesehen).
-   currentColor macht jede SVG in Farbe und Abblendung vom eigenen Knopf
-   abhaengig, dieselbe Strichstaerke fuer alle. */
-.knopf-symbol {
-  width: 15px;
-  height: 15px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.3;
-  stroke-linejoin: round;
-  stroke-linecap: round;
-}
-/* Ohne eigenen Rahmen - fuer den Stift neben dem Anlagennamen, der zum
-   Namen gehoert und nicht als eigener Knopf daneben stehen soll. */
-.leiste-knopf-still { border-color: transparent; background: none; }
-.leiste-knopf-still:hover { border-color: var(--border); }
-/* Die eine gefuellte Pille: der Zweck der Seite. */
-.leiste-knopf-haupt {
-  border-color: var(--blue);
-  background: var(--blue);
-  color: var(--auf-farbe);
-  font-weight: 500;
-  padding: 0 18px;
-}
-.leiste-knopf-haupt:hover { background: var(--blue-hover); border-color: var(--blue-hover); }
-.leiste-knopf-haupt:disabled {
-  background: var(--border);
-  border-color: var(--border);
-  color: var(--text-tertiary);
-  opacity: 1;
-}
 
 .leiste-gruppe {
   display: flex;
@@ -461,80 +163,109 @@ textarea:focus-visible {
    dieselbe .zurueck-knopf, haben aber die ganze Breite - dort waere ein auf
    36 Punkte geschrumpfter Knopf ohne Not raetselhaft (und sein Wort liefe
    aus dem Knopf heraus). */
-@media (max-width: 1400px) {
-  .app .knopf-wort { display: none; }
-  .app .zurueck-knopf,
-  .legende summary { width: 36px; padding: 0; }
-}
-@media (max-width: 1100px) {
-  .app .leiste { gap: 8px; padding: 0 8px; }
-  .leiste-gruppe { gap: 5px; }
-  .anlagenname-zeile { gap: 4px; }
-  /* Die Gruppen stehen dann eng genug beieinander, dass die Striche mehr
-     Platz kosten als sie ordnen. */
-  .leiste-trenner { display: none; }
-}
+/* Kein Glied der Leiste schrumpft unter sein eigenes Wort. Es weicht lieber
+   ganz ins Ausweichmenue (static/js/editor-leiste.js) - vorher quetschten
+   sich die Knoepfe ineinander, und "Parameter" stand als "Pa" da, waehrend
+   "Bericht" darueber lag. Der Anlagenname ist das EINZIGE Glied, das
+   mitschrumpft; er endet dann mit "...". */
+.app .leiste > *,
+.app .leiste-gruppe > * { flex-shrink: 0; }
+/* Der Name ist das einzige Glied, das mitschrumpft - aber nicht ins Nichts:
+   Unter 110 Punkten steht dort nur noch "A...". Der Boden ist zugleich das
+   Mass, an dem die Leiste ihren Ueberlauf ueberhaupt bemerkt: Ohne ihn
+   schluckt der Name jede fehlende Breite, und editor-leiste.js faende nie
+   einen Grund, eine Stufe tiefer zu gehen. */
+.app .leiste .anlagenname-zeile { flex-shrink: 1; min-width: 110px; }
+.app .leiste { overflow: hidden; }
+
+/* ---- Die vier Stufen ----
+   data-stufe steht auf der Leiste selbst und kommt von
+   static/js/editor-leiste.js. KEINE Medienabfrage: Die Leiste ist so breit
+   wie die Buehne, nicht wie das Fenster - bei 820 Punkten Fensterbreite
+   nahmen Palette und Parameterfenster 460 davon, und die Leiste hatte 360.
+   Eine Regel nach Fensterbreite haette ihr Wohlbefinden an einer Zahl
+   gemessen, die sie gar nicht betrifft.
+
+     voll       alles mit Wort, Trennstriche zwischen den Gruppen
+     zeichen    die linken Knoepfe legen ihr Wort ab
+     gesammelt  Verlauf, Einpassen und Verbindungen im Ausweichmenue
+     knapp      auch Bericht und Vergleich im Ausweichmenue */
+.leiste[data-stufe="zeichen"] .knopf-wort,
+.leiste[data-stufe="gesammelt"] .knopf-wort,
+.leiste[data-stufe="knapp"] .knopf-wort { display: none; }
+.leiste[data-stufe="zeichen"] .zurueck-knopf,
+.leiste[data-stufe="gesammelt"] .zurueck-knopf,
+.leiste[data-stufe="knapp"] .zurueck-knopf,
+.leiste[data-stufe="zeichen"] .legende summary,
+.leiste[data-stufe="gesammelt"] .legende summary,
+.leiste[data-stufe="knapp"] .legende summary { width: 36px; padding: 0; }
+/* Im Ausweichmenue ist Platz fuer Woerter - dort gilt die Verengung nicht. */
+.leiste .im-menue .knopf-wort { display: inline; }
+
+.leiste[data-stufe="gesammelt"],
+.leiste[data-stufe="knapp"] { gap: 8px; padding: 0 8px; }
+.leiste[data-stufe="gesammelt"] .leiste-gruppe,
+.leiste[data-stufe="knapp"] .leiste-gruppe { gap: 5px; }
+.leiste[data-stufe="gesammelt"] .anlagenname-zeile,
+.leiste[data-stufe="knapp"] .anlagenname-zeile { gap: 4px; }
+/* Die Gruppen stehen dann eng genug beieinander, dass die Trennstriche mehr
+   Platz kosten als sie ordnen. */
+.leiste[data-stufe="gesammelt"] .leiste-trenner,
+.leiste[data-stufe="knapp"] .leiste-trenner { display: none; }
+
 /* Dieselben runden Knoepfe mit dem Finger: 44 statt 36 Punkte. Muss NACH
-   der Regel oben stehen (gleiche Spezifitaet, spaeter gewinnt) und
-   getrennt von ihr bleiben - an einem breiten Beruehrungsbildschirm tragen
-   sie ihr Wort und duerfen keine feste Breite bekommen. */
-@media (max-width: 1100px) and (pointer: coarse) {
-  .app .zurueck-knopf,
-  .legende summary { width: 44px; }
+   den Regeln oben stehen - hoehere Spezifitaet plus spaetere Stelle. */
+@media (pointer: coarse) {
+  .leiste[data-stufe] .zurueck-knopf,
+  .leiste[data-stufe] .legende summary { width: 44px; }
+  .leiste[data-stufe] .im-menue { width: auto; }
 }
 
-/* Der Bericht-Weg in der Kopfleiste (templates/editor.html, #link-bericht):
-   ein <a>, kein <button> - kennt darum kein :disabled. Solange noch kein
-   Lauf mit Ergebnis vorliegt, setzt editor.js aria-disabled="true" statt
-   eines href (siehe dort); dieselbe Abblendung wie .knopf-mini:disabled
-   (loeschen.css), zusaetzlich pointer-events:none, weil ein <a> ohne href
-   sonst zwar keine Fahrt antritt, mit der Maus aber trotzdem als klickbar
-   wirkt (Cursor, Fokus). */
-.knopf-mini[aria-disabled="true"] { opacity: .5; cursor: default; pointer-events: none; }
-
-.knopf-haupt {
-  border: 1px solid var(--blue);
-  background: var(--blue);
-  color: var(--auf-farbe);
-  border-radius: var(--radius-sm);
-  padding: 7px 16px;
-  font-size: 13px;
-  font-weight: 500;
-  font-family: inherit;
-  cursor: pointer;
-}
-.knopf-haupt:hover { background: var(--blue-hover); border-color: var(--blue-hover); }
-.knopf-haupt:disabled { background: var(--border); border-color: var(--border); color: var(--text-tertiary); cursor: default; }
-/* .knopf-haupt sitzt sonst immer auf einem <button> - auf einem <a> (z.B.
-   templates/anlage_nicht_gefunden.html) braucht es zusaetzlich inline-block
-   und die Unterstreichung muss weg, sonst wirkt es nicht wie ein Knopf. */
-a.knopf-haupt { display: inline-block; text-decoration: none; }
-
-/* Dasselbe fuer .knopf-mini auf einem <a> - der "Bericht ansehen"-Verweis im
-   Bilanzdialog (static/js/simulation.js, zeigeBilanz()) sitzt neben echten
-   <button>-Knoepfen und soll genauso aussehen, nicht wie ein blauer,
-   unterstrichener Link. */
-a.knopf-mini { display: inline-block; text-decoration: none; }
-
-/* Zurueckhaltender als .knopf-haupt - fuer "Einpassen" neben dem Hauptknopf
-   der Kopfleiste, nicht fuer die eine zentrale Handlung der Seite. */
-.knopf-sekundaer {
-  border: 1px solid var(--border);
+/* ---------- Ausweichmenue der Kopfleiste ----------
+   Was in der Leiste keinen Platz mehr hat, zieht hier ein - dieselben
+   Elemente, nicht Kopien (static/js/editor-leiste.js). Im Menue ist Platz
+   fuer Woerter, in der Leiste nicht: deshalb kommen die Beschriftungen dort
+   zurueck, und die runden Knoepfe werden wieder zu Zeilen. */
+.werkzeugmenue { position: relative; }
+.werkzeugmenue > summary { list-style: none; }
+.werkzeugmenue > summary::-webkit-details-marker { display: none; }
+/* Die drei Punkte sind gefuellt, nicht gestrichelt - anders als jedes andere
+   Zeichen der Leiste. Die Farbe kommt wie bei allen aus dem Knopf. */
+.werkzeugmenue > summary .knopf-symbol { fill: currentColor; }
+.werkzeugmenue-inhalt {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  min-width: 210px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
   background: var(--surface);
-  color: var(--text);
-  border-radius: var(--radius-sm);
-  padding: 7px 14px;
-  font-size: 13px;
-  font-family: inherit;
-  cursor: pointer;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  box-shadow: var(--schatten-2);
 }
-.knopf-sekundaer:hover { background: var(--surface-alt); border-color: var(--border-strong); }
-
-/* (Der frueher hier stehende "margin-left: auto" auf .knopf-sekundaer ist
-   entfallen: die Kopfleiste schiebt jetzt die ganze Ergebnisgruppe nach
-   rechts - siehe .leiste-ergebnis weiter oben. Ausserhalb der Kopfleiste
-   hatte die Regel ohnehin nie etwas zu suchen, genau das war ihr
-   urspruenglicher Anlass.) */
+.leiste .im-menue {
+  width: auto;
+  height: auto;
+  min-height: var(--antippziel);
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+}
+.leiste .im-menue:hover { background: var(--surface-alt); }
+/* Im Menue traegt jeder Eintrag sein Wort - auch die, die es in der Leiste
+   abgelegt haben. */
+.app .im-menue .knopf-wort { display: inline; }
+/* Die Legende ist selbst eine Klappe; im Menue oeffnet sie nach links, sonst
+   stuende sie ueber dem Bildschirmrand. */
+.werkzeugmenue-inhalt .legende summary { width: auto; padding: 6px 10px; }
+.werkzeugmenue-inhalt .legende[open] > .legende-inhalt { right: 100%; left: auto; margin-right: 6px; }
 
 /* Seitenbereich-Umschalter (Palette/Parameter): nur im schmalen
    Hochformat mit Finger sichtbar (siehe @media (max-width: 900px) and
@@ -561,21 +292,6 @@ a.knopf-mini { display: inline-block; text-decoration: none; }
   height: 7px;
   border-radius: 50%;
   background: var(--warning);
-}
-.legende summary::-webkit-details-marker { display: none; }
-/* Aufklapp-Pfeilchen: eine gezeichnete SVG (templates/bedienzeichen/aufklapp.svg),
-   keine aus Rahmenlinien gedrehte Ecke mehr - siehe Task "alles soll durch
-   SVGs geloest sein". currentColor macht die Drehung unabhaengig von Farbe
-   und Zustand des Knopfes (abgeblendet, Tastaturfokus). */
-.aufklapp-zeichen {
-  width: 9px;
-  height: 9px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  transition: transform .15s ease;
 }
 .legende[open] .aufklapp-zeichen { transform: rotate(180deg); }
 .legende[open] summary { border-color: var(--border-strong); }
@@ -637,6 +353,15 @@ a.knopf-mini { display: inline-block; text-decoration: none; }
   color: var(--text);
 }
 .legende-muster { width: 32px; height: 8px; flex-shrink: 0; overflow: visible; }
+
+/* Bis 1100px (das iPad im Querformat ist 1080 Punkte breit) schmalere
+   Seitenbereiche: dort gehen sonst 548 der 1080 Punkte an Palette und
+   Parameterfenster, und fuer die Kopfleiste bleibt weniger uebrig, als
+   ihre Knoepfe brauchen (gemessen: 532 verfuegbar, 589 noetig). */
+@media (max-width: 1100px) {
+  .palette { width: 190px; }
+  .panel { width: 270px; }
+}
 
 /* ---------- Leinwand ---------- */
 /* Kein flex:1 mehr auf dem SVG selbst - siehe Bericht: Safari berechnet
@@ -872,21 +597,6 @@ a.knopf-mini { display: inline-block; text-decoration: none; }
   padding-bottom: 10px;
   border-bottom: 1px solid var(--border-light);
 }
-.panel-zeile { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
-.panel-label { font-size: 11px; color: var(--text-secondary); }
-.panel-zeile input,
-.panel-zeile select,
-.panel-zeile textarea {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 6px 8px;
-  font-size: 13px;
-  font-family: inherit;
-  color: var(--text);
-  background: var(--surface);
-  width: 100%;
-}
-.panel-zeile input[type="number"] { font-variant-numeric: tabular-nums; }
 
 /* Ein vom Server abgelehnter Wert (siehe static/js/panel.js,
    markiereFeldFehler) - die Meldung selbst steht in der Fehlerleiste, hier
@@ -1107,90 +817,6 @@ a.knopf-mini { display: inline-block; text-decoration: none; }
   stroke-linejoin: round;
 }
 .port-pfeil-aus { transform: scaleX(-1); }
-.leerhinweis { font-size: 13px; color: var(--text-secondary); }
-
-/* ---------- Fehlerleiste ----------
-   Faellt auf, ohne die Arbeit zu blockieren: schwebt oben, nimmt keinen
-   Platz vom Editor, verschwindet von selbst (siehe zeigeFehler() in
-   editor.js/start.js). z-index ueber Dialogen, sonst waere sie hinter einem
-   offenen Dialog unsichtbar, obwohl genau dann oft ein Fehler entsteht. */
-.fehlermeldung {
-  position: fixed;
-  top: 14px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  max-width: min(80vw, 560px);
-  background: var(--danger);
-  color: var(--auf-farbe);
-  padding: 9px 16px 9px 14px;
-  border-radius: var(--radius-sm);
-  /* touch-action erst unten, mit body.seite-editor abgegrenzt - dieses
-     Element existiert auf ALLEN vier Seiten (siehe jedes templates/*.html),
-     hier direkt "none" zu setzen wuerde auch der Startseite/Bausteinen die
-     Kneifgeste ueber der Fehlerleiste wegnehmen, wo sie erlaubt bleiben
-     soll (siehe Task, "nur auf der Editorseite"). */
-  font-size: 13px;
-  line-height: 1.35;
-  z-index: 40;
-  box-shadow: var(--schatten-2);
-  /* Nichts an diesen beiden Leisten ist zum Anklicken da - und sie
-     schweben ueber der Kopfleiste. Ohne pointer-events:none verschluckt
-     die Hinweisleiste genau den Knopf, den sie nennt: "Verbindung
-     gelöscht - „Rückgängig" holt sie zurück" legte sich auf dem iPad
-     ueber ↶, und der Fingertipp dort kam nicht an (nachgestellt und
-     gemessen: der Pfeil kam nicht wieder). */
-  pointer-events: none;
-}
-/* Das Ausrufezeichen im Kreis war ein Schriftzeichen (content:"!") - jetzt
-   eine gezeichnete SVG, als Hintergrundbild statt Text. Kein <svg> in der
-   HTML: zeigeFehler()/zeigeHinweis() setzen textContent auf #fehlermeldung
-   (editor.js, bausteine.js UND das nicht zu dieser Aufgabe gehoerende
-   start.js) und wuerden ein Kind-Element dabei jedesmal mitloeschen - ein
-   Hintergrundbild auf ::before uebersteht das. Kreis (halbdurchsichtiges
-   Weiss, wie vorher --schleier-hell) und Strich fest als Weiss in der SVG
-   verdrahtet statt currentColor: die Leiste hat nur diese eine Erscheinung
-   (roter Grund, weisse Schrift, siehe .fehlermeldung), kein abgeblendeter
-   oder fokussierter Zustand wie bei einem Knopf. */
-.fehlermeldung::before {
-  content: "";
-  flex-shrink: 0;
-  width: 16px;
-  height: 16px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='8' fill='%23fff' fill-opacity='.3'/%3E%3Cline x1='8' y1='4.2' x2='8' y2='9' stroke='%23fff' stroke-width='1.6' stroke-linecap='round'/%3E%3Ccircle cx='8' cy='11.6' r='.9' fill='%23fff'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-size: 16px 16px;
-}
-
-/* ---------- Hinweisleiste ----------
-   Dieselbe Stelle und dieselbe Form wie die Fehlerleiste darueber, nur
-   ruhig statt alarmierend: sie bestaetigt, was gerade zurueckgenommen oder
-   wiederholt wurde (zeigeHinweis() in editor.js). Bewusst dieselben Masse
-   wie .fehlermeldung, damit beide nicht wie zwei verschiedene Systeme
-   wirken - und ohne das "!"-Zeichen, das dort die Warnung traegt. Beide
-   koennen nie gleichzeitig sichtbar sein: zeigeHinweis() und zeigeFehler()
-   blenden jeweils die andere aus. */
-.hinweismeldung {
-  position: fixed;
-  top: 14px;
-  pointer-events: none;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  max-width: min(80vw, 560px);
-  background: var(--text);
-  color: var(--auf-farbe);
-  padding: 9px 16px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  line-height: 1.35;
-  z-index: 40;
-  box-shadow: var(--schatten-2);
-}
 
 /* ---------- Pfeile ----------
    Drei Verbindungsarten, jede mit eigener Kombination aus Strichstaerke UND
@@ -1297,352 +923,6 @@ a.knopf-mini { display: inline-block; text-decoration: none; }
   text-overflow: ellipsis;
 }
 
-/* ---------- Dialoge (Simulation, Projekt/Anlage anlegen) ---------- */
-.dialog-huelle {
-  position: fixed;
-  inset: 0;
-  background: var(--schleier);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 20;
-  padding: 24px;
-}
-/* Befunde der Anlagenpruefung im Simulationsdialog (core/pruefung.py).
-   Bewusst in der Hinweisfarbe und nicht in der Warnfarbe: es sind Hinweise
-   auf etwas, das man vielleicht vergessen hat, kein Fehler und kein Riegel -
-   der Lauf laesst sich damit ganz normal starten. */
-.pruefung-hinweis {
-  margin: 4px 0 12px;
-  padding: 10px 12px;
-  border-left: 3px solid var(--warning);
-  background: var(--warning-tint);
-  border-radius: var(--radius-sm);
-}
-.pruefung-titel {
-  margin: 0 0 6px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--warning);
-}
-.pruefung-liste {
-  margin: 0;
-  padding-left: 18px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--text);
-}
-.pruefung-liste li { margin-bottom: 3px; }
-
-.dialog {
-  background: var(--surface);
-  border-radius: var(--radius-lg);
-  padding: 22px 24px 24px;
-  min-width: 340px;
-  max-width: 90vw;
-  max-height: 85vh;
-  overflow-y: auto;
-  /* Fehlte hier (siehe Kommentar bei .palette weiter oben, dieselbe
-     Begruendung): ein bis zum Ende gescrollter Dialog (z.B. ein langer
-     Loeschtext) reichte einen weiteren Wisch sonst an den naechsten
-     Vorfahren weiter. */
-  overscroll-behavior: contain;
-  box-shadow: var(--schatten-2);
-}
-.dialog-breit { min-width: 560px; }
-.dialog h2 {
-  font-size: 16px;
-  font-weight: 500;
-  margin: 0 0 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border-light);
-}
-.dialog-knoepfe { display: flex; gap: 8px; justify-content: flex-end; margin-top: 22px; }
-/* Die NEBENknoepfe einer Knopfreihe. Das :not() ist der Kern der Regel: ohne
-   es traf sie auch .knopf-haupt und gewann gegen dessen Regel weiter oben
-   (0,1,1 gegen 0,1,0) - in jedem Dialog sah der Hauptknopf danach aus wie
-   "Abbrechen" daneben, und die Reihe hatte keinen erkennbaren Schwerpunkt
-   mehr. Dasselbe gilt fuer den roten Loeschknopf. */
-.dialog-knoepfe button:not(.knopf-haupt):not(.knopf-haupt-gefahr),
-.fortschritt button:not(.knopf-haupt):not(.knopf-haupt-gefahr),
-.projekt-aktionen button:not(.knopf-haupt):not(.knopf-haupt-gefahr) {
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  border-radius: var(--radius-sm);
-  padding: 7px 16px;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 13px;
-}
-.dialog-knoepfe button:not(.knopf-haupt):not(.knopf-haupt-gefahr):hover,
-.fortschritt button:not(.knopf-haupt):not(.knopf-haupt-gefahr):hover,
-.projekt-aktionen button:not(.knopf-haupt):not(.knopf-haupt-gefahr):hover {
-  background: var(--surface-alt);
-  border-color: var(--border-strong);
-}
-.dialog-knoepfe button:disabled,
-.fortschritt button:disabled { opacity: .6; cursor: default; }
-.panel-zeile-nebeneinander { flex-direction: row; gap: 12px; }
-.panel-zeile-nebeneinander .panel-zeile { flex: 1; }
-
-.fruehere-laeufe {
-  list-style: none;
-  margin: 4px 0 0;
-  padding: 0;
-  max-height: 150px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-sm);
-}
-.frueherer-lauf {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 7px 10px;
-  font-size: 12px;
-  cursor: pointer;
-  border-bottom: 1px solid var(--border-light);
-}
-.frueherer-lauf:last-child { border-bottom: none; }
-.frueherer-lauf:hover, .frueherer-lauf:focus-visible { background: var(--surface-alt); }
-.frueherer-lauf-laeuft { color: var(--blue); font-style: italic; }
-
-/* ---------- Fortschritt (Simulation laeuft bis zu acht Minuten) ---------- */
-.fortschritt-huelle {
-  position: fixed;
-  inset: 0;
-  background: var(--schleier);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 20;
-}
-.fortschritt {
-  background: var(--surface);
-  border-radius: var(--radius-lg);
-  padding: 26px 28px;
-  min-width: 380px;
-  text-align: center;
-  box-shadow: var(--schatten-2);
-}
-.fortschritt-text {
-  font-size: 13px;
-  color: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
-}
-.fortschritt-schiene {
-  height: 6px;
-  background: var(--border-light);
-  border-radius: 3px;
-  margin: 16px 0;
-  overflow: hidden;
-}
-.fortschritt-schiene div {
-  height: 100%;
-  width: 0;
-  background: var(--blue);
-  transition: width .3s ease;
-}
-
-/* ---------- Jahresbilanz: rechtsbuendige Tabelle, einheitliche
-   Nachkommastellen (per .toFixed() in simulation.js/start.js gesetzt) ---------- */
-.bilanz { width: 100%; border-collapse: collapse; font-size: 13px; }
-.bilanz th, .bilanz td {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border-light);
-  text-align: left;
-}
-.bilanz th {
-  font-size: 11px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: .03em;
-  color: var(--text-secondary);
-  border-bottom: 1px solid var(--border);
-}
-.bilanz .zahl { text-align: right; font-variant-numeric: tabular-nums; }
-.bilanz tbody tr:nth-child(even) { background: var(--surface-alt); }
-.bilanz tfoot td { font-weight: 500; border-top: 2px solid var(--border); border-bottom: none; }
-
-.abbruchhinweis { color: var(--warning); font-size: 12px; margin: -8px 0 16px; }
-
-/* ---------- Stundenprotokoll (Datenlogger-Spalten, bis zu 8760 Zeilen) ---------- */
-.protokoll-huelle { max-height: 60vh; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--border-light); border-radius: var(--radius-sm); }
-.protokoll { width: 100%; border-collapse: collapse; font-size: 12px; }
-.protokoll th, .protokoll td {
-  padding: 5px 10px;
-  border-bottom: 1px solid var(--border-light);
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.protokoll th {
-  position: sticky;
-  top: 0;
-  background: var(--surface);
-  font-size: 11px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: .03em;
-  color: var(--text-secondary);
-  border-bottom: 1px solid var(--border);
-}
-.protokoll tbody tr:nth-child(even) { background: var(--surface-alt); }
-.protokoll-hinweis { font-size: 12px; color: var(--text-secondary); margin: 0 0 12px; }
-
-.warnhinweis { margin-top: 16px; font-size: 12px; color: var(--warning); }
-.warnhinweis p { margin: 0; }
-.warnhinweis-ok { color: var(--text-secondary); }
-.warn-mehr {
-  border: none;
-  background: none;
-  color: var(--blue);
-  cursor: pointer;
-  font-size: 12px;
-  font-family: inherit;
-  padding: 0;
-  margin-left: 6px;
-  text-decoration: underline;
-}
-.warn-beispiele {
-  margin: 8px 0 0;
-  padding-left: 18px;
-  color: var(--text-secondary);
-  max-height: 120px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-.warn-beispiele li { margin-bottom: 3px; }
-
-/* ---------- Vergleich mehrerer Wetterjahre (Vorhaben B) ----------
-   .vergleich-tabelle erweitert die vorhandene .bilanz-Tabelle nur um eine
-   waagerechte Schiene (mehrere Jahresspalten sind auf einem Tablet breiter
-   als der Dialog) statt eigene Zell-/Kopfregeln nachzubauen. */
-.vergleich-hinweis { font-size: 12.5px; color: var(--text-secondary); margin: -4px 0 14px; }
-.vergleich-tabelle-huelle { overflow-x: auto; overscroll-behavior: contain; margin-top: 4px; }
-.vergleich-tabelle { min-width: 100%; }
-.vergleich-tabelle th:first-child,
-.vergleich-tabelle td:first-child { white-space: nowrap; }
-.vergleich-kein-ergebnis { font-weight: 400; color: var(--text-tertiary); text-transform: none; }
-.vergleich-abweichung { font-size: 11px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
-.vergleich-zeile-kosten td,
-.vergleich-zeile-warnungen td { border-top: 2px solid var(--border); font-weight: 500; }
-.vergleich-diagramm { width: 100%; height: auto; margin-top: 18px; }
-
-/* ---------- Startseite ---------- */
-/* dvh/safe-area: dieselbe Begruendung wie bei .app weiter oben. */
-.start {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  height: 100dvh;
-  padding: env(safe-area-inset-top) env(safe-area-inset-right)
-           env(safe-area-inset-bottom) env(safe-area-inset-left);
-}
-.start .leiste { flex-shrink: 0; }
-.start-haupt { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 28px 32px 48px; }
-/* Begrenzte Lesebreite gilt fuer Fliesstext (siehe .abschnitt-hinweis,
-   .leerhinweis-gross p - beide mit eigenem ch-Mass), nicht fuer den
-   Abschnitt selbst: Listen, Karten und Tabellen duerfen die verfuegbare
-   Breite nutzen, sonst klebt bei breiten Fenstern alles gestaucht am
-   linken Rand. 1400px ist eine weiche Obergrenze gegen ausufernde
-   Kartenreihen auf sehr breiten Bildschirmen, keine enge Spalte. */
-.start-abschnitt { max-width: 1400px; margin: 0 auto 44px; }
-.abschnitt-titel { font-size: 18px; font-weight: 500; margin: 0 0 14px; }
-.abschnitt-hinweis { font-size: 13px; color: var(--text-secondary); margin: -6px 0 16px; max-width: var(--lesebreite); line-height: 1.5; }
-
-.leerhinweis-gross {
-  background: var(--surface);
-  border: 1px dashed var(--border);
-  border-radius: var(--radius-lg);
-  padding: 34px;
-  text-align: center;
-}
-.leerhinweis-gross h2 { margin: 0 0 8px; font-size: 16px; font-weight: 500; }
-/* Eigenstaendige Seite (templates/anlage_nicht_gefunden.html), nicht
-   Teil der Startseiten-Liste - schmaler und mit etwas Abstand nach oben,
-   statt ueber die volle .start-abschnitt-Breite (1400px) zu laufen. */
-.nicht-gefunden { max-width: 480px; margin-top: 72px; }
-.leerhinweis-gross p {
-  margin: 0 0 18px;
-  color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.55;
-  max-width: 52ch;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.projekt-karte {
-  background: var(--surface);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
-  padding: 18px 20px;
-  margin-bottom: 16px;
-}
-.projekt-kopf h2 { margin: 0; font-size: 15px; font-weight: 500; }
-.projekt-beschreibung { margin: 4px 0 0; font-size: 12px; color: var(--text-secondary); }
-
-.anlagen-liste { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0 14px; }
-.anlage-karte {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: 184px;
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius);
-  padding: 11px 13px;
-  text-decoration: none;
-  color: var(--text);
-  background: var(--bg);
-}
-.anlage-karte:hover { border-color: var(--blue); background: var(--blue-tint); }
-.anlage-name { font-size: 13px; font-weight: 500; }
-.anlage-info { font-size: 11px; color: var(--text-secondary); }
-.anlage-status { font-size: 11px; font-variant-numeric: tabular-nums; }
-.anlage-status-laeuft { color: var(--blue); font-style: italic; }
-.anlage-status-fertig { color: var(--text-secondary); }
-.anlage-status-offen { color: var(--text-secondary); font-style: italic; }
-.anlage-status-warnung { color: var(--warning); }
-.anlage-status-unbekannt { color: var(--text-secondary); font-style: italic; }
-
-.projekt-aktionen { display: flex; gap: 8px; }
-
-.vorlage-wahl {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 12.5px;
-  margin: 7px 0;
-  cursor: pointer;
-}
-.vorlage-wahl input { margin-top: 3px; }
-
-.wetter-formular { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 18px; }
-.wetter-formular input[type="text"] {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 7px 10px;
-  font-size: 13px;
-  font-family: inherit;
-  color: var(--text);
-  background: var(--surface);
-}
-.wetter-tabelle { max-width: 640px; }
-
-/* Bis 1100px (das iPad im Querformat ist 1080 Punkte breit) schmalere
-   Seitenbereiche: dort gehen sonst 548 der 1080 Punkte an Palette und
-   Parameterfenster, und fuer die Kopfleiste bleibt weniger uebrig, als
-   ihre Knoepfe brauchen (gemessen: 532 verfuegbar, 589 noetig). Frueher
-   galt diese Regel erst ab 900px - dazwischen standen beide auf ihrer
-   vollen Schreibtischbreite. */
-@media (max-width: 1100px) {
-  .palette { width: 190px; }
-  .panel { width: 270px; }
-}
-
 /* ---------- Beruehrungsziele (Finger statt Maus) ----------
    Apples Richtwert ist 44 Punkte Kantenlaenge (siehe Task, Befund 5). Am
    Schreibtisch bleiben die Knoepfe kompakt - "pointer: coarse" trifft nur
@@ -1650,19 +930,9 @@ a.knopf-mini { display: inline-block; text-decoration: none; }
    Nur das Innenmass (padding) waechst, nicht Schrift oder Rahmenfarbe -
    dieselbe Optik, nur eine groessere Trefferflaeche. */
 @media (pointer: coarse) {
-  .knopf-haupt,
-  .knopf-sekundaer,
-  .dialog-knoepfe button,
-  .fortschritt button,
-  .projekt-aktionen button {
-    padding-top: 12px;
-    padding-bottom: 12px;
-  }
-  /* .knopf-mini/.knopf-haupt-gefahr: siehe loeschen.css, nicht hier - das
-     dortige @media (pointer: coarse) muss NACH der eigenen, unconditional
-     .knopf-mini-Regel derselben Datei stehen, sonst gewinnt bei gleicher
-     Spezifitaet die spaetere, unconditional Regel und die Vergroesserung
-     hier bliebe wirkungslos. */
+  /* Die allgemeinen Knoepfe (.knopf-haupt, .knopf-sekundaer, .knopf-mini,
+     die Knopfreihen der Dialoge) stehen in bedienelemente.css - sie kommen
+     auf jeder Seite vor, nicht nur hier. */
   .palette-eintrag {
     padding-top: 12px;
     padding-bottom: 12px;
@@ -1712,7 +982,14 @@ a.knopf-mini { display: inline-block; text-decoration: none; }
    #btn-palette-umschalten/#btn-panel-umschalten sowie automatisch beim
    Auswaehlen/Abwaehlen einer Karte (Parameterfenster) bzw. beim Antippen
    eines Paletteneintrags (Palette, siehe dort Palette.armieren()). */
-@media (max-width: 900px) and (pointer: coarse) {
+/* ---------- Schmale Leinwand: Palette und Parameter treten zurueck ----------
+   Frueher galt das nur mit dem Finger (pointer: coarse). Ein Laptopfenster
+   von 820 Punkten behielt darum beide Seitenbereiche - 460 der 820 Punkte
+   gingen an sie, fuer die Leinwand blieben 360, und die Kopfleiste bekam
+   dieselben 360 fuer alle ihre Knoepfe. Die Breite entscheidet, nicht die
+   Art des Zeigers: Auf 900 Punkten ist neben der Leinwand kein Platz fuer
+   beide, gleich womit man darauf zeigt. */
+@media (max-width: 900px) {
   /* inline-flex, nicht inline-block: sonst faellt genau dieser Knopf aus
      der Formensprache der Kopfleiste (die zentriert ihre Beschriftung
      ueber align-items/justify-content, siehe .leiste-knopf). */
@@ -1722,7 +999,7 @@ a.knopf-mini { display: inline-block; text-decoration: none; }
   .palette,
   .panel {
     position: absolute;
-    top: 52px; /* Hoehe von .leiste, siehe auch .leinwand-hinweis */
+      top: var(--leistenhoehe); /* siehe auch .leinwand-hinweis */
     bottom: 0;
     z-index: 12;
     box-shadow: var(--schatten-2);
@@ -1735,3 +1012,24 @@ a.knopf-mini { display: inline-block; text-decoration: none; }
     transform: translateX(0);
   }
 }
+
+/* -- Editor: Anlagenname mit Umbenennen-Knopf in der Kopfleiste --
+   .titel (style.css) ist fuer einen einzelnen Textknoten gedacht
+   (white-space: nowrap + Ellipse) - hier stattdessen ein Flex-Container, der
+   selbst schrumpfen darf (min-width: 0, sonst reisst er die Kopfleiste
+   ueber ihre Breite hinaus) und die Ellipse an #anlagenname weiterreicht. */
+.anlagenname-zeile {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: normal;
+}
+.anlagenname-zeile #anlagenname {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.anlagenname-zeile .knopf-mini { flex-shrink: 0; }

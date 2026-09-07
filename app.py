@@ -86,7 +86,8 @@ def create_app():
 
     app.teardown_appcontext(close_db)
 
-    from routes import anlagen as anlagen_routen, bericht, lehre, pages, simulation
+    from routes import anlagen as anlagen_routen, bericht, katalog, lehre, pages
+    from routes import simulation
     from routes import wetter as wetter_routen
 
     app.register_blueprint(pages.bp)
@@ -94,6 +95,7 @@ def create_app():
     app.register_blueprint(wetter_routen.bp)
     app.register_blueprint(simulation.bp)
     app.register_blueprint(lehre.bp)
+    app.register_blueprint(katalog.bp)
     app.register_blueprint(bericht.bp)
 
     with app.app_context():

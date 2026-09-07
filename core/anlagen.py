@@ -864,16 +864,57 @@ def anlage_kopf(anlage_id):
     return dict(zeile)
 
 
+def _warnungszahl(konvergenz_json, baustein_json):
+    """Konvergenz- plus Baustein-Warnungen eines Laufs, in einer Zahl.
+
+    Dieselbe Auskunft wie core.ergebnisse._anzahl_warnungen, hier fuer den
+    letzten Lauf, den anlagen_von() mitliefert.
+    """
+    konvergenz = json.loads(konvergenz_json) if konvergenz_json else []
+    baustein = json.loads(baustein_json) if baustein_json else []
+    return len(konvergenz) + len(baustein)
+
+
 def anlagen_von(projekt_id=None):
     """Alle Anlagen, wahlweise auf ein Projekt eingegrenzt - mit der Zahl
     ihrer Karten und Simulationslaeufe (letztere fuer dieselbe Rueckfrage vor
-    dem Loeschen wie bei projekte())."""
+    dem Loeschen wie bei projekte()) UND dem letzten Lauf.
+
+    Der letzte Lauf steht hier, weil die Startseite ihn fuer jede Anlage
+    zeigt. Vorher holte sie ihn einzeln nach: ein Abruf je Anlage, also 1 + N
+    Umlaeufe, bevor ueberhaupt etwas zu sehen war. Bei einem Projekt mit zehn
+    Anlagen sind das elf Anfragen fuer eine Liste, die in einer Abfrage
+    steht - und bis sie durch waren, zeigte die Seite eine leere Flaeche.
+
+    Die Unterabfragen holen genau die Felder, die der Status braucht (siehe
+    static/js/start.js, _fuelleStatus und BADGE_TEXT). Nur wenn ein Lauf
+    gerade RECHNET, fragt die Seite noch einmal nach - fuer seinen
+    Fortschritt, den keine Tabelle fuehrt.
+    """
     db = get_db()
+    letzter = (
+        "(SELECT s.id FROM simulation s WHERE s.anlage_id = a.id "
+        " ORDER BY s.id DESC LIMIT 1)"
+    )
     abfrage = (
         "SELECT a.*, p.name AS projekt_name, "
         "       (SELECT COUNT(*) FROM karte k WHERE k.anlage_id = a.id) AS karten, "
         "       (SELECT COUNT(*) FROM simulation s WHERE s.anlage_id = a.id) "
-        "         AS simulationen "
+        "         AS simulationen, "
+        f"       {letzter} AS lauf_id, "
+        f"       (SELECT s.status FROM simulation s WHERE s.id = {letzter}) "
+        "         AS lauf_status, "
+        f"       (SELECT s.gestartet_am FROM simulation s WHERE s.id = {letzter}) "
+        "         AS lauf_gestartet_am, "
+        "       (SELECT SUM(b.kosten) FROM bilanz b "
+        f"         WHERE b.simulation_id = {letzter}) AS lauf_kosten, "
+        "       (SELECT w.name FROM wetterdatensatz w "
+        "         JOIN simulation s ON s.wetterdatensatz_id = w.id "
+        f"         WHERE s.id = {letzter}) AS lauf_wetter_name, "
+        f"       (SELECT s.warnungen FROM simulation s WHERE s.id = {letzter}) "
+        "         AS lauf_warnungen, "
+        "       (SELECT s.baustein_warnungen FROM simulation s "
+        f"         WHERE s.id = {letzter}) AS lauf_baustein_warnungen "
         "FROM anlage a JOIN projekt p ON p.id = a.projekt_id"
     )
     werte = []
@@ -884,7 +925,25 @@ def anlagen_von(projekt_id=None):
     return [
         {"id": z["id"], "projekt_id": z["projekt_id"], "projekt_name": z["projekt_name"],
          "name": z["name"], "notiz": z["notiz"], "karten": z["karten"],
-         "simulationen": z["simulationen"]}
+         "simulationen": z["simulationen"],
+         "letzter_lauf": (
+             {
+                 "id": z["lauf_id"], "status": z["lauf_status"],
+                 "gestartet_am": z["lauf_gestartet_am"],
+                 "kosten_gesamt": z["lauf_kosten"] or 0.0,
+                 # Der Statuszettel der Anlage nennt auch, mit welchem
+                 # Wetterjahr zuletzt gerechnet wurde (static/js/start.js,
+                 # _fuelleStatus).
+                 "wetter_name": z["lauf_wetter_name"],
+                 # Ein Lauf mit vielen Warnungen soll auf der Karte nicht wie
+                 # ein glatter Erfolg aussehen, nur weil er 'fertig' heisst
+                 # (dieselbe Zahl wie core.ergebnisse.simulationen_von).
+                 "anzahl_warnungen": _warnungszahl(
+                     z["lauf_warnungen"], z["lauf_baustein_warnungen"]
+                 ),
+             }
+             if z["lauf_id"] else None
+         )}
         for z in db.execute(abfrage, werte)
     ]
 

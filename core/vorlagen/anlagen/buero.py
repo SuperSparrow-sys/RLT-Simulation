@@ -55,6 +55,11 @@ from core.vorlagen.bauhilfe import (
 )
 
 NAME = "Bürogebäude mit WRG"
+#: Wohin die Anlage im Katalog gehoert (siehe core/vorlagen/__init__.py,
+#: alle()). Drei Gruppen statt zehn Einzelbezeichnungen: Zwoelf Karten in
+#: einer Reihe sind kein Katalog, und eine Gruppe je Anlage waere keine
+#: Gliederung, sondern dieselbe Reihe mit Ueberschriften.
+GRUPPE = "Komfortlüftung"
 BESCHREIBUNG = (
     "2000 m² Büro auf zwei Geschossen, Zentralgerät mit Plattenwärmetauscher, "
     "Erhitzer und Kühler, Raum-/Zuluft-Kaskade, Betrieb Mo–Fr 7–18 Uhr"

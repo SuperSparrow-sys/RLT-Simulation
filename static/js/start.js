@@ -1,127 +1,19 @@
-/* Startseite: Projekte mit ihren Anlagen, Anlage anlegen (leer oder aus
-   Vorlage), Wetterdaten hochladen und einsehen.
+/* Startseite: Projekte mit ihren Anlagen und der Dialog "Anlage anlegen".
+
+   Die Listen selbst stehen fertig in der Seite (templates/index.html, gefuellt
+   in routes/pages.py) - dieses Modul verdrahtet nur die Knoepfe daran, zeigt
+   den Einstiegskasten beim allerersten Besuch und verfolgt einen gerade
+   laufenden Rechenlauf.
+
+   Der Wetterteil ist mit dem Umbau der Oberflaeche nach static/js/wetter.js
+   gewandert: Er gehoert zur Wetterseite, und diese Seite brauchte von den 44 kB
+   des frueheren gemeinsamen Moduls kaum die Haelfte. zeigeFehler(),
+   htmlSicher() und die beiden Dialoge stehen in static/js/dialoge.js.
 
    Eigenstaendiges Modul statt Mitbenutzung von editor.js/simulation.js: diese
    Seite laedt weder Editor noch Panel noch Pfeile, und ein stiller Aufruf
    einer dort nur scheinbar vorhandenen Funktion waere ein Fehler, der erst
-   beim Klicken auffiele. zeigeFehler() und htmlSicher() sind hier deshalb
-   noch einmal (kurz) selbst definiert statt aus editor.js/simulation.js
-   importiert - im Editor ist genau eine solche stille Abhaengigkeit schon
-   einmal angemerkt worden (siehe tests/test_pages.py). */
-
-function zeigeFehler(nachricht) {
-  const leiste = document.getElementById("fehlermeldung");
-  if (!leiste) return;
-  leiste.textContent = nachricht;
-  leiste.hidden = false;
-  window.clearTimeout(zeigeFehler.timer);
-  zeigeFehler.timer = window.setTimeout(() => { leiste.hidden = true; }, 5000);
-}
-
-/* Frei vergebene Namen (Projekt, Anlage, Wetterdatensatz) landen unverarbeitet
-   in innerHTML-Vorlagen - ohne dieses Escapen wuerde ein Name wie
-   '<img src=x onerror=...>' beim Anlegen zu ausfuehrbarem Markup. */
-function htmlSicher(text) {
-  const traeger = document.createElement("span");
-  traeger.textContent = text == null ? "" : String(text);
-  return traeger.innerHTML;
-}
-
-/* Zwei wiederverwendete Dialoge fuer Loeschen und Umbenennen - je ein
-   Promise, das sich erst mit dem Schliessen des Dialogs aufloest, damit sich
-   'const ok = await bestaetigenDialog(...)' schreiben laesst statt mit
-   Callbacks zu hantieren. 'text' darf HTML enthalten (fuer eingebettete
-   Zahlen/Namen) - Aufrufer muessen frei vergebene Namen selbst vorher mit
-   htmlSicher() maskieren, genau wie ueberall sonst in dieser Datei. */
-function bestaetigenDialog(titel, text, bestaetigenText = "Löschen") {
-  return new Promise((abschliessen) => {
-    const huelle = document.createElement("div");
-    huelle.className = "dialog-huelle";
-    huelle.innerHTML = `
-      <div class="dialog">
-        <h2>${htmlSicher(titel)}</h2>
-        <p class="dialog-text">${text}</p>
-        <div class="dialog-knoepfe">
-          <button id="btn-abbrechen">Abbrechen</button>
-          <button class="knopf-haupt-gefahr" id="btn-bestaetigen">${htmlSicher(bestaetigenText)}</button>
-        </div>
-      </div>`;
-    document.body.appendChild(huelle);
-    huelle.querySelector("#btn-abbrechen").onclick = () => { huelle.remove(); abschliessen(false); };
-    huelle.querySelector("#btn-bestaetigen").onclick = () => { huelle.remove(); abschliessen(true); };
-  });
-}
-
-function textEingabeDialog(titel, vorgabe) {
-  return new Promise((abschliessen) => {
-    const huelle = document.createElement("div");
-    huelle.className = "dialog-huelle";
-    huelle.innerHTML = `
-      <div class="dialog">
-        <h2>${htmlSicher(titel)}</h2>
-        <label class="panel-zeile">
-          <span class="panel-label">Name</span>
-          <input type="text" id="feld-text-eingabe" value="${htmlSicher(vorgabe)}">
-        </label>
-        <div class="dialog-knoepfe">
-          <button id="btn-abbrechen">Abbrechen</button>
-          <button class="knopf-haupt" id="btn-uebernehmen">Übernehmen</button>
-        </div>
-      </div>`;
-    document.body.appendChild(huelle);
-    const feld = huelle.querySelector("#feld-text-eingabe");
-    feld.focus();
-    feld.select();
-    const schliessen = (wert) => { huelle.remove(); abschliessen(wert); };
-    huelle.querySelector("#btn-abbrechen").onclick = () => schliessen(null);
-    const uebernehmen = () => {
-      const wert = feld.value.trim();
-      if (!wert) {
-        zeigeFehler("Bitte einen Namen eingeben.");
-        return;
-      }
-      schliessen(wert);
-    };
-    huelle.querySelector("#btn-uebernehmen").onclick = uebernehmen;
-    feld.addEventListener("keydown", (e) => { if (e.key === "Enter") uebernehmen(); });
-  });
-}
-
-const BADGE_TEXT = {
-  fertig: (l) => `Letzter Lauf: ${Zahlen.fest(l.kosten_gesamt, 2)} EUR`,
-  abgebrochen: () => "Letzter Lauf abgebrochen",
-  fehler: () => "Letzter Lauf fehlgeschlagen",
-};
-
-// Laeufe, zu denen es einen Bericht gibt (core/bericht.py: STATUS_MIT_ERGEBNIS)
-// - hier dupliziert wie WETTER_FRUEHESTES_JAHR weiter unten, aus demselben
-// Grund: rein eine Oberflaechenfrage (den Verweis "Bericht" zeigen oder
-// nicht), dafuer lohnt keine eigene Schnittstelle.
-const STATUS_MIT_BERICHT = ["fertig", "abgebrochen"];
-
-// Datum aus "YYYY-MM-DD HH:MM:SS" (core/database.py, datetime('now'), UTC) -
-// nur der Kalendertag, ohne Zeitzonenumrechnung: fuer eine kompakte
-// Anlage-Karte reicht "an welchem Tag zuletzt gerechnet wurde", eine
-// Uhrzeit auf die Minute waere mehr Genauigkeit, als die Karte braucht.
-function formatDatum(zeitstempel) {
-  const treffer = /^(\d{4})-(\d{2})-(\d{2})/.exec(zeitstempel || "");
-  if (!treffer) return zeitstempel || "";
-  const [, jahr, monat, tag] = treffer;
-  return `${tag}.${monat}.${jahr}`;
-}
-
-// Anzeigetext je Quelle eines Wetterdatensatzes - der Rohwert aus der DB
-// ("upload"/"open-meteo") ist fuer den Code praktisch, fuer die Liste aber
-// zu technisch.
-const WETTER_QUELLE_TEXT = {
-  upload: "Datei-Upload",
-  "open-meteo": "Online-Abruf",
-};
-
-// Erstes Jahr, das die Open-Meteo Archive-API anbietet (core/wetter/openmeteo.py:
-// FRUEHESTES_JAHR) - hier dupliziert, weil die Grenze rein in der Oberflaeche
-// gebraucht wird und dafuer keine eigene Schnittstelle lohnt.
-const WETTER_FRUEHESTES_JAHR = 1940;
+   beim Klicken auffiele. */
 
 /* Der Haken der erledigten Einstiegsschritte. Als eigenes SVG statt als
    Schriftzeichen - dieselbe Regel wie in templates/bedienzeichen/. Ueber
@@ -145,122 +37,108 @@ function hakenSymbol() {
   return svg;
 }
 
-// Endungen, die der Server lesen kann (core/wetter/einlesen.py: ENDUNGEN).
-// Wonach hier nicht gefiltert wird, geht auch nicht ueber die Leitung - der
-// Ordner eines Testreferenzjahrs enthaelt neben den Daten ein Handbuch von
-// rund zwei Megabyte, das auf dem Rechner des Nutzers bleiben soll.
-const WETTER_ENDUNGEN = [".dat", ".xls", ".xlsx", ".xlsm", ".csv"];
-
-// Art des TRY aus dem Kuerzel im Dateinamen (Handbuch Kap. 2, AAAA) - dieselbe
-// Zuordnung wie in core/wetter/try_dat.py: ARTEN. Hier nur fuer die
-// Beschriftung der Ankreuzliste; verbindlich benannt wird auf dem Server.
-const TRY_ARTEN = {
-  jahr: "mittleres Jahr",
-  somm: "extremer Sommer",
-  wint: "extremer Winter",
-};
-const TRY_NAMENSMUSTER = /^TR[YJ](\d{4})_[^_]*_(Jahr|Somm|Wint)/i;
-
-
-// Archive werden bewusst nicht ausgepackt (core/wetter/einlesen.py:
-// ARCHIVENDUNGEN). Sie werden hier trotzdem erkannt, damit ein Nutzer, der ein
-// heruntergeladenes Zip waehlt, erfaehrt, was er tun soll - statt vor einer
-// leeren Liste zu stehen.
-const WETTER_ARCHIVENDUNGEN = [".zip", ".7z", ".rar", ".tar", ".gz", ".tgz", ".bz2"];
-
-const ARCHIV_HINWEIS =
-  "Archive werden nicht ausgepackt. Bitte das Archiv entpacken und den " +
-  "entpackten Ordner auswählen – die Dateien darin werden dann gefunden, " +
-  "auch in Unterordnern.";
-
-function wetterIstArchiv(dateiname) {
-  const klein = dateiname.toLowerCase();
-  return WETTER_ARCHIVENDUNGEN.some((endung) => klein.endsWith(endung));
-}
-
-function wetterEndungErlaubt(dateiname) {
-  const klein = dateiname.toLowerCase();
-  return WETTER_ENDUNGEN.some((endung) => klein.endsWith(endung));
-}
-
-// "TRY2015_510881137633_Somm.dat" -> "2015 - extremer Sommer". Alles, was nicht
-// auf die Konvention passt, behaelt seinen Dateinamen: raten waere schlechter
-// als zeigen, was dasteht.
-function wetterBeschriftung(dateiname) {
-  const treffer = TRY_NAMENSMUSTER.exec(dateiname);
-  if (!treffer) return dateiname;
-  const art = TRY_ARTEN[treffer[2].toLowerCase()];
-  return art ? `${treffer[1]} – ${art}` : dateiname;
-}
-
-// Schluesseljahr aus dem Dateinamen, oder null.
-function wetterSchluesseljahr(dateiname) {
-  const treffer = TRY_NAMENSMUSTER.exec(dateiname);
-  return treffer ? Number(treffer[1]) : null;
-}
-
-// Ein Zukunfts-TRJ beruht auf Klimamodellen fuer einen Zeitraum, der noch
-// bevorsteht (derzeit 2031-2060, Schluesseljahr 2045). Es wird seltener
-// gebraucht als das Gegenwarts-TRJ und darum nicht vorgehakt - man soll es
-// bewusst dazunehmen.
-//
-// Verglichen wird mit dem laufenden Jahr statt mit der festen Zahl 2045:
-// liefert der DWD spaeter einen weiteren Zukunftsdatensatz unter einem anderen
-// Schluesseljahr, greift die Regel weiterhin.
-function wetterIstZukunftsjahr(dateiname) {
-  const jahr = wetterSchluesseljahr(dateiname);
-  return jahr !== null && jahr > new Date().getFullYear();
-}
-
-// Der oberste Ordnername der Auswahl - beim Ordner-Upload der Standort.
-// webkitRelativePath sieht bei einer Ordnerwahl so aus:
-// "Dresden_Industriegelaende/TRY_510881137633/TRY2015_..._Jahr.dat".
-function wetterStandortRaten(dateien) {
-  for (const datei of dateien) {
-    const pfad = datei.webkitRelativePath || "";
-    const teile = pfad.split("/").filter(Boolean);
-    if (teile.length > 1) return teile[0];
-  }
-  return "";
-}
-
-// wetterNachStandort() und OHNE_STANDORT stehen in static/js/wetterauswahl.js -
-// die Editorseite braucht dieselbe Buendelung fuer ihre Simulationsdialoge.
-
 const Start = {
-  projekte: [],
-  anlagen: [],
-  wetter: [],
+  // Die Anlagenvorlagen fuer den Dialog "Anlage anlegen" - das Einzige, was
+  // diese Seite noch nachlaedt.
   vorlagen: {},
-  // Die im Ordner gefundenen und im Formular angekreuzten Dateien.
-  wetterAuswahl: [],
-  // Mitgewaehlte Archive - nur, um sie erklaeren zu koennen.
-  wetterArchive: [],
 
+  /* Projekte, Anlagen und Wetterdatensaetze stehen schon im HTML
+     (routes/pages.py) - geholt wird nur noch, was auf keiner Seite steht: die
+     Vorlagenliste fuer den Dialog "Anlage anlegen". Sie wird erst beim Oeffnen
+     des Dialogs gebraucht, deshalb darf sie ruhig nachtroepfeln. */
   async laden() {
-    let antworten;
+    let antwort;
     try {
-      antworten = await Promise.all([
-        fetch("/api/projekte"),
-        fetch("/api/anlagen"),
-        fetch("/api/wetter"),
-        fetch("/api/vorlagen"),
-      ]);
+      antwort = await fetch("/api/vorlagen");
     } catch {
-      zeigeFehler("Startseite konnte nicht geladen werden.");
+      zeigeFehler("Die Anlagenvorlagen konnten nicht geladen werden.");
       return;
     }
-    if (antworten.some((a) => !a.ok)) {
-      zeigeFehler("Startseite konnte nicht geladen werden.");
+    if (!antwort.ok) {
+      zeigeFehler("Die Anlagenvorlagen konnten nicht geladen werden.");
       return;
     }
-    [this.projekte, this.anlagen, this.wetter, this.vorlagen] =
-      await Promise.all(antworten.map((a) => a.json()));
+    this.vorlagen = await antwort.json();
+  },
 
-    this.zeichneEinstieg();
-    await this.zeichneProjekte();
-    await this.zeichneLehrmaterial();
-    this.zeichneWetter();
+  /* Die Projektliste steht schon im HTML (routes/pages.py, _projektliste) -
+     dieses Skript baut sie nicht mehr, es haengt nur seine Handlungen an die
+     fertigen Elemente. Vorher baute es sie im Browser und fragte dafuer den
+     Status JEDER Anlage einzeln nach: bei zehn Anlagen elf Anfragen fuer eine
+     Liste, die in einer Abfrage steht - und bis sie durch waren, zeigte die
+     Seite eine leere Flaeche.
+
+     Nach einer Aenderung wird die Seite neu geladen, statt die Liste im
+     Browser nachzuziehen. Das ist EINE Anfrage und kann nicht von dem
+     abweichen, was der Server ohnehin liefert; zwei Wege zu derselben
+     Darstellung waeren zwei Wege, die auseinanderlaufen. */
+  bindeProjekte() {
+    const bei = (auswahl, was) => {
+      document.querySelectorAll(auswahl).forEach((element) => {
+        element.addEventListener("click", (e) => {
+          e.preventDefault();
+          was(element);
+        });
+      });
+    };
+
+    bei("[data-projekt-umbenennen]", (el) =>
+      this.projektUmbenennenDialog({
+        id: Number(el.dataset.projektUmbenennen),
+        name: el.closest(".projekt-block").dataset.name,
+      })
+    );
+    bei("[data-projekt-loeschen]", (el) => {
+      const block = el.closest(".projekt-block");
+      this.projektLoeschenDialog({
+        id: Number(el.dataset.projektLoeschen),
+        name: block.dataset.name,
+        anlagen: block.querySelectorAll(".anlage-zeile").length,
+      });
+    });
+    bei("[data-anlage-umbenennen]", (el) =>
+      this.anlageUmbenennenDialog({
+        id: Number(el.dataset.anlageUmbenennen), name: el.dataset.name,
+      })
+    );
+    bei("[data-anlage-loeschen]", (el) =>
+      this.anlageLoeschenDialog({
+        id: Number(el.dataset.anlageLoeschen), name: el.dataset.name,
+      })
+    );
+    bei("[data-anlage-anlegen]", (el) => {
+      const block = el.closest(".projekt-block");
+      this.anlageAnlegenDialog({
+        id: Number(el.dataset.anlageAnlegen), name: block.dataset.name,
+      });
+    });
+    const erstes = document.getElementById("btn-erstes-projekt");
+    if (erstes) erstes.addEventListener("click", () => this.projektAnlegenDialog());
+  },
+
+  /* Ein Lauf, der GERADE rechnet, ist das Einzige an der Liste, was sich
+     ohne Zutun aendert - dafuer fragt die Seite weiter nach, aber nur fuer
+     die Anlagen, deren Etikett "Laeuft" sagt. Der Fortschritt landet neben
+     dem Etikett, in derselben Spalte wie sonst Kosten und Warnungen. */
+  async laufendeVerfolgen() {
+    const laufende = [...document.querySelectorAll(".anlage-zeile .etikett-laeuft")];
+    if (!laufende.length) return;
+    for (const etikett of laufende) {
+      const zeile = etikett.closest("[data-anlage]");
+      try {
+        const antwort = await fetch(`/api/anlagen/${zeile.dataset.anlage}/laufende_simulation`);
+        if (!antwort.ok) continue;
+        const fortschritt = await antwort.json();
+        if (fortschritt && fortschritt.gesamt) {
+          zeile.querySelector(".anlage-zeile-angaben").textContent =
+            `${fortschritt.fertig || 0} von ${fortschritt.gesamt} Stunden`;
+        }
+      } catch {
+        // Der Fortschritt ist eine Zugabe zum blossen "Laeuft" - bleibt er
+        // aus, steht dort weiterhin nur das Etikett.
+      }
+    }
+    window.setTimeout(() => this.laufendeVerfolgen(), 3000);
   },
 
   // Beispielanlagen aus /bausteine landen serverseitig in einem eigenen,
@@ -269,13 +147,14 @@ const Start = {
   // "ist_lehrmaterial". Getrennt von eigenenProjekte() gehalten, damit
   // weder der Einstiegskasten noch "Noch kein Projekt vorhanden" dieses
   // automatisch entstandene Projekt faelschlich als eigene Arbeit zaehlen.
+  /* Wieviele eigene Projekte es gibt, steht auf der Seite - sie ist
+     serverseitig gefuellt (routes/pages.py). Der Einstiegskasten fragt
+     danach; er soll nur beim allerersten Besuch erscheinen. */
   eigeneProjekte() {
-    return this.projekte.filter((p) => !p.ist_lehrmaterial);
+    return [...document.querySelectorAll("#start-projekte .projekt-block")];
   },
 
-  lehrmaterialProjekte() {
-    return this.projekte.filter((p) => p.ist_lehrmaterial);
-  },
+
 
   // -- Einstieg -------------------------------------------------------------
 
@@ -289,10 +168,11 @@ const Start = {
   // Voraussetzung, siehe static/css/start.css).
   zeichneEinstieg() {
     const bereich = document.getElementById("start-einstieg");
+    if (!bereich) return;
     bereich.textContent = "";
     if (this.eigeneProjekte().length) return;
 
-    const hatWetter = this.wetter.length > 0;
+    const hatWetter = this.wetterAnzahl() > 0;
 
     const kasten = document.createElement("div");
     kasten.className = "start-einstieg";
@@ -314,12 +194,15 @@ const Start = {
         hatWetter
           ? "Mindestens ein Datensatz ist vorhanden."
           : "Ort wählen, Jahr(e) ankreuzen – meist in unter einer Sekunde fertig.",
-        hatWetter ? null : { text: "Zu den Wetterdaten", ziel: () => this._zuWetterdaten() }
+        hatWetter ? null : { text: "Zu den Wetterdaten",
+                             ziel: () => { window.location.href = "/wetter"; } }
       ),
       this._einstiegSchrittElement(
-        2, "Projekt und Anlage anlegen", false,
-        "Eine Anlage gehört immer zu einem Projekt – leer oder aus einer Vorlage.",
-        null
+        2, "Anlage aussuchen", false,
+        "Zwölf fertig verdrahtete Anlagen stehen bereit – Büro, Schwimmhalle, " +
+        "Rechenzentrum und weitere, jede mit vorgerechneter Auslegung. Oder " +
+        "leer anfangen.",
+        { text: "Zu den Anlagen", ziel: () => { window.location.href = "/anlagen"; } }
       ),
       this._einstiegSchrittElement(
         3, "Rechnen lassen", false,
@@ -349,11 +232,14 @@ const Start = {
     }
     const text = document.createElement("div");
     text.className = "einstieg-text";
-    const h2 = document.createElement("h2");
-    h2.textContent = titelText;
+    // <h3>, nicht <h2>: Die Schritte stehen unter der Ueberschrift des
+    // Kastens (start-einstieg-titel, <h2>), die wiederum unter der <h1> der
+    // Seite steht - eine Vorlesehilfe liest die Gliederung so richtig.
+    const h3 = document.createElement("h3");
+    h3.textContent = titelText;
     const p = document.createElement("p");
     p.textContent = hinweisText;
-    text.append(h2, p);
+    text.append(h3, p);
     if (aktion) {
       const knopf = document.createElement("button");
       knopf.type = "button";
@@ -366,194 +252,16 @@ const Start = {
     return schritt;
   },
 
-  _zuWetterdaten() {
-    const abschnitt = document.getElementById("wetter-abschnitt");
-    if (abschnitt) abschnitt.scrollIntoView({ behavior: "smooth", block: "start" });
-    const ort = document.getElementById("feld-wetter-abruf-ort");
-    if (ort) ort.focus();
+  /* Wieviele Wetterdatensaetze es gibt, steht serverseitig am
+     Einstiegskasten (routes/pages.py: index() -> wetter_anzahl). Er fragt
+     danach, um seinen ersten Schritt abzuhaken - und ist der Einzige auf
+     dieser Seite, der es noch wissen muss. */
+  wetterAnzahl() {
+    const kasten = document.getElementById("start-einstieg");
+    return kasten ? Number(kasten.dataset.wetterAnzahl || 0) : 0;
   },
 
   // -- Projekte und Anlagen ------------------------------------------------
-
-  async zeichneProjekte() {
-    const bereich = document.getElementById("start-projekte");
-    bereich.textContent = "";
-
-    const eigene = this.eigeneProjekte();
-    if (!eigene.length) {
-      bereich.appendChild(this.leerhinweisElement());
-      return;
-    }
-
-    const karten = await Promise.all(
-      eigene.map((p) => this.projektKarteElement(p))
-    );
-    karten.forEach((karte) => bereich.appendChild(karte));
-  },
-
-  // Dasselbe Kartenlayout wie zeichneProjekte() (projektKarteElement()
-  // wiederverwendet, damit eine Beispielanlage genauso aussieht wie eine
-  // eigene) - nur in einem eingeklappten <details> statt zwischen den
-  // eigenen Projekten (siehe templates/index.html, Task-Rueckmeldung: "Sie
-  // sind Lehrmaterial, kein Arbeitsergebnis"). Ganz versteckt (hidden), wenn
-  // es noch nie eine Beispielanlage gab - kein leerer Abschnitt fuer
-  // jemanden, der /bausteine nie geoeffnet hat.
-  async zeichneLehrmaterial() {
-    const abschnitt = document.getElementById("start-lehrmaterial");
-    const bereich = document.getElementById("start-lehrmaterial-inhalt");
-    const lehrmaterial = this.lehrmaterialProjekte();
-
-    if (!lehrmaterial.length) {
-      abschnitt.hidden = true;
-      return;
-    }
-    abschnitt.hidden = false;
-    bereich.textContent = "";
-    const karten = await Promise.all(
-      lehrmaterial.map((p) => this.projektKarteElement(p))
-    );
-    karten.forEach((karte) => bereich.appendChild(karte));
-  },
-
-  // Kurz gehalten (Schritt 2 des Einstiegskastens oben erklaert die
-  // Reihenfolge schon ausfuehrlich) - hier nur noch die eine Handlung, die
-  // an dieser Stelle der Seite tatsaechlich fehlt.
-  leerhinweisElement() {
-    const div = document.createElement("div");
-    div.className = "leerhinweis-gross";
-    const titel = document.createElement("h2");
-    titel.textContent = "Noch kein Projekt vorhanden";
-    const text = document.createElement("p");
-    text.textContent =
-      "Eine Anlage gehört immer zu einem Projekt – leer oder aus der " +
-      "mitgelieferten Vorlage AX_SIM 2.1 (zwei Lüftungsgeräte an gemeinsamer " +
-      "Wärmerückgewinnung, ein Raum).";
-    const knopf = document.createElement("button");
-    knopf.className = "knopf-haupt";
-    knopf.textContent = "Erstes Projekt anlegen";
-    knopf.addEventListener("click", () => this.projektAnlegenDialog());
-    div.append(titel, text, knopf);
-    return div;
-  },
-
-  async projektKarteElement(projekt) {
-    const div = document.createElement("div");
-    div.className = "projekt-karte";
-
-    const kopf = document.createElement("div");
-    kopf.className = "projekt-kopf";
-    const kopfZeile = document.createElement("div");
-    kopfZeile.className = "projekt-kopf-zeile";
-    const titel = document.createElement("h2");
-    titel.textContent = projekt.name;
-    kopfZeile.appendChild(titel);
-    kopfZeile.appendChild(this.eintragAktionenElement(
-      () => this.projektUmbenennenDialog(projekt),
-      () => this.projektLoeschenDialog(projekt),
-    ));
-    kopf.appendChild(kopfZeile);
-    if (projekt.beschreibung) {
-      const beschreibung = document.createElement("p");
-      beschreibung.className = "projekt-beschreibung";
-      beschreibung.textContent = projekt.beschreibung;
-      kopf.appendChild(beschreibung);
-    }
-    div.appendChild(kopf);
-
-    const anlagenDesProjekts = this.anlagen.filter((a) => a.projekt_id === projekt.id);
-    const liste = document.createElement("div");
-    liste.className = "anlagen-liste";
-    if (!anlagenDesProjekts.length) {
-      const hinweis = document.createElement("p");
-      hinweis.className = "leerhinweis";
-      hinweis.textContent = "Noch keine Anlage in diesem Projekt.";
-      liste.appendChild(hinweis);
-    } else {
-      const karten = await Promise.all(
-        anlagenDesProjekts.map((a) => this.anlageKarteElement(a))
-      );
-      karten.forEach((karte) => liste.appendChild(karte));
-    }
-    div.appendChild(liste);
-
-    const aktionen = document.createElement("div");
-    aktionen.className = "projekt-aktionen";
-    const btnAnlage = document.createElement("button");
-    btnAnlage.textContent = "+ Anlage";
-    btnAnlage.addEventListener("click", () => this.anlageAnlegenDialog(projekt));
-    aktionen.appendChild(btnAnlage);
-    div.appendChild(aktionen);
-
-    return div;
-  },
-
-  async anlageKarteElement(anlage) {
-    const status = await this.ladeStatus(anlage.id);
-
-    const link = document.createElement("a");
-    link.className = "anlage-karte";
-    link.href = `/anlage/${anlage.id}`;
-
-    const name = document.createElement("div");
-    name.className = "anlage-name";
-    name.textContent = anlage.name;
-    link.appendChild(name);
-
-    const info = document.createElement("div");
-    info.className = "anlage-info";
-    info.textContent = `${anlage.karten} ${anlage.karten === 1 ? "Karte" : "Karten"}`;
-    link.appendChild(info);
-
-    const badge = document.createElement("div");
-    badge.className = "anlage-status";
-    this._fuelleStatus(badge, status);
-    link.appendChild(badge);
-
-    // Umbenennen/Loeschen als eigene Zeile UNTER dem Link statt darin - ein
-    // <button> innerhalb eines <a> wuerde beim Klick immer auch navigieren.
-    // "Bericht" in derselben Zeile, aus demselben Grund als eigener <a>
-    // statt als Link im Kartenkoerper - und nur, wenn es zum letzten Lauf
-    // ueberhaupt einen gibt (core/bericht.py: STATUS_MIT_ERGEBNIS).
-    const eintrag = document.createElement("div");
-    eintrag.className = "anlage-eintrag";
-    eintrag.appendChild(link);
-    const aktionen = this.eintragAktionenElement(
-      () => this.anlageUmbenennenDialog(anlage),
-      () => this.anlageLoeschenDialog(anlage),
-    );
-    if (status.letzter && STATUS_MIT_BERICHT.includes(status.letzter.status)) {
-      // Ans Ende angehaengt (nicht davor): bei einem Zeilenumbruch (siehe
-      // static/css/loeschen.css, .eintrag-aktionen) soll "Bericht" allein
-      // in die zweite Zeile rutschen, nicht "Loeschen" - der informative
-      // Verweis darf vereinzelt stehen, der gefaehrliche Knopf besser nicht.
-      const berichtLink = document.createElement("a");
-      berichtLink.className = "knopf-mini";
-      berichtLink.textContent = "Bericht";
-      berichtLink.href = `/anlage/${anlage.id}/lauf/${status.letzter.id}/bericht`;
-      aktionen.appendChild(berichtLink);
-    }
-    eintrag.appendChild(aktionen);
-    return eintrag;
-  },
-
-  // Zwei kleine Knoepfe (Umbenennen/Loeschen) - fuer Projekt- und
-  // Anlagekarten identisch aufgebaut, deshalb hier einmal gemeinsam gebaut.
-  eintragAktionenElement(umbenennen, loeschen) {
-    const zeile = document.createElement("div");
-    zeile.className = "eintrag-aktionen";
-    const btnUmbenennen = document.createElement("button");
-    btnUmbenennen.type = "button";
-    btnUmbenennen.className = "knopf-mini";
-    btnUmbenennen.textContent = "Umbenennen";
-    btnUmbenennen.addEventListener("click", (e) => { e.preventDefault(); umbenennen(); });
-    const btnLoeschen = document.createElement("button");
-    btnLoeschen.type = "button";
-    btnLoeschen.className = "knopf-mini knopf-mini-gefahr";
-    btnLoeschen.textContent = "Löschen";
-    btnLoeschen.addEventListener("click", (e) => { e.preventDefault(); loeschen(); });
-    zeile.append(btnUmbenennen, btnLoeschen);
-    return zeile;
-  },
 
   async projektUmbenennenDialog(projekt) {
     const neuerName = await textEingabeDialog("Projekt umbenennen", projekt.name);
@@ -573,7 +281,7 @@ const Start = {
       zeigeFehler("Projekt konnte nicht umbenannt werden.");
       return;
     }
-    await this.laden();
+    window.location.reload();
   },
 
   // 'projekt.anlagen'/'projekt.simulationen' kommen bereits gezaehlt von
@@ -601,7 +309,7 @@ const Start = {
       zeigeFehler("Projekt konnte nicht gelöscht werden.");
       return;
     }
-    await this.laden();
+    window.location.reload();
   },
 
   async anlageUmbenennenDialog(anlage) {
@@ -622,7 +330,7 @@ const Start = {
       zeigeFehler("Anlage konnte nicht umbenannt werden.");
       return;
     }
-    await this.laden();
+    window.location.reload();
   },
 
   async anlageLoeschenDialog(anlage) {
@@ -646,7 +354,7 @@ const Start = {
       zeigeFehler("Anlage konnte nicht gelöscht werden.");
       return;
     }
-    await this.laden();
+    window.location.reload();
   },
 
   // Baut aus [[anzahl, einzahl, mehrzahl], ...] den Satz 'Werden mit
@@ -660,90 +368,6 @@ const Start = {
       .map(([anzahl, einzahl, mehrzahl]) => `${anzahl} ${anzahl === 1 ? einzahl : mehrzahl}`);
     if (!genannt.length) return "";
     return ` <span class="dialog-text-verlust">Werden mit gelöscht: ${genannt.join(", ")}.</span>`;
-  },
-
-  _fuelleStatus(badge, status) {
-    if (status.fehler) {
-      badge.textContent = "Status nicht abrufbar";
-      badge.classList.add("anlage-status-unbekannt");
-      return;
-    }
-    if (status.letzter && status.letzter.status === "laeuft") {
-      const fortschritt = status.fortschritt;
-      badge.textContent =
-        fortschritt && fortschritt.gesamt
-          ? `läuft … ${fortschritt.fertig || 0}/${fortschritt.gesamt} Std.`
-          : "läuft …";
-      badge.classList.add("anlage-status-laeuft");
-      return;
-    }
-    if (!status.letzter) {
-      badge.textContent = "Noch nicht simuliert";
-      badge.classList.add("anlage-status-offen");
-      return;
-    }
-    const formatiere = BADGE_TEXT[status.letzter.status];
-    const haupttext = formatiere
-      ? formatiere(status.letzter)
-      : `Letzter Lauf: ${status.letzter.status}`;
-    // Ein "fertig" markierter Lauf mit Warnungen soll nicht wie ein glatter
-    // Erfolg aussehen (core.ergebnisse.simulationen_von(): anzahl_warnungen
-    // summiert Konvergenz- und Baustein-Warnungen) - dieselbe Warnfarbe wie
-    // bei abgebrochen/fehler, auch wenn der Status selbst "fertig" bleibt.
-    const anzahlWarnungen = status.letzter.anzahl_warnungen || 0;
-    badge.textContent = haupttext;
-    badge.classList.add(
-      status.letzter.status === "fertig" && !anzahlWarnungen
-        ? "anlage-status-fertig"
-        : "anlage-status-warnung"
-    );
-    if (anzahlWarnungen) {
-      const warnzusatz = document.createElement("span");
-      warnzusatz.textContent = ` · ${anzahlWarnungen} ${anzahlWarnungen === 1 ? "Warnung" : "Warnungen"}`;
-      badge.appendChild(warnzusatz);
-    }
-    // Zweite, stumme Zeile: wann zuletzt gerechnet und mit welchem
-    // Wetterjahr - sonst sagt die Karte ausser Kosten/Zustand nichts ueber
-    // sich (siehe Task, Befund 3). wetter_name ist ein frei vergebener Name
-    // (Umbenennen/Abruf) - deshalb per textContent statt innerHTML gesetzt,
-    // kein htmlSicher() noetig.
-    const neben = document.createElement("div");
-    neben.className = "anlage-status-neben";
-    neben.textContent = `${formatDatum(status.letzter.gestartet_am)} · ${status.letzter.wetter_name}`;
-    badge.appendChild(neben);
-  },
-
-  // Ob fuer eine Anlage gerade ein Lauf rechnet, und was der letzte Lauf ergab
-  // - so weit die Endpunkte das hergeben. Ein Fehlschlag hier legt nicht die
-  // ganze Seite lahm (die Karte bleibt als Verweis in den Editor nutzbar) -
-  // er zeigt sich sichtbar als eigenes Abzeichen auf genau dieser Karte statt
-  // ueber die gemeinsame Fehlerleiste, die sonst bei vielen Anlagen mehrfach
-  // aufblitzen wuerde.
-  async ladeStatus(anlageId) {
-    let antwort;
-    try {
-      antwort = await fetch(`/api/anlagen/${anlageId}/simulationen`);
-    } catch {
-      return { fehler: true };
-    }
-    if (!antwort.ok) return { fehler: true };
-    const laeufe = await antwort.json();
-    const letzter = laeufe[0] || null;
-    if (!letzter || letzter.status !== "laeuft") {
-      return { letzter };
-    }
-
-    let fortschritt = null;
-    try {
-      const fortschrittAntwort = await fetch(
-        `/api/anlagen/${anlageId}/laufende_simulation`
-      );
-      if (fortschrittAntwort.ok) fortschritt = await fortschrittAntwort.json();
-    } catch {
-      // Der Fortschrittswert ist eine Zugabe zum blossen "laeuft" - sein
-      // Fehlen soll die Karte nicht als fehlerhaft zeigen.
-    }
-    return { letzter, fortschritt };
   },
 
   projektAnlegenDialog() {
@@ -792,17 +416,25 @@ const Start = {
         return;
       }
       huelle.remove();
-      await this.laden();
+      window.location.reload();
     };
   },
 
   anlageAnlegenDialog(projekt) {
+    /* Name zuerst, Beschreibung darunter: Vorher stand hier ausschliesslich
+       der lange Beschreibungstext, und zwoelf davon untereinander waren nicht
+       zu ueberblicken - man las zwoelf Absaetze, um "Schwimmhalle" zu finden.
+       Wer mehr wissen will, findet die vollstaendige Auslegung im
+       Anlagenkatalog; dorthin fuehrt der Verweis unter der Liste. */
     const vorlagenHtml = Object.entries(this.vorlagen)
       .map(
         ([kennung, vorlage]) => `
         <label class="vorlage-wahl">
           <input type="radio" name="vorlage" value="${htmlSicher(kennung)}">
-          <span>${htmlSicher(vorlage.beschreibung)}</span>
+          <span class="vorlage-wahl-text">
+            <span class="vorlage-wahl-name">${htmlSicher(vorlage.name)}</span>
+            <span class="vorlage-wahl-hinweis">${htmlSicher(vorlage.beschreibung)}</span>
+          </span>
         </label>`
       )
       .join("");
@@ -823,6 +455,10 @@ const Start = {
             <span>Leere Leinwand</span>
           </label>
           ${vorlagenHtml}
+          <p class="vorlage-wahl-weg">
+            Alle Anlagen mit ihrer vorgerechneten Auslegung:
+            <a href="/anlagen">zum Anlagenkatalog</a>
+          </p>
         </div>
         <div class="dialog-knoepfe">
           <button id="btn-abbrechen">Abbrechen</button>
@@ -880,488 +516,15 @@ const Start = {
   },
 
   // -- Wetterdaten ----------------------------------------------------------
-
-  zeichneWetter() {
-    const bereich = document.getElementById("start-wetter-liste");
-    bereich.textContent = "";
-
-    if (!this.wetter.length) {
-      const hinweis = document.createElement("p");
-      hinweis.className = "leerhinweis";
-      hinweis.textContent =
-        "Noch keine Wetterdaten hochgeladen. Ohne einen Datensatz kann kein " +
-        "Simulationslauf starten.";
-      bereich.appendChild(hinweis);
-      return;
-    }
-
-    // Nach Standort gebuendelt statt als flache Liste: ein einziger
-    // TRY-Ordner bringt sechs Jahre mit, die sonst als sechs zusammenhanglose
-    // Zeilen dastuenden.
-    const gruppen = wetterNachStandort(this.wetter);
-    const zeilen = Array.from(gruppen.entries())
-      .map(
-        ([ort, eintraege]) => `
-        <tr class="wetter-standort-zeile">
-          <th colspan="5" scope="rowgroup">${htmlSicher(ort)}</th>
-        </tr>` + eintraege
-        .map(
-        (w) => `
-        <tr data-id="${w.id}">
-          <td>${htmlSicher(w.name)}</td>
-          <td><span class="wetter-quelle-etikett">${htmlSicher(
-            WETTER_QUELLE_TEXT[w.quelle] || w.quelle
-          )}</span></td>
-          <td>${w.jahr ?? ""}</td>
-          <td class="zahl">${w.stunden}</td>
-          <td class="wetter-tabelle-aktionen">
-            <button type="button" class="knopf-mini wetter-umbenennen">Umbenennen</button>
-            <button type="button" class="knopf-mini knopf-mini-gefahr wetter-loeschen"
-                    ${w.simulationen ? "disabled" : ""}
-                    title="${
-                      w.simulationen
-                        ? `Wird von ${w.simulationen} ${
-                            w.simulationen === 1 ? "Simulationslauf" : "Simulationsläufen"
-                          } verwendet`
-                        : ""
-                    }">Löschen</button>
-          </td>
-        </tr>`
-        )
-        .join("")
-      )
-      .join("");
-
-    const tabelle = document.createElement("table");
-    tabelle.className = "bilanz wetter-tabelle";
-    tabelle.innerHTML = `
-      <thead>
-        <tr><th>Name</th><th>Quelle</th><th>Jahr</th>
-            <th class="zahl">Stunden</th><th></th></tr>
-      </thead>
-      <tbody>${zeilen}</tbody>`;
-    bereich.appendChild(tabelle);
-
-    tabelle.querySelectorAll("tbody tr[data-id]").forEach((zeile) => {
-      const datensatz = this.wetter.find((w) => w.id === Number(zeile.dataset.id));
-      zeile.querySelector(".wetter-umbenennen").addEventListener("click", () =>
-        this.wetterUmbenennenDialog(datensatz)
-      );
-      zeile.querySelector(".wetter-loeschen").addEventListener("click", () =>
-        this.wetterLoeschenDialog(datensatz)
-      );
-    });
-  },
-
-  async wetterUmbenennenDialog(datensatz) {
-    const neuerName = await textEingabeDialog("Wetterdatensatz umbenennen", datensatz.name);
-    if (neuerName === null) return;
-    let antwort;
-    try {
-      antwort = await fetch(`/api/wetter/${datensatz.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: neuerName }),
-      });
-    } catch {
-      zeigeFehler("Wetterdatensatz konnte nicht umbenannt werden.");
-      return;
-    }
-    if (!antwort.ok) {
-      zeigeFehler("Wetterdatensatz konnte nicht umbenannt werden.");
-      return;
-    }
-    await this._wetterListeAktualisieren(
-      "Umbenannt, die Liste konnte aber nicht aktualisiert werden."
-    );
-  },
-
-  // Der Loeschknopf ist bei einem verwendeten Datensatz schon deaktiviert
-  // (siehe zeichneWetter()) - dieser Zweig greift nur bei einem inzwischen
-  // veralteten Stand (z.B. ein zweiter, offener Tab hat gerade einen Lauf
-  // gestartet), nicht als erster Weg dorthin.
-  async wetterLoeschenDialog(datensatz) {
-    const bestaetigt = await bestaetigenDialog(
-      "Wetterdatensatz löschen",
-      `Wetterdatensatz "${htmlSicher(datensatz.name)}" (${datensatz.stunden} Stunden) ` +
-        "wirklich löschen?"
-    );
-    if (!bestaetigt) return;
-    let antwort;
-    try {
-      antwort = await fetch(`/api/wetter/${datensatz.id}`, { method: "DELETE" });
-    } catch {
-      zeigeFehler("Wetterdatensatz konnte nicht gelöscht werden.");
-      return;
-    }
-    if (!antwort.ok) {
-      let text = "Wetterdatensatz konnte nicht gelöscht werden.";
-      try {
-        const daten = await antwort.json();
-        if (daten.fehler) text = daten.fehler;
-      } catch {
-        /* Antwort war kein JSON - bei der Vorgabemeldung bleiben. */
-      }
-      zeigeFehler(text);
-      return;
-    }
-    await this._wetterListeAktualisieren(
-      "Gelöscht, die Liste konnte aber nicht aktualisiert werden."
-    );
-  },
-
-  // Sammelt die Auswahl aus beiden Dateifeldern (Ordner und Einzeldateien),
-  // wirft alles Unlesbare weg und baut daraus die Ankreuzliste.
-  //
-  // Gefiltert wird hier und nicht erst auf dem Server, damit das Handbuch-PDF
-  // aus einem TRY-Ordner den Rechner gar nicht erst verlaesst.
-  wetterDateiAktualisieren() {
-    const ordnerFeld = document.getElementById("feld-wetter-ordner");
-    const dateiFeld = document.getElementById("feld-wetter-datei");
-    const ortFeld = document.getElementById("feld-wetter-ort");
-
-    const ordnerDateien = Array.from(ordnerFeld?.files || []);
-    const einzelDateien = Array.from(dateiFeld?.files || []);
-    const alle = [...ordnerDateien, ...einzelDateien];
-    const lesbare = alle.filter((d) => wetterEndungErlaubt(d.name));
-    this.wetterArchive = alle.filter((d) => wetterIstArchiv(d.name));
-
-    this.wetterAuswahl = lesbare.map((datei) => ({
-      datei,
-      pfad: datei.webkitRelativePath || datei.name,
-      beschriftung: wetterBeschriftung(datei.name),
-      angehakt: !wetterIstZukunftsjahr(datei.name),
-    }));
-
-    const ordnerName = wetterStandortRaten(ordnerDateien);
-    if (ordnerName && ortFeld && !ortFeld.value.trim()) ortFeld.value = ordnerName;
-
-    const ordnerAnzeige = document.getElementById("feld-wetter-ordnername");
-    if (ordnerAnzeige) {
-      ordnerAnzeige.textContent = ordnerName
-        ? `${ordnerName} (${ordnerDateien.length} Dateien)`
-        : "Kein Ordner ausgewählt";
-    }
-    const dateiAnzeige = document.getElementById("feld-wetter-dateiname");
-    if (dateiAnzeige) {
-      dateiAnzeige.textContent =
-        einzelDateien.length === 0
-          ? "Keine Datei ausgewählt"
-          : einzelDateien.map((d) => d.name).join(", ");
-    }
-
-    this.zeichneWetterAuswahl(alle.length - lesbare.length);
-  },
-
-  // Die Ankreuzliste unter den Dateifeldern. Sie zeigt auch, wie viele Dateien
-  // aussortiert wurden - sonst wirkt ein Ordner mit Handbuch, als haette das
-  // Programm etwas verschluckt.
-  zeichneWetterAuswahl(uebersprungen) {
-    const bereich = document.getElementById("wetter-auswahl-liste");
-    if (!bereich) return;
-    bereich.textContent = "";
-
-    // Ein Archiv erklaeren wir auch dann, wenn sonst nichts gefunden wurde -
-    // sonst bliebe der Kasten leer und der Nutzer ratlos.
-    if (!this.wetterAuswahl.length && !this.wetterArchive.length) {
-      bereich.hidden = true;
-      return;
-    }
-    bereich.hidden = false;
-
-    if (this.wetterArchive.length) {
-      const archivHinweis = document.createElement("p");
-      archivHinweis.className = "wetter-auswahl-hinweis wetter-auswahl-warnung";
-      archivHinweis.textContent = ARCHIV_HINWEIS;
-      bereich.appendChild(archivHinweis);
-    }
-
-    const liste = document.createElement("ul");
-    liste.className = "wetter-auswahl-liste";
-    this.wetterAuswahl.forEach((eintrag, nummer) => {
-      const zeile = document.createElement("li");
-      const marke = document.createElement("label");
-
-      const haken = document.createElement("input");
-      haken.type = "checkbox";
-      haken.checked = eintrag.angehakt;
-      haken.addEventListener("change", () => {
-        this.wetterAuswahl[nummer].angehakt = haken.checked;
-      });
-
-      const titel = document.createElement("span");
-      titel.className = "wetter-auswahl-titel";
-      titel.textContent = eintrag.beschriftung;
-
-      const pfad = document.createElement("span");
-      pfad.className = "wetter-auswahl-pfad";
-      pfad.textContent = eintrag.pfad;
-
-      marke.append(haken, titel, pfad);
-      zeile.appendChild(marke);
-      liste.appendChild(zeile);
-    });
-    bereich.appendChild(liste);
-
-    if (uebersprungen > 0) {
-      const hinweis = document.createElement("p");
-      hinweis.className = "wetter-auswahl-hinweis";
-      hinweis.textContent =
-        uebersprungen === 1
-          ? "Eine weitere Datei im Ordner ist keine Wetterdatei und bleibt liegen."
-          : `${uebersprungen} weitere Dateien im Ordner sind keine Wetterdaten und bleiben liegen.`;
-      bereich.appendChild(hinweis);
-    }
-  },
-
-  async wetterHochladen(ereignis) {
-    ereignis.preventDefault();
-    const ordnerFeld = document.getElementById("feld-wetter-ordner");
-    const dateiFeld = document.getElementById("feld-wetter-datei");
-    const ortFeld = document.getElementById("feld-wetter-ort");
-    const nameFeld = document.getElementById("feld-wetter-name");
-    const knopf = document.getElementById("btn-wetter-hochladen");
-
-    const gewaehlt = this.wetterAuswahl.filter((e) => e.angehakt);
-    if (!gewaehlt.length) {
-      let meldung = "Bitte einen Ordner oder eine Datei auswählen.";
-      if (this.wetterAuswahl.length) meldung = "Bitte mindestens eine Datei ankreuzen.";
-      else if (this.wetterArchive.length) meldung = ARCHIV_HINWEIS;
-      zeigeFehler(meldung);
-      return;
-    }
-
-    const formular = new FormData();
-    gewaehlt.forEach((eintrag) => formular.append("datei", eintrag.datei));
-    if (ortFeld?.value.trim()) formular.append("ort", ortFeld.value.trim());
-    // Eine eigene Bezeichnung kann nur fuer eine einzelne Datei gelten - bei
-    // mehreren hiessen sonst alle Datensaetze gleich (routes/wetter.py).
-    if (gewaehlt.length === 1 && nameFeld.value.trim()) {
-      formular.append("name", nameFeld.value.trim());
-    }
-
-    const urspruenglicherText = knopf.textContent;
-    knopf.disabled = true;
-    knopf.textContent =
-      gewaehlt.length === 1
-        ? "Wird hochgeladen …"
-        : `Wird hochgeladen (${gewaehlt.length}) …`;
-
-    const zuruecksetzen = () => {
-      knopf.disabled = false;
-      knopf.textContent = urspruenglicherText;
-    };
-
-    let antwort;
-    try {
-      antwort = await fetch("/api/wetter/upload", { method: "POST", body: formular });
-    } catch {
-      zeigeFehler("Die Wetterdaten konnten nicht hochgeladen werden.");
-      zuruecksetzen();
-      return;
-    }
-    if (!antwort.ok) {
-      let text = "Die Wetterdaten konnten nicht hochgeladen werden.";
-      try {
-        const daten = await antwort.json();
-        if (daten.fehler) text = daten.fehler;
-      } catch {
-        /* Antwort war kein JSON - bei der Vorgabemeldung bleiben. */
-      }
-      zeigeFehler(text);
-      zuruecksetzen();
-      return;
-    }
-
-    // Ein Teilerfolg ist der Regelfall wert, gemeldet zu werden: wer sechs
-    // Jahre hochlaedt und fuenf bekommt, soll nicht raten muessen, welches
-    // fehlt.
-    try {
-      const daten = await antwort.json();
-      if (daten.dateifehler?.length) {
-        zeigeFehler(
-          `Nicht gelesen: ${daten.dateifehler
-            .map((f) => `${f.datei} (${f.fehler})`)
-            .join("; ")}`
-        );
-      }
-    } catch {
-      /* Antwort war kein JSON - der Upload hat trotzdem geklappt. */
-    }
-
-    this.wetterArchive = [];
-    if (ordnerFeld) ordnerFeld.value = "";
-    if (dateiFeld) dateiFeld.value = "";
-    if (ortFeld) ortFeld.value = "";
-    nameFeld.value = "";
-    this.wetterAuswahl = [];
-    this.wetterDateiAktualisieren();
-    zuruecksetzen();
-
-    await this._wetterListeAktualisieren(
-      "Die Daten wurden hochgeladen, die Liste konnte aber nicht aktualisiert werden."
-    );
-  },
-
-  // Nach einem Upload oder Abruf neu von /api/wetter laden, statt den neuen
-  // Datensatz von Hand in this.wetter einzufuegen - die Liste bleibt so immer
-  // deckungsgleich mit dem, was die Datenbank tatsaechlich enthaelt.
-  async _wetterListeAktualisieren(fehlerBeiFehlschlag) {
-    try {
-      const antwort = await fetch("/api/wetter");
-      if (!antwort.ok) throw new Error("Antwort nicht ok");
-      this.wetter = await antwort.json();
-    } catch {
-      zeigeFehler(fehlerBeiFehlschlag);
-      return;
-    }
-    this.zeichneWetter();
-  },
-
-  // Fuellt das Jahr-Mehrfachauswahlfeld mit allen abgeschlossenen
-  // Kalenderjahren, die die Open-Meteo Archive-API anbietet (1940 bis zum
-  // Vorjahr) - neuestes zuerst, weil das der haeufigste Wunsch ist. So kann
-  // die Oberflaeche gar nicht erst ein unzulaessiges Jahr anbieten, statt den
-  // Benutzer erst beim Absenden auf den Fehler laufen zu lassen.
-  wetterAbrufJahreFuellen() {
-    const feld = document.getElementById("feld-wetter-abruf-jahre");
-    const letztesVollstaendigesJahr = new Date().getFullYear() - 1;
-    feld.textContent = "";
-    for (let jahr = letztesVollstaendigesJahr; jahr >= WETTER_FRUEHESTES_JAHR; jahr--) {
-      const option = document.createElement("option");
-      option.value = String(jahr);
-      option.textContent = String(jahr);
-      feld.appendChild(option);
-    }
-    // Bequemer Einstieg: das juengste verfuegbare Jahr ist vorausgewaehlt.
-    if (feld.options.length) feld.options[0].selected = true;
-  },
-
-  // Zeigt/versteckt die Koordinatenfelder, je nachdem ob ein vorbelegter Ort
-  // oder "Eigene Koordinaten" gewaehlt ist.
-  wetterAbrufOrtGewaehlt() {
-    const auswahl = document.getElementById("feld-wetter-abruf-ort");
-    const koordinatenBereich = document.getElementById("wetter-abruf-koordinaten");
-    koordinatenBereich.hidden = auswahl.value !== "eigene";
-  },
-
-  async wetterAbrufen(ereignis) {
-    ereignis.preventDefault();
-
-    const ortAuswahl = document.getElementById("feld-wetter-abruf-ort");
-    const jahreFeld = document.getElementById("feld-wetter-abruf-jahre");
-    const nameFeld = document.getElementById("feld-wetter-abruf-name");
-    const knopf = document.getElementById("btn-wetter-abrufen");
-
-    let ort;
-    let breite;
-    let laenge;
-    if (ortAuswahl.value === "eigene") {
-      const breiteFeld = document.getElementById("feld-wetter-abruf-breite");
-      const laengeFeld = document.getElementById("feld-wetter-abruf-laenge");
-      const ortsnameFeld = document.getElementById("feld-wetter-abruf-ortsname");
-      breite = parseFloat(breiteFeld.value);
-      laenge = parseFloat(laengeFeld.value);
-      if (!Number.isFinite(breite) || !Number.isFinite(laenge)) {
-        zeigeFehler("Bitte Breite und Länge als Zahl eingeben.");
-        return;
-      }
-      ort = ortsnameFeld.value.trim() || `${breite}, ${laenge}`;
-    } else {
-      const gewaehlteOption = ortAuswahl.selectedOptions[0];
-      breite = parseFloat(gewaehlteOption.dataset.breite);
-      laenge = parseFloat(gewaehlteOption.dataset.laenge);
-      ort = ortAuswahl.value;
-    }
-
-    const jahre = Array.from(jahreFeld.selectedOptions).map((o) => parseInt(o.value, 10));
-    if (!jahre.length) {
-      zeigeFehler("Bitte mindestens ein Jahr auswählen.");
-      return;
-    }
-
-    const eigenerName = nameFeld.value.trim();
-    const urspruenglicherText = knopf.textContent;
-    knopf.disabled = true;
-
-    // Ein Abruf je Jahr, hintereinander statt parallel - der Server schickt
-    // pro Jahr bereits fuenf parallele Teilabfragen an Open-Meteo los,
-    // mehrere Jahre gleichzeitig wuerden das unnoetig vervielfachen. Fehler
-    // bei einem Jahr sollen die uebrigen Jahre nicht verhindern.
-    const fehlgeschlagen = [];
-    let erfolge = 0;
-    for (let i = 0; i < jahre.length; i++) {
-      const jahr = jahre[i];
-      knopf.textContent =
-        jahre.length > 1 ? `Wird abgerufen … (${i + 1}/${jahre.length})` : "Wird abgerufen …";
-
-      const name = eigenerName ? (jahre.length > 1 ? `${eigenerName} ${jahr}` : eigenerName) : "";
-
-      let antwort;
-      try {
-        antwort = await fetch("/api/wetter/abrufen", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ breite, laenge, jahr, ort, name }),
-        });
-      } catch {
-        fehlgeschlagen.push(`${jahr}: Wetterdaten konnten nicht abgerufen werden`);
-        continue;
-      }
-      if (!antwort.ok) {
-        let text = "Wetterdaten konnten nicht abgerufen werden";
-        try {
-          const daten = await antwort.json();
-          if (daten.fehler) text = daten.fehler;
-        } catch {
-          /* Antwort war kein JSON - bei der Vorgabemeldung bleiben. */
-        }
-        fehlgeschlagen.push(`${jahr}: ${text}`);
-        continue;
-      }
-      erfolge++;
-    }
-
-    knopf.disabled = false;
-    knopf.textContent = urspruenglicherText;
-
-    if (fehlgeschlagen.length) {
-      zeigeFehler(
-        erfolge
-          ? `${erfolge} von ${jahre.length} Jahren abgerufen. Fehlgeschlagen: ${fehlgeschlagen.join("; ")}`
-          : `Abruf fehlgeschlagen: ${fehlgeschlagen.join("; ")}`
-      );
-    }
-
-    if (erfolge) {
-      nameFeld.value = "";
-      await this._wetterListeAktualisieren(
-        "Die Wetterdaten wurden abgerufen, die Liste konnte aber nicht aktualisiert werden."
-      );
-    }
-  },
 };
 
 window.addEventListener("DOMContentLoaded", () => {
-  document.getElementById("btn-projekt-anlegen").addEventListener("click", () =>
-    Start.projektAnlegenDialog()
-  );
-  document
-    .getElementById("form-wetter-upload")
-    .addEventListener("submit", (e) => Start.wetterHochladen(e));
-  ["feld-wetter-ordner", "feld-wetter-datei"].forEach((kennung) => {
-    document
-      .getElementById(kennung)
-      .addEventListener("change", () => Start.wetterDateiAktualisieren());
-  });
+  const anlegen = document.getElementById("btn-projekt-anlegen");
+  if (anlegen) anlegen.addEventListener("click", () => Start.projektAnlegenDialog());
 
-  Start.wetterAbrufJahreFuellen();
-  document
-    .getElementById("feld-wetter-abruf-ort")
-    .addEventListener("change", () => Start.wetterAbrufOrtGewaehlt());
-  document
-    .getElementById("form-wetter-abruf")
-    .addEventListener("submit", (e) => Start.wetterAbrufen(e));
-
+  // Die Projektliste steht schon da - sie wird nur verdrahtet.
+  Start.bindeProjekte();
+  Start.zeichneEinstieg();
+  Start.laufendeVerfolgen();
   Start.laden();
 });

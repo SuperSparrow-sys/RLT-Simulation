@@ -168,6 +168,8 @@ Zur Wahl der Verdrahtung - ein Befund ueber Task 14:
 from core import anlagen, verlauf
 
 NAME = "Testanlage Technikhalle"
+#: Katalogruppe - siehe core/vorlagen/__init__.py, alle().
+GRUPPE = "Referenz"
 BESCHREIBUNG = (
     "Ein Luftgerät mit Umluft-Mischkammer statt WRG, Dampfbefeuchtung, "
     "bauphysikalischem Raum mit Wandspeicher, Kaskaden-/Sequenzregelung und "
