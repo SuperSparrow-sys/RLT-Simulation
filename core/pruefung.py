@@ -264,24 +264,43 @@ def _luftweg_ohne_volumenstrom(graph):
     die Luftmenge, und die hängt an Ventilator und Verdrahtung, nicht am
     Wetter.
     """
+    # Gerechnet werden DREI Proben, nicht eine: kalt, mild und warm. Eine
+    # Klappe, die gerade zufaehrt, ist kein fehlender Ventilator - die
+    # Umluftklappe einer Schwimmhalle steht im Sommer offen und im Winter zu,
+    # und mit einer einzigen Probestunde meldete die Regel je nach Wetterlage
+    # den einen oder den anderen Strang als tot. Gemeldet wird deshalb nur,
+    # wodurch in KEINER der drei Lagen etwas stroemt.
+    #
+    # Die Proben sind bewusst reizlos - ohne Sonne, ohne Feuchteextrem:
+    # Gefragt ist die Luftmenge, und die haengt an Ventilator und Verdrahtung.
     # Der Zeitpunkt ist ein datetime, kein Text: Karten mit Tages- oder
     # Wochenprofil lesen daraus Stunde und Wochentag ab.
-    probe = {
-        "zeitpunkt": datetime(2024, 1, 1, 12), "t_au": 0.0, "x_au": 4.0,
-        "str_s": 0.0, "str_o": 0.0, "str_w": 0.0, "str_n": 0.0, "str_h": 0.0,
-    }
-    stunde = solver.Solver(graph).starte([probe]).stunden[0]
+    proben = [
+        {
+            "zeitpunkt": datetime(2024, monat, 15, 12), "t_au": t, "x_au": x,
+            "str_s": 0.0, "str_o": 0.0, "str_w": 0.0, "str_n": 0.0, "str_h": 0.0,
+        }
+        for monat, t, x in ((1, -10.0, 1.5), (4, 10.0, 6.0), (7, 30.0, 12.0))
+    ]
     belegt_ein = {v.nach_port.id for v in graph.verbindungen}
+
+    stroemte = set()
+    for probe in proben:
+        stunde = solver.Solver(graph).starte([probe]).stunden[0]
+        for karte in graph.karten.values():
+            werte = stunde.get(karte.id, {})
+            for port in karte.ports:
+                if werte.get(f"V_{port.schluessel}", 0.0) > 0.0:
+                    stroemte.add(port.id)
 
     ohne_strom = []
     for karte in graph.karten.values():
-        werte = stunde.get(karte.id, {})
         for port in karte.ports:
             if port.art != basis.LUFT or port.richtung != basis.EINGANG:
                 continue
             if port.id not in belegt_ein:
                 continue          # meldet schon _luftweg_offen()
-            if werte.get(f"V_{port.schluessel}", 0.0) > 0.0:
+            if port.id in stroemte:
                 continue
             ohne_strom.append((karte, port))
 
@@ -350,14 +369,22 @@ def _raumforderung_ohne_abnehmer(graph):
     dann auch nicht angemahnt werden.
     """
     sollwerte = {"QH_stat": "sollwert_stat", "QK_stat": "sollwert_kuehl"}
-    belegt_aus = {v.von_port.id for v in graph.verbindungen}
+    # Ein Pfeil zum Datenlogger zaehlt NICHT als Abnehmer. Er schreibt die
+    # Forderung nur mit; die Energie nimmt er nicht ab, und in der Bilanz
+    # steht sie danach so wenig wie vorher. Ohne diese Unterscheidung galt
+    # jeder Raum als versorgt, sobald er im Protokoll steht - und das steht er
+    # in jeder Vorlage.
+    abnehmer = {
+        v.von_port.id for v in graph.verbindungen
+        if v.nach_port.rolle != basis.PROTOKOLL
+    }
 
     meldungen = []
     for karte in graph.karten.values():
         for port in karte.ports:
             if port.richtung != basis.AUSGANG or port.basis not in sollwerte:
                 continue
-            if port.id in belegt_aus:
+            if port.id in abnehmer:
                 continue
             sollwert = karte.parameter.get(sollwerte[port.basis], 0.0)
             if not sollwert:

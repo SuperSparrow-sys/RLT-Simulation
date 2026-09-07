@@ -44,21 +44,28 @@ AUSLEGUNG
                    6 GradC ist die uebliche Kaltwassertemperatur einer
                    Kaeltemaschine.
     Freie Kuehlung Die Klappe regelt die MISCHTEMPERATUR auf 18 GradC, also
-                   VOR dem Kuehler. Sie nimmt ihm damit gut die Haelfte der
-                   Jahresarbeit ab: 1101 statt 2190 kWh/(m2 a) (nachgemessen).
-                   Eine Stunde des Jahres schwingt dabei nicht ein - der
-                   10. Juni um 17 Uhr, mit 18,1 GradC Aussenluft genau auf dem
-                   Sollwert der Klappe. Die Klappe steht dort an ihrem
-                   Anschlag: Sie faehrt auf null Umluft, und weil die
-                   Aussenluft ein Zehntelgrad zu warm ist, fordert der Regler
-                   weiter nach unten. Der Umluftbedarf im Rueckwaertslauf
-                   springt dadurch zwischen 0 und rund 26 000 m3/h hin und her
-                   (nachgemessen: die groesste Restabweichung sitzt in
-                   V_umluft_ein, nicht in einer Leistung). Ausgewiesen ist das
-                   Mittel der beiden letzten Durchgaenge. Ein ruhigerer
-                   Klappenregler (xp von 4 auf 8 und 12) aendert daran nichts -
-                   es ist der Anschlag selbst, nicht die Geschwindigkeit, mit
-                   der er angefahren wird.
+                   VOR dem Kuehler. Zusammen mit dem festen Raumsollwert von
+                   27 GradC traegt sie damit den groessten Teil der
+                   Jahresarbeit: 370 statt 2190 kWh/(m2 a) gehen ueber die
+                   Kaeltemaschine (nachgemessen), also ein Sechstel. Gegenprobe:
+                   Ueber 18 GradC Aussenluft, wo die Mischung 18 GradC nicht
+                   mehr erreicht, liegen im Testreferenzjahr rund 1200 Stunden;
+                   1200 h x 100 kW / 400 m2 = 300 kWh/(m2 a) - dieselbe
+                   Groessenordnung.
+
+                   Zwei Fehler steckten hier, beide gefunden, weil eine Stunde
+                   des Jahres nicht einschwang (der 10. Juni um 17 Uhr, mit
+                   18,1 GradC Aussenluft genau auf dem Sollwert der Klappe):
+
+                   Erstens verwechselte der Verteiler "fordert null an" mit
+                   "fordert nichts an". Sobald die Klappe zufuhr, zaehlte er
+                   den Umluftgang zu den Gaengen ohne Bedarf und schob ihm nach
+                   seinem festen Schluessel 80 Prozent der Abluft zu - 26 400
+                   m3/h in einen Strang, den niemand haben wollte. Behoben in
+                   core/bausteine/verteiler.py.
+
+                   Zweitens verdeckte dieses Rauschen einen Auslegungsfehler:
+                   den gleitenden Raumsollwert, siehe bei der Kaskade unten.
     Kuehllast      100 kW innere Last + Transmission im Sommer
                    -> Kuehler 120 kW
                    Gegenprobe an der Jahresarbeit: Alles, was die Server an
@@ -94,10 +101,12 @@ ERWARTUNG = {
     # 100 kW ueber 8760 h sind 876 MWh = 2190 kWh/(m2*a) - so viel Waerme
     # muss heraus, denn alles, was die Server an Strom aufnehmen, wird Waerme.
     # Was davon die Kaeltemaschine traegt und was die freie Kuehlung, ist
-    # gerade die Frage an die Rechnung; gemessen sind es 1101 kWh/(m2*a),
-    # also gut die Haelfte. Die Obergrenze liegt deshalb unter 2190: Braeuchte
-    # die Maschine mehr, arbeitete die freie Kuehlung nicht.
-    "kaelte_kwh_m2a": (300.0, 1800.0),
+    # gerade die Frage an die Rechnung; gemessen sind es 370 kWh/(m2*a), also
+    # ein Sechstel. Die Obergrenze liegt weit darueber und faengt den Fall,
+    # dass die freie Kuehlung gar nicht arbeitet; die Untergrenze faengt den
+    # umgekehrten: Weniger als 200 kWh/(m2*a) hiesse, dass die Waerme der
+    # Server irgendwo verschwindet, statt abgefuehrt zu werden.
+    "kaelte_kwh_m2a": (200.0, 1800.0),
     "sfp_w_m3h": (0.25, 0.95),
     # 33 000 m3/h auf 1200 m3 Raum sind 27,5 Luftwechsel je Stunde. Fuer ein
     # luftgekuehltes Rechenzentrum ist das normal - die Luft traegt hier die
@@ -123,15 +132,12 @@ def baue(projekt_id, name=NAME):
                          rolle="zuluft", V_max=LUFTMENGE_M3H, dp_max=900.0,
                          dp_konst=900.0, PE_max=12.69, regelart="F")
         raum = b.karte("einfacher_raum", 920, 200, "Serverfläche",
-                       spez_transmission=0.4, sollwert_stat=24.0)
-        # Die Gebaeudeheizung. Ohne sie meldet der Raum seine
-        # Unterdeckung (QH_stat) und niemand nimmt sie entgegen: Er bleibt
-        # trotzdem auf seinem Sollwert, und die Waerme dafuer taucht in
-        # keiner Bilanz auf - das Gebaeude heizte sich umsonst. Der
-        # Lueftungserhitzer deckt das nicht; er waermt die Zuluft, nicht
-        # die Huelle. Auslegung: 0,4 kW/K x 32 K = 12,8 kW - sie laeuft praktisch nie, weil 100 kW Serverlast den Raum von innen heizen
-        gebaeudeheizung = b.karte("statische_heizung", 920, 620,
-                                  "Gebäudeheizung", QH_nenn=15.0)
+                       # Keine Gebaeudeheizung: 100 kW Serverlast heizen den
+                       # Raum von innen, und niemand haelt sich darin auf. Der
+                       # Sollwert steht deshalb auf null - der Raum klemmt seine
+                       # Temperatur sonst auf einen Wert, den niemand bezahlt
+                       # (core/pruefung.py meldet genau das).
+                       spez_transmission=0.4, sollwert_stat=0.0)
         abluft = b.karte("ventilator", 1140, 200, "Abluftventilator",
                          rolle="abluft", V_max=LUFTMENGE_M3H, dp_max=600.0,
                          dp_konst=600.0, PE_max=8.46, regelart="F")
@@ -141,7 +147,25 @@ def baue(projekt_id, name=NAME):
 
         # Nur die Kuehlseite der Kaskade wird gebraucht.
         kaskade = b.karte("kaskade", 480, 20, "Raumtemperaturregelung",
-                          T_Raum_min=24.0, T_AU_min=15.0, T_Raum_max=27.0,
+                          # KEIN gleitender Raumsollwert: 27 GradC das ganze
+                          # Jahr. Ein gleitender Sollwert folgt der
+                          # Behaglichkeit - Menschen nehmen im Sommer einen
+                          # waermeren Raum an -, und hier sitzt niemand. Fuer
+                          # ein Rechenzentrum ist er sogar verkehrt herum:
+                          # Faellt er bei kaltem Wetter auf 24 GradC, muss die
+                          # Zuluft auf 15,1 GradC, und die Kaeltemaschine
+                          # kuehlt die 18 GradC, die die freie Kuehlung gerade
+                          # umsonst geliefert hat, noch einmal um drei Kelvin
+                          # herunter. Nachgemessen ueber das Testreferenzjahr:
+                          #     24 bis 27 GradC  1111 kWh/(m2 a) Kaelte
+                          #     26 bis 27 GradC   623 kWh/(m2 a)
+                          #     fest auf 27       376 kWh/(m2 a)
+                          # Ein Drittel der Kaeltearbeit, und die
+                          # Gebaeudeheizung faellt ganz weg. 27 GradC ist der
+                          # obere Wert des Bandes, das ASHRAE TC9.9 fuer den
+                          # Lufteintritt in die Technik empfiehlt (18 bis 27);
+                          # der Kaltgang liegt hier bei der Zuluft von 18 GradC.
+                          T_Raum_min=27.0, T_AU_min=15.0, T_Raum_max=27.0,
                           T_AU_max=30.0, T_ZU_min=15.0, T_ZU_max=26.0, xp=5.0,
                           # Ein Kuehler, keine Heizung. Ohne diese Angabe
                           # lief die Regelabweichung bis 200, wirksam waren
@@ -211,10 +235,9 @@ def baue(projekt_id, name=NAME):
                          personen=0.0, grundflaeche=FLAECHE_M2)
         # Die Serverabwaerme kommt ueber 'weitere_waerme' herein; Personen gibt
         # es hier keine - ein Rechenzentrum versorgt keine.
-        lasten_verdrahten(b, tagesprofil, server, lasten, raum,
-                          gebaeudeheizung=gebaeudeheizung)
+        lasten_verdrahten(b, tagesprofil, server, lasten, raum)
         auswertung_verdrahten(
-            b, (zuluft, abluft, kuehler, server, gebaeudeheizung),
+            b, (zuluft, abluft, kuehler, server),
             bilanz, logger,
             protokoll=((mischkammer, "umluftanteil_ist", "wert_5"),),
             pfeile=(raum, kaskade),

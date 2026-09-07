@@ -221,6 +221,33 @@ class Solver:
 
         # Karten, die im Vorwaertslauf einen anderen Bedarf melden als im
         # Nenn-Rueckwaertslauf (heute nur der Ventilator).
+        # Welcher Lufteingang einer Karte schoepft aus welchem Luftausgang?
+        #
+        # Gefragt wird die Karte selbst: Wird an genau einem Ausgang etwas
+        # abgenommen, nennt bedarf() die Eingaenge, aus denen sie es holt. Der
+        # Kern kennt dafuer keinen einzigen Kartentyp - und er fragt einmal je
+        # Lauf, nicht in der Schleife; die Antwort haengt nur an Topologie und
+        # Parametern.
+        #
+        # Gebraucht wird sie, um "nichts gefordert" von "null gefordert" zu
+        # unterscheiden (siehe _ein_rueckwaertsdurchlauf). Ohne sie meldete die
+        # Abluftseite einer Waermerueckgewinnung eine ausdrueckliche Null, nur
+        # weil hinter ihr die Fortluft steht, die nie etwas fordert - und der
+        # Verteiler davor hielt diesen Gang dann fuer einen, der nichts haben
+        # will, statt fuer seine Senke.
+        self._bedarfskopplung = {}
+        for karte_id, karte in self.graph.karten.items():
+            ausgaenge = [s for s, _, _ in self._luftausgaenge[karte_id]]
+            kopplung = {}
+            for gefragt in ausgaenge:
+                probe = {a: (1.0 if a == gefragt else 0.0) for a in ausgaenge}
+                for schluessel, menge in karte.baustein.bedarf(
+                    probe, karte.parameter
+                ).items():
+                    if menge > 0.0:
+                        kopplung.setdefault(schluessel, set()).add(gefragt)
+            self._bedarfskopplung[karte_id] = kopplung
+
         self._karten_mit_stellwert = [
             (karte_id, tuple(karte.baustein.BEDARF_HAENGT_AN))
             for karte_id, karte in self.graph.karten.items()
@@ -267,10 +294,29 @@ class Solver:
         for karte_id in reversed(self.reihenfolge):
             karte = self.graph.karten[karte_id]
             aus_bedarf = {}
+            # Zwei verschiedene Auskuenfte, die frueher dieselbe Null ergaben:
+            # "hinter diesem Ausgang hat niemand etwas gefordert" und "hinter
+            # ihm wurde ausdruecklich null gefordert". Die Fortluftkarte meldet
+            # aus bedarf() ein leeres Verzeichnis - sie sagt gar nichts -, die
+            # Mischkammer meldet bei geschlossener Klappe ausdruecklich
+            # "umluft_ein": 0,0. Fuer den Verteiler ist das der Unterschied
+            # zwischen "das ist meine Senke, dorthin geht der Rest" und "dieser
+            # Gang will nichts, also bekommt er nichts" (siehe
+            # core/bausteine/verteiler.py).
+            gemeldet = {}
             for schluessel, port_id, zielports in self._luftausgaenge[karte_id]:
-                menge = float(sum(gefordert.get(z, 0.0) for z in zielports))
+                beitraege = [gefordert[z] for z in zielports if z in gefordert]
+                menge = float(sum(beitraege))
                 aus_bedarf[schluessel] = menge
                 abnahme[port_id] = menge
+                # Drei Faelle, nicht zwei: Ein Ausgang OHNE Ziel kann gar
+                # nichts aufnehmen (der freie Reserveanschluss eines
+                # Verteilers, siehe core/graph.py, fehlende_ports) - dort
+                # verschwaende Luft. Er meldet deshalb null und nicht "nichts
+                # gefordert", sonst schluckte ausgerechnet er den Rest.
+                gemeldet[schluessel] = (
+                    menge if beitraege else (None if zielports else 0.0)
+                )
 
             hook = None
             if ausgaben is not None:
@@ -295,9 +341,30 @@ class Solver:
             # ganzen Gruppe gleichnamiger Anschluesse und wird gleichmaessig auf
             # sie verteilt - so wie die Mappe die Abluft des Raums in zwei
             # gleiche Haelften teilt (Anlage!AH33 = AH35 = M42/2).
+            # "Nichts gefordert" muss durch Karten hindurchreichen, die den
+            # Bedarf nur weitergeben. Hinter der Abluftseite einer
+            # Waermerueckgewinnung steht die Fortluft, und die fordert nie
+            # etwas an; die Rueckgewinnung meldete daraus aber eine
+            # ausdrueckliche Null - und der Verteiler davor hielt diesen Gang
+            # dann fuer einen, der nichts haben will, statt fuer seine Senke.
+            # In der Schwimmhalle waere so die ganze Abluft in die Umluft
+            # gelaufen und keine ins Freie.
+            #
+            # Eine Karte, an deren Ausgaengen NIEMAND etwas gefordert hat und
+            # die selbst nichts fordert, gibt deshalb ebenfalls keine Forderung
+            # ab. Wer von sich aus fordert - ein Ventilator meldet seinen
+            # Volumenstrom, gleich was hinter ihm liegt -, meldet weiterhin.
+            kopplung = self._bedarfskopplung[karte_id]
             nummern = self._portnummern[karte_id]
             gruppen = self._lufteingangsgruppen[karte_id]
             for schluessel, menge in eigener.items():
+                quellen = kopplung.get(schluessel)
+                if (
+                    menge <= 0.0
+                    and quellen
+                    and all(gemeldet.get(a) is None for a in quellen)
+                ):
+                    continue
                 if schluessel in nummern:
                     gefordert[nummern[schluessel]] = menge
                     continue
@@ -325,7 +392,8 @@ class Solver:
                 karte.baustein.abgaenge = [
                     schluessel for schluessel, _, _ in self._luftausgaenge[karte_id]
                 ]
-                karte.baustein.bedarf_je_abgang = dict(aus_bedarf)
+                # Mit der Unterscheidung oben: None heisst "nichts gefordert".
+                karte.baustein.bedarf_je_abgang = gemeldet
 
         return gefordert, abnahme
 

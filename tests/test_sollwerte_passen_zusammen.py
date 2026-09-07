@@ -49,10 +49,17 @@ def test_gebaeudeheizung_und_kaskade_wollen_dasselbe(app, kennung):
     # Nur Räume, deren Wärmeforderung auch abgenommen wird: Ein Raum ohne
     # angeschlossene Gebäudeheizung hält seinen Sollwert zwar ebenfalls, aber
     # dafür meldet core/pruefung.py bereits eine eigene Beanstandung.
-    belegt = {v.von_port.id for v in graph.verbindungen}
+    #
+    # Ein Pfeil zum Datenlogger zählt dabei nicht - er schreibt die Forderung
+    # nur mit. Ohne diese Unterscheidung galt jeder Raum als versorgt, denn im
+    # Protokoll steht er in jeder Vorlage.
+    abnehmer = {
+        v.von_port.id for v in graph.verbindungen
+        if v.nach_port.rolle != "protokoll"
+    }
     mit_heizung = [
         raum for raum in raeume
-        if any(p.basis == "QH_stat" and p.richtung == "aus" and p.id in belegt
+        if any(p.basis == "QH_stat" and p.richtung == "aus" and p.id in abnehmer
                for p in raum.ports)
     ]
     if not mit_heizung:

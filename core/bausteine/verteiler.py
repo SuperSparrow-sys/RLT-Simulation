@@ -52,7 +52,19 @@ class Verteiler(Baustein):
         luft = ein.get("luft_ein", Luft())
         abgaenge = self.abgaenge or ["luft_aus"]
 
-        gefordert = {a: self.bedarf_je_abgang.get(a, 0.0) for a in abgaenge}
+        # None heisst "hinter diesem Gang hat niemand etwas gefordert" - das
+        # ist eine Senke wie die Fortluft. Eine ausdrueckliche Null heisst
+        # "dieser Gang will nichts", und dann bekommt er auch nichts.
+        #
+        # Beides an derselben Zahl festzumachen, kostete das Rechenzentrum eine
+        # Stunde im Jahr: Seine freie Kuehlung faehrt die Umluftklappe zu, die
+        # Forderung der Mischkammer laeuft sauber gegen null - und in dem
+        # Durchgang, in dem sie null erreichte, schob der Verteiler ihr nach
+        # seinem festen Schluessel 80 Prozent der Abluft zu, 26 400 m3/h in
+        # einen Strang, den niemand haben wollte. Im naechsten Durchgang
+        # forderte sie wieder null, und das Spiel begann von vorn.
+        gemeldet = {a: self.bedarf_je_abgang.get(a) for a in abgaenge}
+        gefordert = {a: (0.0 if v is None else v) for a, v in gemeldet.items()}
         summe = sum(gefordert.values())
 
         warnung = ""
@@ -70,9 +82,15 @@ class Verteiler(Baustein):
             # 2000 loesten sich auf, statt ins Freie zu gehen.
             verteilt = dict(gefordert)
             rest = luft.V - summe
-            ohne_bedarf = [a for a in abgaenge if gefordert.get(a, 0.0) <= 0]
+            ohne_bedarf = [a for a in abgaenge if gemeldet.get(a) is None]
             if rest > 0 and ohne_bedarf:
                 verteilt.update(self._nach_anteilen(rest, ohne_bedarf, p))
+            elif rest > 0 and summe <= 0:
+                # Jeder Gang sagt ausdruecklich null, und es ist trotzdem Luft
+                # da - sie muss irgendwohin. Nach dem festen Schluessel, wie im
+                # ersten Rueckwaertsdurchlauf, in dem noch niemand etwas
+                # gefordert hat.
+                verteilt = self._nach_anteilen(rest, abgaenge, p)
             elif rest > 0:
                 # Alle Gaenge fordern etwas, und es bleibt trotzdem Luft
                 # uebrig: Sie anteilig auf die Forderungen aufschlagen, statt

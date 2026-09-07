@@ -84,12 +84,18 @@ def test_der_verteiler_laesst_keine_luft_verschwinden():
     anderer nichts (die Fortluft ist eine Senke und fordert nie), bekam vorher
     nur der fordernde Gang seine Menge - der Rest löste sich auf. In
     core/vorlagen/testanlage.py waren das 2000 von 5000 m³/h.
+
+    „Fordert nie etwas an" steht als None, nicht als 0,0. Die beiden sind
+    verschiedene Auskünfte, und sie auseinanderzuhalten war nötig: Eine
+    ausdrückliche Null heißt „dieser Gang will nichts", und dann bekommt er
+    auch nichts. Vorher stand hier eine 0,0 für die Senke, und genau diese
+    Verwechslung kostete das Rechenzentrum eine Stunde im Jahr.
     """
 
 
     v = Verteiler()
     v.abgaenge = ["luft_aus_1", "luft_aus_2"]
-    v.bedarf_je_abgang = {"luft_aus_1": 0.0, "luft_aus_2": 3000.0}
+    v.bedarf_je_abgang = {"luft_aus_1": None, "luft_aus_2": 3000.0}
     aus, _ = v.berechne(
         {"luft_ein": Luft(V=5000.0, T=21.0, x=8.0)},
         {"anteile": {"luft_aus_1": 60.0, "luft_aus_2": 40.0}},
