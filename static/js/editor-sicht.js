@@ -190,13 +190,13 @@ Object.assign(Editor, {
       this.einpassen();
       return;
     }
-    /* Auf einer schmalen Leinwand (Tablett im Hochformat) wird immer
+    /* Auf einem schmalen Geraet (Tablett im Hochformat) wird immer
        eingepasst, auch wenn dabei kein Kartenname mehr zu lesen ist. Der
        verankerte Ausschnitt zeigt dort zwei Karten und einen Pfeil, der ins
        Nichts laeuft - das ist keine Arbeitsstelle, sondern Ratlosigkeit. Wer
        genauer hinsehen will, zieht auf; wer die Uebersicht braucht, hat sie
        dann wenigstens. */
-    if (huelle && kasten.width < this.SCHMALE_LEINWAND) {
+    if (huelle && window.innerWidth <= this.SCHMALES_FENSTER) {
       this.einpassen();
       return;
     }

@@ -69,10 +69,16 @@
              gelöscht"). Auf dem iPad, wo es kein Schweben gibt, nennt der
              Hinweisstreifen nach dem Druck dasselbe noch einmal
              (zeigeHinweis() in editor.js). -->
-        <div class="leiste-gruppe verlauf-knoepfe" data-weicht="gesammelt">
+        <!-- Jeder Knopf traegt sein eigenes data-weicht, nicht die Gruppe:
+             Im Ausweichmenue soll jeder eine eigene Zeile mit Beschriftung
+             bekommen; als Gruppe blieben sie dort ein Paar runder Zeichen
+             ohne Wort. -->
+        <div class="leiste-gruppe verlauf-knoepfe">
           <button class="leiste-knopf leiste-knopf-rund" id="btn-zurueck"
+                  data-weicht="gesammelt"
                   title="Rückgängig" aria-label="Rückgängig" disabled>{% include "bedienzeichen/rueckgaengig.svg" %}</button>
           <button class="leiste-knopf leiste-knopf-rund" id="btn-vor"
+                  data-weicht="gesammelt"
                   title="Wiederholen" aria-label="Wiederholen" disabled>{% include "bedienzeichen/wiederholen.svg" %}</button>
         </div>
 

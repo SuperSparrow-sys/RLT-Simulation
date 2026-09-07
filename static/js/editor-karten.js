@@ -64,17 +64,23 @@ Object.assign(Editor, {
   // Anfang, wo man zu arbeiten beginnt.
   EINSTIEG_ZOOM_MIN: 0.6,
 
-  /* Unterhalb dieser Leinwandbreite wird beim Oeffnen IMMER eingepasst
+  /* Unterhalb dieser FENSTERbreite wird beim Oeffnen IMMER eingepasst
      (editor-sicht.js, startAnsicht).
 
      900 Punkte, dieselbe Schwelle, an der Palette und Parameterfenster
-     zurueckreten (editor.css) - und das ist kein Zufall: Ein Bildschirm, auf
+     zuruecktreten (editor.css) - und das ist kein Zufall: Ein Bildschirm, auf
      dem neben der Leinwand kein Platz fuer beide ist, ist einer, auf dem man
      zuerst die Uebersicht braucht. Ein iPad im Hochformat hat 820 Punkte; der
      verankerte Ausschnitt zeigte dort zwei Karten und einen Pfeil, der ins
      Nichts laeuft. Von zwei schlechten Ansichten ist die vollstaendige die
-     brauchbarere - wer genauer hinsehen will, zieht auf. */
-  SCHMALE_LEINWAND: 900,
+     brauchbarere - wer genauer hinsehen will, zieht auf.
+
+     Das FENSTER, nicht die Leinwand: Am Schreibtisch mit 1440 Punkten bleiben
+     der Leinwand nach Palette und Parameterfenster nur 892 - waere die
+     Leinwand das Mass, wuerde auch dort eingepasst und die abgewogene
+     Entscheidung darueber (EINSTIEG_ZOOM_MIN, Verankerung samt Minikarte)
+     stillschweigend ausgehebelt. */
+  SCHMALES_FENSTER: 900,
 
   /* Berechnet Breite, Hoehe und alle Textzeilen/-y-Positionen einer Karte,
      bevor sie gezeichnet wird - die Kartenhoehe waechst mit der Anzahl

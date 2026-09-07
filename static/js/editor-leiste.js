@@ -52,6 +52,7 @@ const Leiste = {
   wandernde: [],
   stufeJetzt: null,
   pruefeLaeuft: false,
+  nachholen: false,
 
   starte() {
     this.leiste = document.querySelector(".app .leiste");
@@ -78,6 +79,14 @@ const Leiste = {
     } else {
       window.addEventListener("resize", () => this.pruefe());
     }
+    // Was während des offenen Menüs übersprungen wurde, wird beim Schließen
+    // nachgeholt.
+    this.menue.addEventListener("toggle", () => {
+      if (!this.menue.open && this.nachholen) {
+        this.nachholen = false;
+        this.pruefe();
+      }
+    });
   },
 
 
@@ -93,6 +102,14 @@ const Leiste = {
      hinaufkommt. */
   pruefe() {
     if (this.pruefeLaeuft) return;   // ResizeObserver meldet das eigene Umbauen
+    /* Nicht umbauen, solange jemand das Menue offen hat: Die Messung beginnt
+       bei "voll", raeumt das Menue dafuer leer und schliesst es - dem
+       Benutzer wuerde der Eintrag unter dem Finger weggezogen. Beim naechsten
+       Schliessen wird nachgeholt (siehe starte()). */
+    if (this.menue.open) {
+      this.nachholen = true;
+      return;
+    }
     this.pruefeLaeuft = true;
     try {
       let gewaehlt = "knapp";

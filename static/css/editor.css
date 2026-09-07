@@ -176,7 +176,16 @@
    schluckt der Name jede fehlende Breite, und editor-leiste.js faende nie
    einen Grund, eine Stufe tiefer zu gehen. */
 .app .leiste .anlagenname-zeile { flex-shrink: 1; min-width: 110px; }
-.app .leiste { overflow: hidden; }
+/* KEIN overflow:hidden auf der Leiste. Es stand hier, damit ein Ueberlauf
+   abgeschnitten statt uebereinandergeschoben wird - und schnitt prompt die
+   beiden Klappen ab, die aus der Leiste herausragen sollen: das
+   Ausweichmenue und die Legende "Verbindungen". Beide oeffnen nach unten,
+   und beide waren dadurch unsichtbar.
+
+   Gebraucht wird es auch nicht mehr: Kein Glied schrumpft (flex-shrink: 0),
+   und editor-leiste.js misst nach jeder Groessenaenderung nach und geht eine
+   Stufe tiefer, solange der Inhalt breiter ist als die Leiste. Der Ueberlauf
+   wird also vermieden, statt versteckt zu werden. */
 
 /* ---- Die vier Stufen ----
    data-stufe steht auf der Leiste selbst und kommt von
@@ -193,12 +202,16 @@
 .leiste[data-stufe="zeichen"] .knopf-wort,
 .leiste[data-stufe="gesammelt"] .knopf-wort,
 .leiste[data-stufe="knapp"] .knopf-wort { display: none; }
+/* :not(.im-menue) - die Verengung gilt der LEISTE, nicht dem Ausweichmenue.
+   Ohne sie gewann sie dort gegen die Menueregel weiter unten (hoehere
+   Spezifitaet), und die Legende stand als 36 Punkte breiter Knopf da, aus dem
+   ihr Wort herauslief. */
 .leiste[data-stufe="zeichen"] .zurueck-knopf,
 .leiste[data-stufe="gesammelt"] .zurueck-knopf,
 .leiste[data-stufe="knapp"] .zurueck-knopf,
-.leiste[data-stufe="zeichen"] .legende summary,
-.leiste[data-stufe="gesammelt"] .legende summary,
-.leiste[data-stufe="knapp"] .legende summary { width: 36px; padding: 0; }
+.leiste[data-stufe="zeichen"] .legende:not(.im-menue) summary,
+.leiste[data-stufe="gesammelt"] .legende:not(.im-menue) summary,
+.leiste[data-stufe="knapp"] .legende:not(.im-menue) summary { width: 36px; padding: 0; }
 /* Im Ausweichmenue ist Platz fuer Woerter - dort gilt die Verengung nicht. */
 .leiste .im-menue .knopf-wort { display: inline; }
 
@@ -217,7 +230,7 @@
    den Regeln oben stehen - hoehere Spezifitaet plus spaetere Stelle. */
 @media (pointer: coarse) {
   .leiste[data-stufe] .zurueck-knopf,
-  .leiste[data-stufe] .legende summary { width: 44px; }
+  .leiste[data-stufe] .legende:not(.im-menue) summary { width: 44px; }
   .leiste[data-stufe] .im-menue { width: auto; }
 }
 
@@ -247,25 +260,49 @@
   border-radius: var(--radius);
   box-shadow: var(--schatten-2);
 }
-.leiste .im-menue {
+/* Ein Eintrag des Menues ist eine Zeile, kein Knopf: volle Breite, links
+   ausgerichtet, mit Wort. Auch die Knoepfe, die in der Leiste nur ihr Zeichen
+   tragen - im Menue ist Platz dafuer. */
+.leiste .im-menue,
+.werkzeugmenue-inhalt .legende > summary {
   width: auto;
   height: auto;
   min-height: var(--antippziel);
+  display: flex;
+  align-items: center;
   justify-content: flex-start;
   gap: 10px;
   padding: 6px 10px;
-  border: none;
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: none;
+  font-size: 13px;
+  color: var(--text);
 }
-.leiste .im-menue:hover { background: var(--surface-alt); }
-/* Im Menue traegt jeder Eintrag sein Wort - auch die, die es in der Leiste
-   abgelegt haben. */
+.leiste .im-menue:hover:not(:disabled),
+.werkzeugmenue-inhalt .legende > summary:hover { background: var(--surface-alt); }
+.leiste .im-menue:disabled { opacity: .45; }
+
+/* Die Beschriftung kommt aus aria-label - dieselbe Quelle, aus der auch eine
+   Vorlesehilfe sie nimmt, statt eines zweiten Textes, der auseinanderlaufen
+   koennte. Nur dort, wo der Knopf nicht ohnehin ein Wort traegt. */
+.leiste button.im-menue[aria-label]::after,
+.leiste a.im-menue[aria-label]::after { content: attr(aria-label); }
+/* Wer sein Wort schon hat, zeigt es hier wieder - in der Leiste hatte er es
+   ab der Stufe "zeichen" abgelegt. */
 .app .im-menue .knopf-wort { display: inline; }
-/* Die Legende ist selbst eine Klappe; im Menue oeffnet sie nach links, sonst
-   stuende sie ueber dem Bildschirmrand. */
-.werkzeugmenue-inhalt .legende summary { width: auto; padding: 6px 10px; }
-.werkzeugmenue-inhalt .legende[open] > .legende-inhalt { right: 100%; left: auto; margin-right: 6px; }
+.im-menue .knopf-symbol,
+.werkzeugmenue-inhalt .knopf-symbol { flex: none; }
+
+/* Die Legende ist selbst eine Klappe. Im Menue verliert sie ihren Knopfrahmen;
+   ihr Inhalt oeffnet nach links, sonst stuende er ueber dem Bildschirmrand. */
+.legende.im-menue { display: block; width: auto; border: none; padding: 0; }
+.werkzeugmenue-inhalt .legende[open] > .legende-inhalt {
+  right: 100%;
+  left: auto;
+  top: 0;
+  margin-right: 6px;
+}
 
 /* Seitenbereich-Umschalter (Palette/Parameter): nur im schmalen
    Hochformat mit Finger sichtbar (siehe @media (max-width: 900px) and

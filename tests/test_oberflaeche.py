@@ -272,16 +272,20 @@ def test_ausweichmenue_ist_leer_und_versteckt_wenn_alles_passt(app):
     assert "hidden" in LEISTE_JS  # das Skript blendet es ein, sobald etwas einzieht
 
 
-def test_schmale_leinwand_passt_die_anlage_beim_oeffnen_ein():
+def test_schmales_geraet_passt_die_anlage_beim_oeffnen_ein():
     """Der verankerte Ausschnitt zeigt auf einem Tablett zwei Karten und einen
     Pfeil, der ins Nichts laeuft. Von zwei schlechten Ansichten ist die
-    vollstaendige die brauchbarere."""
+    vollstaendige die brauchbarere.
+
+    Gemessen wird das Fenster, nicht die Leinwand: Am Schreibtisch mit 1440
+    Punkten bleiben der Leinwand nach Palette und Parameterfenster nur 892 -
+    waere sie das Mass, wuerde auch dort eingepasst."""
     sicht = (JS / "editor-sicht.js").read_text()
     karten = (JS / "editor-karten.js").read_text()
-    assert "SCHMALE_LEINWAND" in karten
+    assert "SCHMALES_FENSTER" in karten
     stelle = sicht.index("  startAnsicht() {")
     block = sicht[stelle:sicht.index("\n  },", stelle)]
-    assert "SCHMALE_LEINWAND" in block
+    assert "SCHMALES_FENSTER" in block
 
 
 # ---------- Die Beispielanlagen ---------------------------------------------
@@ -377,8 +381,8 @@ def test_die_einpassschwelle_liegt_dort_wo_die_seitenbereiche_weichen():
     braucht. Zwei verschiedene Zahlen waeren zwei Antworten auf dieselbe
     Frage."""
     karten = (JS / "editor-karten.js").read_text()
-    treffer = re.search(r"SCHMALE_LEINWAND:\s*(\d+)", karten)
-    assert treffer, "SCHMALE_LEINWAND fehlt"
+    treffer = re.search(r"SCHMALES_FENSTER:\s*(\d+)", karten)
+    assert treffer, "SCHMALES_FENSTER fehlt"
 
     css = _ohne_kommentare((CSS / "editor.css").read_text())
     schwelle = re.search(
@@ -386,3 +390,53 @@ def test_die_einpassschwelle_liegt_dort_wo_die_seitenbereiche_weichen():
     )
     assert schwelle, "die Schwelle der Seitenbereiche steht nicht mehr in editor.css"
     assert treffer.group(1) == schwelle.group(1), (treffer.group(1), schwelle.group(1))
+
+
+# ---------- Das Ausweichmenue der Kopfleiste --------------------------------
+
+def test_die_leiste_schneidet_ihre_klappen_nicht_ab():
+    """overflow:hidden auf der Leiste schnitt beide Klappen ab, die aus ihr
+    herausragen sollen - das Ausweichmenue und die Legende "Verbindungen".
+    Beide oeffnen nach unten und waren dadurch unsichtbar. Gebraucht wird es
+    auch nicht: Der Ueberlauf wird gemessen und vermieden, nicht versteckt."""
+    css = _ohne_kommentare((CSS / "editor.css").read_text())
+    for regel in re.findall(r"[^{}]*\.leiste[^{}]*\{[^}]*\}", css):
+        if "overflow" in regel and "hidden" in regel:
+            # Nur, wenn die Regel wirklich die Leiste selbst meint.
+            kopf = regel.split("{")[0]
+            assert not re.search(r"\.leiste\s*\{|\.leiste\s*$", kopf), regel
+
+
+def test_die_menueeintraege_tragen_ihr_wort():
+    """In der Leiste tragen die Knoepfe links nur ihr Zeichen. Im Menue ist
+    Platz fuer Woerter - sonst stuenden dort vier namenlose Symbole."""
+    css = _ohne_kommentare((CSS / "editor.css").read_text())
+    assert ".im-menue .knopf-wort { display: inline; }" in css
+    # Wer kein eigenes Wort hat, bekommt es aus aria-label - dieselbe Quelle,
+    # aus der auch eine Vorlesehilfe es nimmt.
+    assert "content: attr(aria-label)" in css
+
+
+def test_die_verengung_der_leiste_gilt_nicht_im_menue():
+    """Die Stufenregel ist spezifischer als die Menueregel und gewann dort -
+    die Legende stand als 36 Punkte breiter Knopf da, aus dem ihr Wort
+    herauslief."""
+    css = _ohne_kommentare((CSS / "editor.css").read_text())
+    verengung = re.findall(r"\.leiste\[data-stufe[^{]*\{[^}]*width:\s*(?:36|44)px", css)
+    assert verengung, "die Verengung der Leiste steht nicht mehr da"
+    for regel in verengung:
+        if ".legende" in regel:
+            assert ":not(.im-menue)" in regel, regel
+
+
+def test_das_menue_wird_nicht_umgebaut_waehrend_es_offen_ist():
+    """Die Messung beginnt bei "voll" und raeumt das Menue dafuer leer. Liefe
+    sie, waehrend jemand es offen hat, wuerde ihm der Eintrag unter dem Finger
+    weggezogen - und jede Groessenaenderung klappte es zu."""
+    assert "this.menue.open" in LEISTE_JS
+    block = LEISTE_JS[LEISTE_JS.index("  pruefe() {"):]
+    block = block[: block.index("\n  },")]
+    assert "if (this.menue.open)" in block
+    # Was uebersprungen wurde, wird beim Schliessen nachgeholt.
+    assert "nachholen" in LEISTE_JS
+    assert '"toggle"' in LEISTE_JS
