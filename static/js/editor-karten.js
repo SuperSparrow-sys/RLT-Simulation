@@ -65,12 +65,16 @@ Object.assign(Editor, {
   EINSTIEG_ZOOM_MIN: 0.6,
 
   /* Unterhalb dieser Leinwandbreite wird beim Oeffnen IMMER eingepasst
-     (editor-sicht.js, startAnsicht). 700 Punkte: Ein iPad im Hochformat hat
-     820 Punkte, davon gehen im schmalen Zustand keine an Palette und
-     Parameterfenster - eine Anlage von 36 Karten passt dort nicht in
-     lesbarer Groesse, der verankerte Ausschnitt zeigt aber nur zwei Karten.
-     Von zwei schlechten Ansichten ist die vollstaendige die brauchbarere. */
-  SCHMALE_LEINWAND: 700,
+     (editor-sicht.js, startAnsicht).
+
+     900 Punkte, dieselbe Schwelle, an der Palette und Parameterfenster
+     zurueckreten (editor.css) - und das ist kein Zufall: Ein Bildschirm, auf
+     dem neben der Leinwand kein Platz fuer beide ist, ist einer, auf dem man
+     zuerst die Uebersicht braucht. Ein iPad im Hochformat hat 820 Punkte; der
+     verankerte Ausschnitt zeigte dort zwei Karten und einen Pfeil, der ins
+     Nichts laeuft. Von zwei schlechten Ansichten ist die vollstaendige die
+     brauchbarere - wer genauer hinsehen will, zieht auf. */
+  SCHMALE_LEINWAND: 900,
 
   /* Berechnet Breite, Hoehe und alle Textzeilen/-y-Positionen einer Karte,
      bevor sie gezeichnet wird - die Kartenhoehe waechst mit der Anzahl

@@ -312,3 +312,77 @@ def test_beispielanlagen_benutzen_dieselben_zeilen_wie_ein_projekt(app):
     inhalt = html[html.index('id="start-lehrmaterial-inhalt"'):]
     assert "anlage-zeile" in inhalt
     assert "projekt-block" in inhalt
+
+
+# ---------- Der Schreibtisch bringt seine Daten mit --------------------------
+
+def test_editorseite_liefert_anlage_und_palette_mit(app):
+    """Beides holte die Seite bis zum Umbau erst nach dem Laden ueber
+    /api/palette und /api/anlagen/<id>. Bis die zweite Antwort da war, stand
+    der Editor als leere Flaeche mit leerer Palette da - beim ersten Blick und
+    auf jedem Bildschirmfoto."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("Referenz")
+        anlage = ax_sim_2_1.baue(projekt, "AX_SIM 2.1")
+
+    html = app.test_client().get(f"/anlage/{anlage}").get_data(as_text=True)
+    assert 'id="anlage-daten"' in html
+    assert 'id="palette-daten"' in html
+
+    import json
+
+    for kennung in ("anlage-daten", "palette-daten"):
+        anfang = html.index(f'id="{kennung}"')
+        anfang = html.index(">", anfang) + 1
+        daten = json.loads(html[anfang:html.index("</script>", anfang)])
+        assert daten, kennung
+    # Die Anlage steht mit ihren Karten da, nicht nur als Huelle.
+    anfang = html.index('id="anlage-daten"')
+    anfang = html.index(">", anfang) + 1
+    anlage_daten = json.loads(html[anfang:html.index("</script>", anfang)])
+    assert anlage_daten["name"] == "AX_SIM 2.1"
+    assert len(anlage_daten["karten"]) > 10
+
+
+def test_die_daten_stehen_als_json_nicht_als_javascript(app):
+    """<script type="application/json"> wird nie ausgefuehrt - ein Anlagenname
+    mit </script> darin kann also nichts anrichten."""
+    with app.app_context():
+        projekt = anlagen.projekt_anlegen("Referenz")
+        anlage = ax_sim_2_1.baue(projekt, "AX_SIM 2.1")
+
+    html = app.test_client().get(f"/anlage/{anlage}").get_data(as_text=True)
+    for kennung in ("anlage-daten", "palette-daten"):
+        stelle = html.index(f'id="{kennung}"')
+        tag = html[html.rindex("<", 0, stelle):html.index(">", stelle)]
+        assert 'type="application/json"' in tag, tag
+
+
+def test_editor_zeichnet_ohne_zweite_runde():
+    """Die mitgelieferten Daten muessen auch benutzt werden - sonst holt der
+    Editor sie trotzdem und die Seite bleibt bis dahin leer."""
+    editor = (JS / "editor.js").read_text()
+    palette = (JS / "palette.js").read_text()
+    assert 'getElementById("anlage-daten")' in editor
+    assert 'getElementById("palette-daten")' in palette
+    # Nach einer Aenderung ist die Fassung in der Seite veraltet - dann wird
+    # wieder gefragt. Der Weg ueber die Schnittstelle bleibt also bestehen.
+    assert "/api/anlagen/${anlageId}" in editor
+    assert 'fetch("/api/palette")' in palette
+
+
+def test_die_einpassschwelle_liegt_dort_wo_die_seitenbereiche_weichen():
+    """Ein Bildschirm, auf dem neben der Leinwand kein Platz fuer Palette und
+    Parameterfenster ist, ist einer, auf dem man zuerst die Uebersicht
+    braucht. Zwei verschiedene Zahlen waeren zwei Antworten auf dieselbe
+    Frage."""
+    karten = (JS / "editor-karten.js").read_text()
+    treffer = re.search(r"SCHMALE_LEINWAND:\s*(\d+)", karten)
+    assert treffer, "SCHMALE_LEINWAND fehlt"
+
+    css = _ohne_kommentare((CSS / "editor.css").read_text())
+    schwelle = re.search(
+        r"@media \(max-width: (\d+)px\)[^{]*\{[^}]*knopf-seitenbereich", css
+    )
+    assert schwelle, "die Schwelle der Seitenbereiche steht nicht mehr in editor.css"
+    assert treffer.group(1) == schwelle.group(1), (treffer.group(1), schwelle.group(1))

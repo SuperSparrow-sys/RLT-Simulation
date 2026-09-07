@@ -1,3 +1,4 @@
+import json
 import os
 
 from flask import Blueprint, current_app, render_template, send_from_directory
@@ -169,12 +170,27 @@ def wetter():
 
 @bp.route("/anlage/<int:anlage_id>")
 def editor(anlage_id):
-    # Ohne diese Pruefung rendert der Editor fuer JEDE Zahl, auch eine
-    # Anlage, die es nie gab oder die inzwischen geloescht wurde - er zeigt
-    # dann "Diese Anlage ist noch leer.", ununterscheidbar von einer echten,
-    # frisch angelegten Anlage. Eine eigene Seite statt eines stillen
-    # Redirects auf die Startseite: der Link selbst war falsch oder veraltet,
-    # das soll sichtbar bleiben statt kommentarlos woanders hinzufuehren.
+    """Der Schreibtisch - mit der Anlage und der Palette schon an Bord.
+
+    Beides holte die Seite bis zum Umbau der Oberflaeche erst nach dem Laden
+    ueber /api/palette und /api/anlagen/<id>. Bis die zweite Antwort da war,
+    stand der Editor als leere Flaeche mit leerer Palette da - und auf keinem
+    Abzug der Seite war die Anlage zu sehen. Die Leinwand selbst bleibt ein
+    Programm im Browser (sie zeichnet, misst, verschiebt); nur ihre Daten
+    kommen jetzt mit der Seite, statt in einer zweiten Runde.
+
+    Ohne die Pruefung unten rendert der Editor fuer JEDE Zahl, auch eine
+    Anlage, die es nie gab oder die inzwischen geloescht wurde - er zeigt dann
+    "Diese Anlage ist noch leer.", ununterscheidbar von einer echten, frisch
+    angelegten Anlage. Eine eigene Seite statt eines stillen Redirects auf die
+    Startseite: der Link selbst war falsch oder veraltet, das soll sichtbar
+    bleiben statt kommentarlos woanders hinzufuehren.
+    """
     if not anlagen.anlage_existiert(anlage_id):
         return render_template("anlage_nicht_gefunden.html", anlage_id=anlage_id), 404
-    return render_template("editor.html", anlage_id=anlage_id)
+    return render_template(
+        "editor.html",
+        anlage_id=anlage_id,
+        anlage_json=json.dumps(anlagen.als_json(anlage_id), ensure_ascii=False),
+        palette_json=json.dumps(anlagen.palette(), ensure_ascii=False),
+    )

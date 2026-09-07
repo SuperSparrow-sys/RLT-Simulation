@@ -292,19 +292,42 @@ const Editor = {
   // der zeigerbasierte Pfad laeuft dort also unveraendert wie bisher.
   _gestenAnker: null,
 
-  async laden(anlageId) {
-    let antwort;
+  /* Beim ERSTEN Mal steht die Anlage schon in der Seite (routes/pages.py:
+     editor(), als <script type="application/json">). Danach ist sie dort
+     veraltet - jede spaetere Abfrage geht ueber die Schnittstelle.
+
+     Der Unterschied ist nicht bloss eine gesparte Anfrage: Vorher zeichnete
+     der Editor erst, wenn die zweite Runde zurueck war. Bis dahin stand eine
+     leere Flaeche da - beim ersten Blick und auf jedem Bildschirmfoto. */
+  _ausDerSeite() {
+    const traeger = document.getElementById("anlage-daten");
+    if (!traeger || traeger.dataset.verbraucht) return null;
+    traeger.dataset.verbraucht = "1";
     try {
-      antwort = await fetch(`/api/anlagen/${anlageId}`);
+      return JSON.parse(traeger.textContent);
     } catch {
-      zeigeFehler("Anlage konnte nicht geladen werden.");
-      return;
+      return null;   // lieber nachfragen als mit halben Daten zeichnen
     }
-    if (!antwort.ok) {
-      zeigeFehler("Anlage konnte nicht geladen werden.");
-      return;
+  },
+
+  async laden(anlageId) {
+    const mitgeliefert = this._ausDerSeite();
+    if (mitgeliefert) {
+      this.anlage = mitgeliefert;
+    } else {
+      let antwort;
+      try {
+        antwort = await fetch(`/api/anlagen/${anlageId}`);
+      } catch {
+        zeigeFehler("Anlage konnte nicht geladen werden.");
+        return;
+      }
+      if (!antwort.ok) {
+        zeigeFehler("Anlage konnte nicht geladen werden.");
+        return;
+      }
+      this.anlage = await antwort.json();
     }
-    this.anlage = await antwort.json();
     this.anlagennamenZeigen(this.anlage.name);
     this.zeichne();
     if (this._nochNichtGeoeffnet) {

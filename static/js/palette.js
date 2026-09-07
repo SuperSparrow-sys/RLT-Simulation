@@ -12,19 +12,34 @@ const Palette = {
   // Touchscreen gar nicht erst ausgeloest wird (siehe Task, Befund 1).
   bereit: null,
 
+  /* Die Kartentypen stehen schon in der Seite (routes/pages.py: editor()) -
+     ihr Inhalt steht fest, sobald das Programm laeuft, und aendert sich zur
+     Laufzeit nie. Vorher holte die Palette sie nach dem Laden nach und stand
+     bis dahin leer da. Die Schnittstelle bleibt als Rueckfallweg. */
   async laden() {
-    let antwort;
-    try {
-      antwort = await fetch("/api/palette");
-    } catch {
-      zeigeFehler("Palette konnte nicht geladen werden.");
-      return;
+    let gruppen = null;
+    const traeger = document.getElementById("palette-daten");
+    if (traeger) {
+      try {
+        gruppen = JSON.parse(traeger.textContent);
+      } catch {
+        gruppen = null;
+      }
     }
-    if (!antwort.ok) {
-      zeigeFehler("Palette konnte nicht geladen werden.");
-      return;
+    if (!gruppen) {
+      let antwort;
+      try {
+        antwort = await fetch("/api/palette");
+      } catch {
+        zeigeFehler("Palette konnte nicht geladen werden.");
+        return;
+      }
+      if (!antwort.ok) {
+        zeigeFehler("Palette konnte nicht geladen werden.");
+        return;
+      }
+      gruppen = await antwort.json();
     }
-    const gruppen = await antwort.json();
     const behaelter = document.getElementById("palette");
     behaelter.textContent = "";
 

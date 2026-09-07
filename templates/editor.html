@@ -275,6 +275,18 @@
   </div>
 
   <script>window.ANLAGE_ID = {{ anlage_id }};</script>
+
+  {# Anlage und Palette kommen mit der Seite (routes/pages.py: editor()) -
+     als <script type="application/json">, nicht als JavaScript-Zuweisung:
+     Der Inhalt wird nie ausgefuehrt, ein Anlagenname mit </script> darin
+     kann also nichts anrichten (Jinjas |tojson entwertet ihn zusaetzlich).
+     Beides holte der Editor bis zum Umbau der Oberflaeche erst nach dem
+     Laden; bis dahin standen leere Palette und leere Leinwand da. Nach einer
+     Aenderung fragt er die Anlage wie bisher neu ab - dann steht sie hier
+     nicht mehr aktuell, und das Skript weiss das (siehe editor.js,
+     _anlageHolen). #}
+  <script type="application/json" id="anlage-daten">{{ anlage_json | safe }}</script>
+  <script type="application/json" id="palette-daten">{{ palette_json | safe }}</script>
   <script src="{{ url_for('static', filename='js/zahlen.js') }}"></script>
   <script src="{{ url_for('static', filename='js/palette.js') }}"></script>
   <script src="{{ url_for('static', filename='js/pfeile.js') }}"></script>
