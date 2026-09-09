@@ -36,6 +36,9 @@ Object.assign(Editor, {
     if (!ebene) return;
     for (const bahn of Array.from(ebene.querySelectorAll("path.pfeil"))) {
       if (bahn.classList.contains("pfeil-treffer")) continue;
+      // Die Spitze liegt auf der Bahn - eine zweite Trefferbahn dafuer waere
+      // dieselbe Flaeche ein zweites Mal.
+      if (bahn.classList.contains("pfeil-spitze")) continue;
       if (!bahn.dataset.id) continue;   // die Vorschau beim Ziehen hat keine
       const treffer = document.createElementNS(NS, "path");
       treffer.setAttribute("d", bahn.getAttribute("d"));
@@ -96,7 +99,10 @@ Object.assign(Editor, {
     const werkzeug = document.getElementById("pfeil-werkzeug");
     if (!werkzeug || this.pfeilAuswahl === null) return;
     const bahn = document.querySelector(
-      `#pfeile path.pfeil[data-id="${this.pfeilAuswahl}"]:not(.pfeil-treffer)`
+      // Weder die Trefferbahn noch die Spitze: Gesucht ist die Mitte der
+      // BAHN, und die Spitze ist nur sieben Punkte lang.
+      `#pfeile path.pfeil[data-id="${this.pfeilAuswahl}"]`
+        + `:not(.pfeil-treffer):not(.pfeil-spitze)`
     );
     const buehne = werkzeug.offsetParent;
     if (!bahn || !buehne) return;

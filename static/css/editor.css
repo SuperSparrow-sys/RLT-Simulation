@@ -861,6 +861,17 @@
    traegt. "Mehrdeutig" ueberlagert jede der drei mit einem eigenen, feinen
    Punktmuster in Warnfarbe. */
 .pfeil { fill: none; pointer-events: stroke; }
+/* Die Spitze am Ziel: dieselbe Farbe und Strichstaerke wie ihre Bahn (sie
+   traegt deren Artklassen), aber nie gestrichelt - ein gestrichelter Winkel
+   waere kaum als Spitze zu erkennen. Zwei Klassen tief, damit sie das
+   Strichmuster der Artklassen (eine Klasse) sicher ueberschreibt. Getroffen
+   wird die Bahn, nicht die Spitze. */
+.pfeil.pfeil-spitze {
+  stroke-dasharray: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
 /* Luft ist immer dick - daran erkennt man den Luftweg schon von weitem,
    unabhaengig von der Art. Die Art selbst steht im Muster (und, als
    Verstaerkung, in der Farbe): durchgezogen fuer die Zuluft als den

@@ -440,3 +440,39 @@ def test_das_menue_wird_nicht_umgebaut_waehrend_es_offen_ist():
     # Was uebersprungen wurde, wird beim Schliessen nachgeholt.
     assert "nachholen" in LEISTE_JS
     assert '"toggle"' in LEISTE_JS
+
+
+# ---------- Die Pfeile auf der Leinwand -------------------------------------
+
+def test_jeder_pfeil_bekommt_eine_spitze():
+    """Ohne sie war einem Pfeil nicht anzusehen, wohin er zeigt - bei einem
+    Regelweg (wer stellt wen?) und bei Zu- gegen Abluft ist das gerade die
+    Auskunft, auf die es ankommt."""
+    quelle = (JS / "pfeile.js").read_text()
+    assert "pfeil-spitze" in quelle
+    assert "spitzePunkte" in quelle
+
+
+def test_die_spitze_nimmt_farbe_und_staerke_ihrer_bahn():
+    """Sie traegt dieselben Artklassen wie die Bahn - sonst braeuchte jede
+    Kombination aus Luftart und Wegart eine eigene Farbregel, und die naechste
+    Luftart wuerde vergessen."""
+    quelle = (JS / "pfeile.js").read_text()
+    assert '[...klassen, "pfeil-spitze"]' in quelle
+    css = _ohne_kommentare((CSS / "editor.css").read_text())
+    regel = css[css.index(".pfeil.pfeil-spitze {"):]
+    regel = regel[: regel.index("}")]
+    assert "stroke-dasharray: none" in regel      # ein Winkel, kein Strichmuster
+    assert "pointer-events: none" in regel        # getroffen wird die Bahn
+    assert "stroke:" not in regel                 # die Farbe kommt von der Bahn
+
+
+def test_die_strichstaerke_steht_nur_im_stylesheet():
+    """Die Spitze richtet sich nach ihr. Waere die Zahl auch im Skript
+    aufgeschrieben, liefen beide beim naechsten Anfassen auseinander -
+    ausgelesen und gemerkt statt zweimal gepflegt."""
+    quelle = (JS / "pfeile.js").read_text()
+    assert "getComputedStyle" in quelle and "strokeWidth" in quelle
+    # Gemerkt, nicht je Pfeil abgefragt: Beim Ziehen einer Karte werden alle
+    # Pfeile in jedem Bild neu gezeichnet.
+    assert "_strichstaerken" in quelle
