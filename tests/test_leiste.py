@@ -53,6 +53,7 @@ class Knoten {
       add: (c) => s.add(c),
       remove: (c) => s.delete(c),
       contains: (c) => s.has(c),
+      toggle: (c, an) => (an ? s.add(c) : s.delete(c)),
     };
   }
   get offsetWidth() {
@@ -94,6 +95,11 @@ class Knoten {
     if (auswahl !== "[data-weicht]") throw new Error("nicht nachgebaut: " + auswahl);
     return this.alleMit((k) => k.dataset && k.dataset.weicht, []);
   }
+  contains(k) {
+    for (let n = k; n; n = n.parentElement) if (n === this) return true;
+    return false;
+  }
+  closest() { return null; }   // die Leiste fragt nur, OB es die Methode gibt
   get pfad() {
     return (this.parentElement ? this.parentElement.pfad + "/" : "") + (this.id || this.nodeName);
   }
@@ -135,10 +141,28 @@ leiste.appendChild(verlauf);
 leiste.appendChild(ansicht);
 leiste.appendChild(ergebnis);
 
+// Die Legende "Verbindungen" ist die zweite Klappe der Leiste. Sie steht in
+// der Ansichtsgruppe, direkt neben "Einpassen".
+const legende = new Knoten("details", "legende");
+legende.dataset.weicht = "gesammelt";   // sie wandert wie die uebrigen
+legende.eigenbreite = 44;
+const legendeInhalt = new Knoten("div", "legende-inhalt");
+legende.appendChild(legendeInhalt);
+ansicht.appendChild(legende);
+
+// Etwas ausserhalb der Leiste, worauf sich tippen laesst.
+const leinwand = new Knoten("svg", "leinwand");
+
 const nachId = { werkzeugmenue: menue, "werkzeugmenue-inhalt": inhalt };
+const lauscher = { dokument: {}, fenster: {} };
 globalThis.document = {
   querySelector: () => leiste,
   getElementById: (id) => nachId[id] || null,
+  querySelectorAll: (auswahl) => {
+    if (auswahl === ".werkzeugmenue, .legende") return [menue, legende];
+    throw new Error("nicht nachgebaut: " + auswahl);
+  },
+  addEventListener: (typ, fn) => { lauscher.dokument[typ] = fn; },
   createComment: (text) => {
     const k = new Knoten("#comment", "");
     k.text = text;
@@ -146,7 +170,7 @@ globalThis.document = {
   },
 };
 globalThis.window = {
-  addEventListener: () => {},
+  addEventListener: (typ, fn) => { lauscher.fenster[typ] = fn; },
   getComputedStyle: () => ({
     columnGap: "10px", gap: "10px", paddingLeft: "8px", paddingRight: "8px",
   }),
@@ -208,7 +232,9 @@ def test_die_knoepfe_finden_ihren_platz_wieder():
     eng, weit, wieder_eng = ergebnis
 
     # Eng: alle vier im Menue, jeder mit seiner Klasse.
-    assert eng["imMenue"] == ["btn-zurueck", "btn-vor", "btn-einpassen", "link-bericht"]
+    assert eng["imMenue"] == [
+        "btn-zurueck", "btn-vor", "btn-einpassen", "legende", "link-bericht"
+    ]
     assert all("im-menue" in k for k in eng["klassen"].values())
 
     # Weit: alle wieder an ihrem Platz - und in ihrer alten Reihenfolge.
@@ -258,3 +284,93 @@ def test_die_stufe_wird_gemessen_nicht_geraten():
     assert gewaehlt == sorted(gewaehlt, key=reihe.index), gewaehlt
     assert gewaehlt[0] == "voll"
     assert gewaehlt[-1] == "knapp"
+
+
+def test_ein_tipp_daneben_schliesst_die_klappen():
+    """Ein natives <details> bleibt offen, bis man seinen Knopf wieder
+    antippt. Wer daneben tippt, liess es stehen - und die Klappe deckte die
+    Leinwand zu, auf die er gerade zeigen wollte."""
+    ergebnis = spiele("""
+      leiste.clientWidth = 900;
+      Leiste.starte();
+      const tipp = lauscher.dokument.pointerdown;
+      const stand = [];
+
+      menue.open = true;
+      legende.open = true;
+      tipp({ target: leinwand });                  // daneben, auf die Leinwand
+      stand.push({ menue: menue.open, legende: legende.open });
+
+      menue.open = true;
+      tipp({ target: inhalt });                    // in die Klappe hinein
+      stand.push({ menue: menue.open, legende: legende.open });
+
+      menue.open = true;
+      legende.open = true;
+      tipp({ target: legendeInhalt });   // in die eine, waehrend die andere offen ist
+      stand.push({ menue: menue.open, legende: legende.open });
+
+      // Auf schmalen Geraeten steht die Legende IM Menue - dann darf ein
+      // Tipp in sie das Menue nicht mit zuklappen.
+      leiste.clientWidth = 300;
+      Leiste.pruefe();
+      menue.open = true;
+      legende.open = true;
+      tipp({ target: legendeInhalt });
+      stand.push({ menue: menue.open, legende: legende.open, drin: inhalt.children.includes(legende) });
+
+      lauscher.fenster.keydown({ key: "Escape" }); // Escape schliesst beide
+      stand.push({ menue: menue.open, legende: legende.open });
+
+      console.log(JSON.stringify(stand));
+    """)
+    daneben, in_klappe, nebeneinander, ineinander, nach_escape = ergebnis
+
+    assert daneben == {"menue": False, "legende": False}
+    # Ein Tipp INNERHALB der Klappe laesst sie stehen - sonst waere kein
+    # Eintrag darin zu treffen.
+    assert in_klappe["menue"] is True
+    # Stehen beide nebeneinander in der Leiste, schliesst ein Tipp in die eine
+    # die andere - sie sind fuereinander "daneben".
+    assert nebeneinander == {"menue": False, "legende": True}
+    # Steckt die Legende im Menue, gehoert ein Tipp in sie auch zum Menue.
+    assert ineinander["drin"] is True
+    assert ineinander["menue"] is True and ineinander["legende"] is True
+    assert nach_escape == {"menue": False, "legende": False}
+
+
+def test_der_lauscher_haengt_in_der_erfassungsphase():
+    """Die Leinwand faengt pointerdown ab (Karten schieben, Pfeile ziehen) und
+    haelt es teilweise an - ein Lauscher in der Blasenphase kaeme dort nie
+    an."""
+    quelle = LEISTE_JS.read_text(encoding="utf-8")
+    stelle = quelle.index('document.addEventListener(')
+    block = quelle[stelle:stelle + 400]
+    assert '"pointerdown"' in block
+    assert "true" in block.split(")")[-3] or "true" in block
+
+
+def test_die_leiste_schiebt_nur_wenn_es_nicht_mehr_passt():
+    """Ein Ueberlaufbereich schneidet ab, ob geschoben wird oder nicht - und
+    die Klappe "Verbindungen" haengt in der Leiste. Dauerhaft eingeschaltet
+    war sie am Schreibtisch unsichtbar: aufgeklappt, aber abgeschnitten.
+    Deshalb nur dann, wenn auch die knappste Stufe noch ueberlaeuft."""
+    ergebnis = spiele("""
+      const stand = {};
+      leiste.clientWidth = 900;
+      Leiste.starte();
+      stand.weit = { stufe: leiste.dataset.stufe, schiebt: leiste.klassen.has("schiebt") };
+      leiste.clientWidth = 200;      // enger als selbst die knappste Stufe
+      Leiste.pruefe();
+      stand.eng = { stufe: leiste.dataset.stufe, schiebt: leiste.klassen.has("schiebt") };
+      leiste.clientWidth = 900;      // und wieder zurueck
+      Leiste.pruefe();
+      stand.wiederWeit = { stufe: leiste.dataset.stufe, schiebt: leiste.klassen.has("schiebt") };
+      console.log(JSON.stringify(stand));
+    """)
+    assert ergebnis["weit"] == {"stufe": "voll", "schiebt": False}
+    assert ergebnis["eng"]["stufe"] == "knapp"
+    assert ergebnis["eng"]["schiebt"] is True
+    # Wird wieder Platz frei, hoert das Schieben auf - sonst bliebe die
+    # Legende dauerhaft abgeschnitten.
+    assert ergebnis["wiederWeit"] == {"stufe": "voll", "schiebt": False}

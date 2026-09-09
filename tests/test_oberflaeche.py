@@ -224,8 +224,12 @@ def test_leiste_misst_sich_selbst_statt_das_fenster():
     """Die Leiste ist so breit wie die Buehne, nicht wie das Fenster: Bei 820
     Punkten Fensterbreite nahmen Palette und Parameterfenster 460 davon. Eine
     Regel nach Fensterbreite maesse eine Zahl, die sie nicht betrifft."""
-    assert "window.innerWidth" not in LEISTE_JS
-    assert "this.leiste.clientWidth" in LEISTE_JS
+    # Nur die Entscheidung ueber die Stufe: Das Ausrichten der Klappe misst
+    # sehr wohl das Fenster - sie soll nicht ueber dessen Rand hinausragen.
+    messung = LEISTE_JS[LEISTE_JS.index("  passt() {"):]
+    messung = messung[: messung.index("\n  },")]
+    assert "window.innerWidth" not in messung, messung
+    assert "this.leiste.clientWidth" in messung
     assert "ResizeObserver" in LEISTE_JS
 
 
@@ -407,17 +411,45 @@ def test_die_einpassschwelle_liegt_dort_wo_die_seitenbereiche_weichen():
 
 # ---------- Das Ausweichmenue der Kopfleiste --------------------------------
 
-def test_die_leiste_schneidet_ihre_klappen_nicht_ab():
-    """overflow:hidden auf der Leiste schnitt beide Klappen ab, die aus ihr
-    herausragen sollen - das Ausweichmenue und die Legende "Verbindungen".
-    Beide oeffnen nach unten und waren dadurch unsichtbar. Gebraucht wird es
-    auch nicht: Der Ueberlauf wird gemessen und vermieden, nicht versteckt."""
+def test_die_leiste_schneidet_ihre_klappe_nicht_ab():
+    """Die Leiste ist ein Ueberlaufbereich, seit sie sich schieben laesst -
+    und ein Ueberlaufbereich schneidet ab, was aus ihm herausragt. Genau so
+    war vom Ausweichmenue einmal nur ein Streifen zu sehen.
+
+    Die Klappe entkommt dem, indem sie fest gestellt ist: Ein Element mit
+    position:fixed haengt nicht am Ueberlauf seiner Vorfahren. Ihren Platz
+    traegt das Skript ein - CSS kann ihn nicht kennen, weil er davon abhaengt,
+    wie weit die Leiste gerade geschoben ist."""
     css = _ohne_kommentare((CSS / "editor.css").read_text())
-    for regel in re.findall(r"[^{}]*\.leiste[^{}]*\{[^}]*\}", css):
-        if "overflow" in regel and "hidden" in regel:
-            # Nur, wenn die Regel wirklich die Leiste selbst meint.
-            kopf = regel.split("{")[0]
-            assert not re.search(r"\.leiste\s*\{|\.leiste\s*$", kopf), regel
+    regel = css[css.index(".werkzeugmenue-inhalt {"):]
+    regel = regel[: regel.index("}")]
+    assert "position: fixed" in regel, regel
+    # Ohne das Nachfuehren stuende sie irgendwo.
+    assert "menueAusrichten" in LEISTE_JS
+    assert "getBoundingClientRect" in LEISTE_JS
+    assert '"scroll"' in LEISTE_JS
+
+
+def test_die_leiste_laesst_sich_schieben_wenn_nichts_mehr_passt():
+    """Auf einem Telefon (rund 390 Punkte) passt auch die knappste Stufe
+    nicht mehr: Zurueck, Name, Palette, Parameter, Menue und Simulieren
+    brauchen zusammen ueber 500. Vorher wurde einfach abgeschnitten -
+    "Simulieren" war auf dem Geraet nicht erreichbar."""
+    css = _ohne_kommentare((CSS / "editor.css").read_text())
+    # pan-x, nicht none: Ein Finger muss die Leiste schieben duerfen, die
+    # Kneifgeste (Seiten-Zoom) bleibt gesperrt.
+    grund = css[css.index(".app .leiste {"):]
+    assert "touch-action: pan-x" in grund[: grund.index("}")], grund[:200]
+
+    stelle = css.index(".app .leiste.schiebt {")
+    regel = css[stelle: css.index("}", stelle)]
+    assert "overflow-x: auto" in regel, regel
+    assert "overscroll-behavior-x: contain" in regel, regel
+    # Ein Rollbalken naehme in einer 52 Punkte hohen Leiste ein Fuenftel ein.
+    assert "scrollbar-width: none" in regel, regel
+    # Nur mit der Klasse - sonst schnitte die Leiste ihre eigene Klappe ab,
+    # auch wo gar nichts zu schieben waere.
+    assert 'classList.toggle("schiebt"' in LEISTE_JS
 
 
 def test_die_menueeintraege_tragen_ihr_wort():

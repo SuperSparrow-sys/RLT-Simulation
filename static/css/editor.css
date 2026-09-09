@@ -40,10 +40,39 @@
 
 .buehne { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
 
-/* Nur die Kopfleiste DES EDITORS: keine native Kneifgeste (Seiten-Zoom) -
-   siehe Kommentar bei .palette, derselbe zweite Weg, hier ohne eigenen
-   Scrollinhalt, deshalb reicht touch-action allein. */
-.app .leiste { touch-action: none; }
+/* ---------- Die Kopfleiste laesst sich schieben ----------
+   Auf einem Telefon (rund 390 Punkte) passt auch die knappste Stufe nicht
+   mehr: Zurueck, Name, Palette, Parameter, das Ausweichmenue und Simulieren
+   brauchen zusammen ueber 500. Bis hierher wurde einfach abgeschnitten -
+   "Simulieren" war auf dem Geraet nicht mehr erreichbar. Jetzt schiebt sich
+   die Leiste waagerecht.
+
+   pan-x statt none: Ein Finger darf sie schieben, die Kneifgeste (Seiten-Zoom)
+   bleibt gesperrt - dieselbe Ueberlegung wie bei .palette, die pan-y
+   erlaubt. contain haelt das Schieben in der Leiste, damit ein Wisch ueber
+   ihren Rand hinaus nicht die Zurueck-Geste des Browsers ausloest.
+
+   Der Rollbalken bleibt verborgen: In einer 52 Punkte hohen Leiste naehme er
+   ein Fuenftel der Hoehe ein. Dass es weitergeht, zeigt der angeschnittene
+   Knopf am Rand. */
+.app .leiste { touch-action: pan-x; }
+
+/* Nur wenn es wirklich nicht mehr passt: static/js/editor-leiste.js setzt die
+   Klasse, sobald auch die knappste Stufe ueberlaeuft.
+
+   Nicht dauerhaft, denn overflow schneidet ab, ob geschoben wird oder nicht -
+   und die Klappe "Verbindungen" haengt in der Leiste. Mit dauerhaftem
+   overflow war sie am Schreibtisch unsichtbar: aufgeklappt, aber
+   abgeschnitten. Im geschobenen Zustand steht sie ohnehin im Ausweichmenue
+   (sie weicht schon eine Stufe frueher), also gibt es dort nichts zu
+   klippen. */
+.app .leiste.schiebt {
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.app .leiste.schiebt::-webkit-scrollbar { display: none; }
 
 /* ---------- Palette ---------- */
 .palette {
@@ -245,16 +274,30 @@
 /* Die drei Punkte sind gefuellt, nicht gestrichelt - anders als jedes andere
    Zeichen der Leiste. Die Farbe kommt wie bei allen aus dem Knopf. */
 .werkzeugmenue > summary .knopf-symbol { fill: currentColor; }
+/* position:fixed, nicht absolute: Die Leiste ist seit dem Schieben ein
+   eigener Ueberlaufbereich und wuerde eine Klappe darin abschneiden - genau
+   der Fehler, der schon einmal dafuer sorgte, dass von diesem Menue nur ein
+   Streifen zu sehen war. Ein fest gestelltes Element haengt nicht am
+   Ueberlauf seiner Vorfahren. Seinen Platz traegt static/js/editor-leiste.js
+   beim Aufklappen ein (menueAusrichten) - CSS kann ihn nicht kennen, weil er
+   davon abhaengt, wie weit die Leiste gerade geschoben ist.
+
+   Die Legende braucht dasselbe nicht: Ist die Leiste so eng, dass sie
+   schiebt, steht die Legende laengst in diesem Menue - und dessen Klappe ist
+   fest gestellt, also schneidet sie niemand ab. */
 .werkzeugmenue-inhalt {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
+  position: fixed;
   z-index: 30;
   min-width: 210px;
   display: flex;
   flex-direction: column;
   gap: 2px;
   padding: 6px;
+  /* Mit aufgeklappter Legende wird das Menue laenger als ein Telefon hoch
+     ist. Die Hoehe traegt das Skript ein (menueAusrichten) - sie haengt
+     davon ab, wo das Menue beginnt. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
   background: var(--surface);
   border: 1px solid var(--border-light);
   border-radius: var(--radius);
@@ -294,14 +337,22 @@
 .im-menue .knopf-symbol,
 .werkzeugmenue-inhalt .knopf-symbol { flex: none; }
 
-/* Die Legende ist selbst eine Klappe. Im Menue verliert sie ihren Knopfrahmen;
-   ihr Inhalt oeffnet nach links, sonst stuende er ueber dem Bildschirmrand. */
+/* Die Legende ist selbst eine Klappe. Im Menue verliert sie ihren
+   Knopfrahmen - und klappt nach UNTEN auf, in den Fluss des Menues, statt als
+   eigenes Feld daneben.
+
+   Erst oeffnete sie nach links. Auf einem Telefon steht das Menue aber schon
+   fast am linken Bildschirmrand: Ihr Feld lag dort ausserhalb des Bildes, und
+   wer "Verbindungen" antippte, sah gar nichts. Im Fluss braucht sie keinen
+   Platz daneben - das Menue wird eben laenger und laesst sich schieben. */
 .legende.im-menue { display: block; width: auto; border: none; padding: 0; }
 .werkzeugmenue-inhalt .legende[open] > .legende-inhalt {
-  right: 100%;
-  left: auto;
-  top: 0;
-  margin-right: 6px;
+  position: static;
+  min-width: 0;
+  margin: 2px 0 6px;
+  box-shadow: none;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
 }
 
 /* Seitenbereich-Umschalter (Palette/Parameter): nur im schmalen
@@ -331,7 +382,10 @@
   background: var(--warning);
 }
 .legende[open] .aufklapp-zeichen { transform: rotate(180deg); }
-.legende[open] summary { border-color: var(--border-strong); }
+/* :not(.im-menue) - im Ausweichmenue ist die Legende eine Zeile ohne
+   Knopfrahmen; ein aufgeklappter Rahmen um sie herum saehe dort aus wie ein
+   Eingabefeld zwischen den uebrigen Eintraegen. */
+.legende[open]:not(.im-menue) summary { border-color: var(--border-strong); }
 .legende-inhalt {
   position: absolute;
   top: calc(100% + 6px);

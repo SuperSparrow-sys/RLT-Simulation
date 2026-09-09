@@ -69,7 +69,42 @@ const Leiste = {
   pruefeLaeuft: false,
   nachholen: false,
 
+  /* Die beiden Klappen der Kopfleiste: das Ausweichmenue und die Legende
+     "Verbindungen". Ein natives <details> bleibt offen, bis man seinen Knopf
+     wieder antippt - wer daneben tippt, laesst es stehen und deckt damit die
+     Leinwand zu. Ausserhalb tippen schliesst es jetzt, Escape ebenso. */
+  KLAPPEN: ".werkzeugmenue, .legende",
+
+  klappenSchliessen(getippt) {
+    document.querySelectorAll(this.KLAPPEN).forEach((klappe) => {
+      if (!klappe.open) return;
+      // Alles innerhalb der Klappe gehoert zu ihr: ihr eigener Knopf (den
+      // <details> selbst umschaltet) und jeder Eintrag darin - etwa der
+      // Schalter "Energie- und Meldewege anzeigen" in der Legende.
+      if (getippt && (klappe === getippt || klappe.contains(getippt))) return;
+      klappe.open = false;
+    });
+  },
+
+  klappenBinden() {
+    /* In der Erfassungsphase: Die Leinwand faengt pointerdown ab (Karten
+       schieben, Pfeile ziehen) und haelt es teilweise an - ein Lauscher in
+       der Blasenphase kaeme dort nie an. */
+    document.addEventListener(
+      "pointerdown",
+      (e) => {
+        const ziel = e.target && e.target.closest ? e.target : null;
+        this.klappenSchliessen(ziel);
+      },
+      true
+    );
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") this.klappenSchliessen(null);
+    });
+  },
+
   starte() {
+    this.klappenBinden();
     this.leiste = document.querySelector(".app .leiste");
     this.menue = document.getElementById("werkzeugmenue");
     this.inhalt = document.getElementById("werkzeugmenue-inhalt");
@@ -93,14 +128,22 @@ const Leiste = {
     } else {
       window.addEventListener("resize", () => this.pruefe());
     }
-    // Was während des offenen Menüs übersprungen wurde, wird beim Schließen
-    // nachgeholt.
     this.menue.addEventListener("toggle", () => {
+      // Was während des offenen Menüs übersprungen wurde, wird beim
+      // Schließen nachgeholt.
       if (!this.menue.open && this.nachholen) {
         this.nachholen = false;
         this.pruefe();
       }
+      this.menueAusrichten();
     });
+    /* Die Leiste lässt sich schieben, sobald ihr Inhalt nicht mehr hineinpasst
+       (editor.css). Die Klappe ist fest gestellt und wandert deshalb nicht von
+       selbst mit - sie wird nachgeführt. */
+    this.leiste.addEventListener("scroll", () => this.menueAusrichten());
+    // Klappt die Legende im Menü auf, wächst es - dann stimmt seine Höhe neu.
+    this.inhalt.addEventListener("toggle", () => this.menueAusrichten(), true);
+    window.addEventListener("resize", () => this.menueAusrichten());
   },
 
 
@@ -127,14 +170,49 @@ const Leiste = {
     this.pruefeLaeuft = true;
     try {
       let gewaehlt = "knapp";
+      let passt = false;
       for (const stufe of this.STUFEN) {
         this.stufeAnwenden(stufe);
         gewaehlt = stufe;
-        if (this.passt()) break;
+        passt = this.passt();
+        if (passt) break;
       }
       this.stufeJetzt = gewaehlt;
+      /* Passt auch die knappste Stufe nicht (ein Telefon mit rund 390
+         Punkten), lässt sich die Leiste schieben - sonst wäre "Simulieren"
+         nicht erreichbar. Nur dann: overflow schneidet ab, ob geschoben wird
+         oder nicht, und die Klappe "Verbindungen" hängt in der Leiste. */
+      this.leiste.classList.toggle("schiebt", !passt);
     } finally {
       this.pruefeLaeuft = false;
+    }
+  },
+
+  /* Setzt die Klappe unter ihren Knopf.
+
+     In Bildschirmkoordinaten, weil sie fest gestellt ist (position: fixed,
+     siehe editor.css): Nur so entkommt sie dem Überlauf der Leiste, die sich
+     seit dem Schieben nicht mehr nach ihren Kindern richtet. Rechtsbündig
+     unter dem Knopf, aber nie über den linken Fensterrand hinaus - auf einem
+     Telefon ist die Klappe breiter als der Platz rechts von ihrem Knopf. */
+  RAND: 8,
+
+  menueAusrichten() {
+    if (!this.menue || !this.inhalt || !this.menue.open) return;
+    const knopf = this.menue.getBoundingClientRect();
+    this.inhalt.style.top = `${knopf.bottom + 6}px`;
+    // Mit aufgeklappter Legende wird das Menü länger als ein Telefon hoch
+    // ist - dann scrollt es in sich selbst, statt unten hinauszulaufen.
+    this.inhalt.style.maxHeight =
+      `${window.innerHeight - knopf.bottom - 6 - this.RAND}px`;
+    // Erst rechtsbündig setzen, dann messen und, falls nötig, nach rechts
+    // zurückschieben.
+    this.inhalt.style.left = "auto";
+    this.inhalt.style.right = `${window.innerWidth - knopf.right}px`;
+    const klappe = this.inhalt.getBoundingClientRect();
+    if (klappe.left < this.RAND) {
+      this.inhalt.style.right = "auto";
+      this.inhalt.style.left = `${this.RAND}px`;
     }
   },
 
