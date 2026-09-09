@@ -45,10 +45,25 @@ const Leiste = {
   leiste: null,
   menue: null,
   inhalt: null,
-  /* {element, heimat, davor} - die Heimat ist der ursprüngliche Elternknoten,
-     davor der Nachbar, vor dem das Element dort wieder einzusetzen ist. Ohne
-     diesen Nachbarn landete ein zurückgeholter Knopf am Ende seiner Gruppe,
-     und die Reihenfolge der Leiste änderte sich mit jeder Größenänderung. */
+  /* {element, platzhalter} - der Platzhalter ist ein leerer Kommentarknoten,
+     der an der Stelle des Elements in der Leiste stehen bleibt, solange es im
+     Menü ist. Er hält den Platz.
+
+     Zuerst hatte ich mir stattdessen den NACHBARN gemerkt, vor dem das
+     Element wieder einzusetzen sei. Das ging beim ersten Einräumen gut und
+     ging bei der ersten Größenänderung danach kaputt: Die Messung räumt das
+     Menü probeweise leer, und wenn "Rückgängig" wieder in seine Gruppe
+     zurücksoll, steht sein Nachbar "Wiederholen" noch im Menü - insertBefore
+     wirft dann NotFoundError, weil der Bezugsknoten kein Kind des Ziels ist.
+     Die Schleife brach mitten im Umbau ab: Die Klasse .im-menue war schon
+     entfernt, verschoben war nichts. "Rückgängig" stand danach als runder
+     Knopf ohne Wort im Menü, alle anderen als Zeilen. Auf dem Schreibtisch
+     fiel es nicht auf, weil dort nach dem Laden nichts mehr die Größe ändert;
+     auf dem iPad genügt das Ein- und Ausfahren der Safari-Leiste.
+
+     Ein Platzhalter kann nicht auswandern und ist deshalb immer ein gültiger
+     Bezugspunkt - unabhängig davon, in welcher Reihenfolge die Elemente
+     zurückkommen. */
   wandernde: [],
   stufeJetzt: null,
   pruefeLaeuft: false,
@@ -61,12 +76,11 @@ const Leiste = {
     if (!this.leiste || !this.menue || !this.inhalt) return;
 
     this.wandernde = [...this.leiste.querySelectorAll("[data-weicht]")].map(
-      (element) => ({
-        element,
-        abStufe: element.dataset.weicht,
-        heimat: element.parentElement,
-        davor: element.nextElementSibling,
-      })
+      (element) => {
+        const platzhalter = document.createComment(" Platz von " + element.id + " ");
+        element.parentElement.insertBefore(platzhalter, element);
+        return { element, abStufe: element.dataset.weicht, platzhalter };
+      }
     );
 
     this.pruefe();
@@ -160,7 +174,9 @@ const Leiste = {
         this.inhalt.appendChild(eintrag.element);
       } else {
         eintrag.element.classList.remove("im-menue");
-        eintrag.heimat.insertBefore(eintrag.element, eintrag.davor);
+        eintrag.platzhalter.parentElement.insertBefore(
+          eintrag.element, eintrag.platzhalter
+        );
       }
     }
 

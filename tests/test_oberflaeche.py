@@ -231,10 +231,23 @@ def test_leiste_misst_sich_selbst_statt_das_fenster():
 
 def test_leiste_verschiebt_ihre_knoepfe_statt_sie_zu_verdoppeln():
     """Ein Knopf, den es zweimal gaebe - einmal in der Leiste, einmal im
-    Menue -, muesste zweimal verdrahtet und zweimal freigeschaltet werden."""
+    Menue -, muesste zweimal verdrahtet und zweimal freigeschaltet werden.
+
+    Dass der Umzug hin UND zurueck stimmt, prueft tests/test_leiste.py am
+    laufenden Modul; hier bleibt nur die Aussage, dass ueberhaupt verschoben
+    und nicht kopiert wird."""
     assert "cloneNode" not in LEISTE_JS
     assert "appendChild(eintrag.element)" in LEISTE_JS
-    assert "insertBefore(eintrag.element" in LEISTE_JS
+    assert "insertBefore(" in LEISTE_JS
+
+
+def test_die_leiste_haelt_den_platz_ihrer_knoepfe_mit_einem_platzhalter():
+    """Der Nachbar, vor dem ein Knopf wieder einzusetzen waere, kann selbst
+    noch im Menue stehen - dann ist er kein Kind seiner alten Gruppe mehr und
+    insertBefore wirft. Ein Platzhalter kann nicht auswandern."""
+    assert "createComment" in LEISTE_JS
+    assert "platzhalter" in LEISTE_JS
+    assert "nextElementSibling" not in LEISTE_JS
 
 
 def test_jeder_knopf_der_leiste_weicht_statt_zu_schrumpfen():

@@ -160,3 +160,59 @@ def _fundstellen(text, was):
     while stelle >= 0:
         yield stelle
         stelle = text.find(was, stelle + 1)
+
+
+def test_die_spitze_der_verlaufszeichen_passt_auf_ihren_kreisbogen():
+    """Rückgängig und Wiederholen sind ein Dreiviertelkreis mit einer Spitze.
+
+    Sie war vorher ein schräger Haken: zwei Schenkel im Winkel von 60 Grad,
+    angesetzt am Anfang des Bogens. Auf dem Gerät las sich das nicht als
+    Pfeilspitze, sondern als Fähnchen am Kreis - „die Pfeilspitze passt nicht
+    auf den Dreiviertelkreis" (Rückmeldung des Benutzers, mit dem Vor- und
+    Zurück-Zeichen eines Browsers daneben).
+
+    Jetzt ist es dieselbe Form wie dort: eine rechtwinklige Ecke, deren
+    Winkelhalbierende genau in die Richtung zeigt, in die der Bogen läuft.
+    Geprüft wird beides, weil beides für sich noch nicht genügt - eine
+    rechtwinklige Ecke quer zur Laufrichtung sähe genauso falsch aus wie ein
+    spitzer Haken in der richtigen.
+    """
+    import math
+    import re
+
+    for name in ("rueckgaengig.svg", "wiederholen.svg"):
+        text = (BEDIENZEICHEN / name).read_text(encoding="utf-8")
+        bogen, ecke = re.findall(r'<path d="([^"]+)"', text)
+
+        # Der letzte Punkt des Bogenpfades ist sein gerader Ausläufer - der
+        # Schaft, der in die Ecke läuft.
+        zahlen = [float(z) for z in re.findall(r"-?\d+(?:\.\d+)?", bogen)]
+        schaft_ende = (zahlen[-2], zahlen[-1])
+        schaft_start = (zahlen[-4], zahlen[-3])
+
+        e = [float(z) for z in re.findall(r"-?\d+(?:\.\d+)?", ecke)]
+        a, scheitel, b = (e[0], e[1]), (e[2], e[3]), (e[4], e[5])
+
+        # 1. Die Ecke sitzt genau am Ende des Schafts.
+        assert abs(scheitel[0] - schaft_ende[0]) < 0.01, name
+        assert abs(scheitel[1] - schaft_ende[1]) < 0.01, name
+
+        def richtung(von, nach):
+            dx, dy = nach[0] - von[0], nach[1] - von[1]
+            laenge = math.hypot(dx, dy)
+            return (dx / laenge, dy / laenge)
+
+        s1 = richtung(scheitel, a)
+        s2 = richtung(scheitel, b)
+
+        # 2. Die beiden Schenkel stehen rechtwinklig zueinander.
+        assert abs(s1[0] * s2[0] + s1[1] * s2[1]) < 0.02, (name, s1, s2)
+
+        # 3. Die Spitze zeigt dorthin, wo der Schaft hinlaeuft: Die
+        #    Winkelhalbierende der Schenkel weist genau entgegengesetzt.
+        lauf = richtung(schaft_start, schaft_ende)
+        halbe = ((s1[0] + s2[0]) / 2, (s1[1] + s2[1]) / 2)
+        laenge = math.hypot(*halbe)
+        halbe = (halbe[0] / laenge, halbe[1] / laenge)
+        gegenlaeufig = -(halbe[0] * lauf[0] + halbe[1] * lauf[1])
+        assert gegenlaeufig > 0.98, (name, math.degrees(math.acos(min(1, gegenlaeufig))))
